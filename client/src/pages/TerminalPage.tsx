@@ -357,71 +357,28 @@ const TerminalPage: React.FC = () => {
     const activeSession = sessions.find(s => s.id === activeSessionId)
     if (activeSession && terminalContainerRef.current) {
       const container = terminalContainerRef.current
-      
-      // 清空容器
-      container.innerHTML = ''
-      
+
+      // 清空容器，这会从 DOM 中移除之前可能存在的终端
+      while (container.firstChild) {
+        container.removeChild(container.firstChild)
+      }
+
       try {
-        // 始终重新创建终端实例以确保状态正确
-        activeSession.terminal.dispose()
+        if (!activeSession.terminal.element) {
+          // 如果终端尚未初始化，则打开它
+          activeSession.terminal.open(container)
+        } else {
+          // 如果已经初始化，则将其DOM元素重新附加
+          container.appendChild(activeSession.terminal.element)
+        }
 
-        const newTerminal = new Terminal({
-          theme: {
-            background: '#1a1a1a',
-            foreground: '#ffffff',
-            cursor: '#ffffff',
-            selectionBackground: '#ffffff30',
-            black: '#000000',
-            red: '#ff6b6b',
-            green: '#51cf66',
-            yellow: '#ffd43b',
-            blue: '#74c0fc',
-            magenta: '#f06292',
-            cyan: '#4dd0e1',
-            white: '#ffffff',
-            brightBlack: '#666666',
-            brightRed: '#ff8a80',
-            brightGreen: '#69f0ae',
-            brightYellow: '#ffff8d',
-            brightBlue: '#82b1ff',
-            brightMagenta: '#ff80ab',
-            brightCyan: '#84ffff',
-            brightWhite: '#ffffff'
-          },
-          fontFamily: 'JetBrains Mono, Fira Code, Consolas, Monaco, monospace',
-          fontSize: 14,
-          lineHeight: 1.2,
-          cursorBlink: true,
-          cursorStyle: 'block',
-          scrollback: 1000,
-          tabStopWidth: 4,
-          allowTransparency: true
-        })
+        // 终端获得焦点
+        activeSession.terminal.focus()
 
-        const newFitAddon = new FitAddon()
-        const webLinksAddon = new WebLinksAddon()
-
-        newTerminal.loadAddon(newFitAddon)
-        newTerminal.loadAddon(webLinksAddon)
-
-        newTerminal.onData((data) => {
-          socketClient.sendTerminalInput(activeSession.id, data)
-        })
-
-        newTerminal.onResize(({ cols, rows }) => {
-          if (socketClient.isConnected()) {
-            socketClient.resizeTerminal(activeSession.id, cols, rows)
-          }
-        })
-
-        activeSession.terminal = newTerminal
-        activeSession.fitAddon = newFitAddon
-
-        newTerminal.open(container)
-
+        // 延迟调整大小以确保正确渲染
         setTimeout(() => {
-          newFitAddon.fit()
-        }, 100)
+          activeSession.fitAddon.fit()
+        }, 50)
       } catch (error) {
         console.error('挂载或重新创建终端失败:', error)
       }
