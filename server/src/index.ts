@@ -252,7 +252,13 @@ async function startServer() {
       
       // 终端相关事件
       socket.on('create-pty', (data) => {
-        terminalManager.createPty(socket, data)
+        // 将前端的cwd参数映射到后端的workingDirectory
+        const mappedData = {
+          ...data,
+          workingDirectory: data.cwd || data.workingDirectory
+        }
+        delete mappedData.cwd
+        terminalManager.createPty(socket, mappedData)
       })
       
       socket.on('terminal-input', (data) => {

@@ -179,7 +179,7 @@ class SocketClient {
   }
 
   // 终端相关方法
-  createTerminal(data: { sessionId: string; name?: string; cols?: number; rows?: number }) {
+  createTerminal(data: { sessionId: string; name?: string; cols?: number; rows?: number; cwd?: string }) {
     this.emit('create-pty', data)
   }
 

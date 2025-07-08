@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
+import { useSearchParams, useNavigate } from 'react-router-dom'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { WebLinksAddon } from '@xterm/addon-web-links'
@@ -30,6 +31,8 @@ interface TerminalSession {
 }
 
 const TerminalPage: React.FC = () => {
+  const [searchParams, setSearchParams] = useSearchParams()
+  const navigate = useNavigate()
   const [sessions, setSessions] = useState<TerminalSession[]>([])
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
@@ -43,9 +46,9 @@ const TerminalPage: React.FC = () => {
   const { addNotification } = useNotificationStore()
   
   // 创建新的终端会话
-  const createTerminalSession = () => {
+  const createTerminalSession = (cwd?: string) => {
     const sessionId = `terminal-${Date.now()}`
-    const sessionName = `终端 ${sessions.length + 1}`
+    const sessionName = cwd && typeof cwd === 'string' ? `终端 - ${cwd.split(/[/\\]/).pop()}` : `终端 ${sessions.length + 1}`
     
     const terminal = new Terminal({
       theme: {
@@ -118,7 +121,8 @@ const TerminalPage: React.FC = () => {
       sessionId: sessionId,
       name: sessionName,
       cols: 80,
-      rows: 24
+      rows: 24,
+      cwd: cwd
     })
     
     addNotification({
@@ -272,6 +276,18 @@ const TerminalPage: React.FC = () => {
     }
   }
   
+  // 检查URL参数中的cwd，如果存在则创建终端
+  useEffect(() => {
+    const cwd = searchParams.get('cwd')
+    if (cwd && sessions.length === 0 && isSessionsLoadedRef.current) {
+      createTerminalSession(cwd)
+      // 清除URL参数，避免重复创建
+      const newSearchParams = new URLSearchParams(searchParams)
+      newSearchParams.delete('cwd')
+      setSearchParams(newSearchParams, { replace: true })
+    }
+  }, [searchParams, sessions.length, setSearchParams])
+
   // 页面加载时获取现有终端会话
   useEffect(() => {
     const loadExistingSessions = async () => {
@@ -574,7 +590,7 @@ const TerminalPage: React.FC = () => {
         {shouldShowSidebar && (
           <div className="p-4 border-b border-gray-700/50">
             <button
-              onClick={createTerminalSession}
+              onClick={() => createTerminalSession()}
               className="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center justify-center space-x-2 transition-colors"
             >
               <Plus className="w-4 h-4" />
@@ -740,7 +756,7 @@ const TerminalPage: React.FC = () => {
               <TerminalIcon className="w-16 h-16 text-gray-500 mx-auto mb-4" />
               <p className="text-gray-400 mb-4">暂无终端会话</p>
               <button
-                onClick={createTerminalSession}
+                onClick={() => createTerminalSession()}
                 className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg transition-colors"
               >
                 创建第一个终端

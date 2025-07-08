@@ -10,7 +10,8 @@ import {
   EyeOutlined,
   SnippetsOutlined,
   FileZipOutlined,
-  FolderOutlined
+  FolderOutlined,
+  ConsoleSqlOutlined
 } from '@ant-design/icons'
 import { FileItem } from '@/types/file'
 
@@ -32,6 +33,7 @@ interface FileContextMenuProps {
   onView: (file: FileItem) => void
   onCompress: (files: FileItem[]) => void
   onExtract: (file: FileItem) => void
+  onOpenTerminal: (file: FileItem) => void
 }
 
 export const FileContextMenu: React.FC<FileContextMenuProps> = ({
@@ -48,7 +50,8 @@ export const FileContextMenu: React.FC<FileContextMenuProps> = ({
   onPaste,
   onView,
   onCompress,
-  onExtract
+  onExtract,
+  onOpenTerminal
 }) => {
   const isSelected = selectedFiles.has(file.path)
   const selectedCount = selectedFiles.size
@@ -124,6 +127,17 @@ export const FileContextMenu: React.FC<FileContextMenuProps> = ({
             >
               <EyeOutlined className="mr-2" />
               预览
+            </div>
+          )}
+          
+          {/* 从此文件夹处打开终端（仅文件夹） */}
+          {file.type === 'directory' && (
+            <div
+              className="px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer flex items-center"
+              onClick={() => onOpenTerminal(file)}
+            >
+              <ConsoleSqlOutlined className="mr-2" />
+              从此文件夹处打开终端
             </div>
           )}
           

@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { 
   Button, 
   Input, 
@@ -86,6 +87,7 @@ const FileManagerPage: React.FC = () => {
   } = useFileStore()
   
   const { addNotification } = useNotificationStore()
+  const navigate = useNavigate()
   
   // 对话框状态
   const [createDialog, setCreateDialog] = useState<{
@@ -370,6 +372,19 @@ const FileManagerPage: React.FC = () => {
         type: 'success',
         title: '解压成功',
         message: `文件 "${file.name}" 解压完成`
+      })
+    }
+  }
+
+  // 从此文件夹处打开终端
+  const handleContextMenuOpenTerminal = (file: FileItem) => {
+    if (file.type === 'directory') {
+      // 导航到终端页面，并传递文件夹路径作为查询参数
+      navigate(`/terminal?cwd=${encodeURIComponent(file.path)}`)
+      addNotification({
+        type: 'success',
+        title: '打开终端',
+        message: `已在 "${file.name}" 文件夹中打开终端`
       })
     }
   }
@@ -703,6 +718,7 @@ const FileManagerPage: React.FC = () => {
                 onView={handleContextMenuView}
                 onCompress={handleContextMenuCompress}
                 onExtract={handleContextMenuExtract}
+                onOpenTerminal={handleContextMenuOpenTerminal}
               >
                 <FileGridItem
                   file={file}
