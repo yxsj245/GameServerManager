@@ -1,0 +1,515 @@
+import { Router, Request, Response } from 'express'
+import { SystemManager } from '../modules/system/SystemManager'
+import logger from '../utils/logger'
+import os from 'os'
+import fs from 'fs/promises'
+import path from 'path'
+
+const router = Router()
+
+// 注意：这里需要在实际使用时注入SystemManager实例
+let systemManager: SystemManager
+
+// 设置SystemManager实例的函数
+export function setSystemManager(manager: SystemManager) {
+  systemManager = manager
+}
+
+// 获取系统基本信息
+router.get('/info', async (req: Request, res: Response) => {
+  try {
+    if (!systemManager) {
+      return res.status(500).json({ error: '系统管理器未初始化' })
+    }
+    
+    const systemInfo = await systemManager.getSystemInfo()
+    res.json({
+      success: true,
+      data: systemInfo
+    })
+  } catch (error) {
+    logger.error('获取系统信息失败:', error)
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : '获取系统信息失败'
+    })
+  }
+})
+
+// 获取系统统计历史
+router.get('/stats', (req: Request, res: Response) => {
+  try {
+    if (!systemManager) {
+      return res.status(500).json({ error: '系统管理器未初始化' })
+    }
+    
+    const minutes = parseInt(req.query.minutes as string) || 60
+    const stats = systemManager.getStatsHistory(minutes)
+    
+    res.json({
+      success: true,
+      data: {
+        stats,
+        period: minutes,
+        count: stats.length
+      }
+    })
+  } catch (error) {
+    logger.error('获取系统统计失败:', error)
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : '获取系统统计失败'
+    })
+  }
+})
+
+// 获取活跃告警
+router.get('/alerts', (req: Request, res: Response) => {
+  try {
+    if (!systemManager) {
+      return res.status(500).json({ error: '系统管理器未初始化' })
+    }
+    
+    const alerts = systemManager.getActiveAlerts()
+    res.json({
+      success: true,
+      data: alerts
+    })
+  } catch (error) {
+    logger.error('获取系统告警失败:', error)
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : '获取告警失败'
+    })
+  }
+})
+
+// 设置告警阈值
+router.post('/alerts/thresholds', (req: Request, res: Response) => {
+  try {
+    if (!systemManager) {
+      return res.status(500).json({ error: '系统管理器未初始化' })
+    }
+    
+    const thresholds = req.body
+    
+    // 验证阈值格式
+    const validKeys = ['cpu', 'memory', 'disk', 'network']
+    for (const key of Object.keys(thresholds)) {
+      if (!validKeys.includes(key)) {
+        return res.status(400).json({
+          success: false,
+          error: `无效的阈值类型: ${key}`
+        })
+      }
+      
+      const threshold = thresholds[key]
+      if (!threshold.warning || !threshold.critical || 
+          threshold.warning >= threshold.critical ||
+          threshold.warning < 0 || threshold.critical > 100) {
+        return res.status(400).json({
+          success: false,
+          error: `无效的阈值配置: ${key}`
+        })
+      }
+    }
+    
+    systemManager.setAlertThresholds(thresholds)
+    
+    res.json({
+      success: true,
+      message: '告警阈值设置成功'
+    })
+  } catch (error) {
+    logger.error('设置告警阈值失败:', error)
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : '设置阈值失败'
+    })
+  }
+})
+
+// 获取网络接口信息
+router.get('/network', (req: Request, res: Response) => {
+  try {
+    if (!systemManager) {
+      return res.status(500).json({ error: '系统管理器未初始化' })
+    }
+    
+    const interfaces = systemManager.getNetworkInterfaces()
+    res.json({
+      success: true,
+      data: interfaces
+    })
+  } catch (error) {
+    logger.error('获取网络接口失败:', error)
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : '获取网络接口失败'
+    })
+  }
+})
+
+// 获取磁盘信息
+router.get('/disks', async (req: Request, res: Response) => {
+  try {
+    if (!systemManager) {
+      return res.status(500).json({ error: '系统管理器未初始化' })
+    }
+    
+    const disks = await systemManager.getDiskList()
+    res.json({
+      success: true,
+      data: disks
+    })
+  } catch (error) {
+    logger.error('获取磁盘信息失败:', error)
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : '获取磁盘信息失败'
+    })
+  }
+})
+
+// 获取进程列表
+router.get('/processes', async (req: Request, res: Response) => {
+  try {
+    if (!systemManager) {
+      return res.status(500).json({ error: '系统管理器未初始化' })
+    }
+    
+    const processes = await systemManager.getProcessList()
+    res.json({
+      success: true,
+      data: processes
+    })
+  } catch (error) {
+    logger.error('获取进程列表失败:', error)
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : '获取进程列表失败'
+    })
+  }
+})
+
+// 获取CPU信息
+router.get('/cpu', (req: Request, res: Response) => {
+  try {
+    const cpus = os.cpus()
+    const cpuInfo = {
+      model: cpus[0]?.model || 'Unknown',
+      speed: cpus[0]?.speed || 0,
+      cores: cpus.length,
+      architecture: os.arch(),
+      details: cpus.map((cpu, index) => ({
+        core: index,
+        model: cpu.model,
+        speed: cpu.speed,
+        times: cpu.times
+      }))
+    }
+    
+    res.json({
+      success: true,
+      data: cpuInfo
+    })
+  } catch (error) {
+    logger.error('获取CPU信息失败:', error)
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : '获取CPU信息失败'
+    })
+  }
+})
+
+// 获取内存信息
+router.get('/memory', (req: Request, res: Response) => {
+  try {
+    const total = os.totalmem()
+    const free = os.freemem()
+    const used = total - free
+    
+    const memoryInfo = {
+      total,
+      free,
+      used,
+      usage: (used / total) * 100,
+      available: free,
+      formatted: {
+        total: formatBytes(total),
+        free: formatBytes(free),
+        used: formatBytes(used)
+      }
+    }
+    
+    res.json({
+      success: true,
+      data: memoryInfo
+    })
+  } catch (error) {
+    logger.error('获取内存信息失败:', error)
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : '获取内存信息失败'
+    })
+  }
+})
+
+// 获取系统负载
+router.get('/load', (req: Request, res: Response) => {
+  try {
+    const loadavg = os.loadavg()
+    const uptime = os.uptime()
+    
+    const loadInfo = {
+      avg1: loadavg[0],
+      avg5: loadavg[1],
+      avg15: loadavg[2],
+      uptime,
+      uptimeFormatted: formatUptime(uptime)
+    }
+    
+    res.json({
+      success: true,
+      data: loadInfo
+    })
+  } catch (error) {
+    logger.error('获取系统负载失败:', error)
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : '获取系统负载失败'
+    })
+  }
+})
+
+// 获取环境变量
+router.get('/env', (req: Request, res: Response) => {
+  try {
+    // 只返回安全的环境变量
+    const safeEnvVars = {
+      NODE_ENV: process.env.NODE_ENV,
+      NODE_VERSION: process.version,
+      PLATFORM: process.platform,
+      ARCH: process.arch,
+      HOME: process.env.HOME || process.env.USERPROFILE,
+      USER: process.env.USER || process.env.USERNAME,
+      SHELL: process.env.SHELL,
+      PATH: process.env.PATH,
+      JAVA_HOME: process.env.JAVA_HOME,
+      PORT: process.env.PORT
+    }
+    
+    res.json({
+      success: true,
+      data: safeEnvVars
+    })
+  } catch (error) {
+    logger.error('获取环境变量失败:', error)
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : '获取环境变量失败'
+    })
+  }
+})
+
+// 获取日志文件列表
+router.get('/logs', async (req: Request, res: Response) => {
+  try {
+    const logDir = path.resolve(process.cwd(), 'logs')
+    
+    try {
+      const files = await fs.readdir(logDir)
+      const logFiles = []
+      
+      for (const file of files) {
+        if (file.endsWith('.log')) {
+          const filePath = path.join(logDir, file)
+          const stats = await fs.stat(filePath)
+          
+          logFiles.push({
+            name: file,
+            size: stats.size,
+            sizeFormatted: formatBytes(stats.size),
+            modified: stats.mtime,
+            created: stats.birthtime
+          })
+        }
+      }
+      
+      res.json({
+        success: true,
+        data: logFiles
+      })
+    } catch (error) {
+      res.json({
+        success: true,
+        data: [],
+        message: '日志目录不存在或为空'
+      })
+    }
+  } catch (error) {
+    logger.error('获取日志文件列表失败:', error)
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : '获取日志列表失败'
+    })
+  }
+})
+
+// 获取日志文件内容
+router.get('/logs/:filename', async (req: Request, res: Response) => {
+  try {
+    const { filename } = req.params
+    const lines = parseInt(req.query.lines as string) || 100
+    
+    // 安全检查：只允许读取.log文件
+    if (!filename.endsWith('.log') || filename.includes('..')) {
+      return res.status(400).json({
+        success: false,
+        error: '无效的文件名'
+      })
+    }
+    
+    const logDir = path.resolve(process.cwd(), 'logs')
+    const filePath = path.join(logDir, filename)
+    
+    try {
+      const content = await fs.readFile(filePath, 'utf-8')
+      const logLines = content.split('\n').filter(line => line.trim())
+      const recentLines = logLines.slice(-lines)
+      
+      res.json({
+        success: true,
+        data: {
+          filename,
+          lines: recentLines,
+          totalLines: logLines.length,
+          requestedLines: lines
+        }
+      })
+    } catch (error) {
+      res.status(404).json({
+        success: false,
+        error: '日志文件不存在'
+      })
+    }
+  } catch (error) {
+    logger.error('读取日志文件失败:', error)
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : '读取日志失败'
+    })
+  }
+})
+
+// 清理日志文件
+router.delete('/logs/:filename', async (req: Request, res: Response) => {
+  try {
+    const { filename } = req.params
+    
+    // 安全检查
+    if (!filename.endsWith('.log') || filename.includes('..')) {
+      return res.status(400).json({
+        success: false,
+        error: '无效的文件名'
+      })
+    }
+    
+    const logDir = path.resolve(process.cwd(), 'logs')
+    const filePath = path.join(logDir, filename)
+    
+    await fs.unlink(filePath)
+    
+    res.json({
+      success: true,
+      message: '日志文件删除成功'
+    })
+  } catch (error) {
+    logger.error('删除日志文件失败:', error)
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : '删除日志失败'
+    })
+  }
+})
+
+// 系统重启（仅重启应用）
+router.post('/restart', (req: Request, res: Response) => {
+  try {
+    res.json({
+      success: true,
+      message: '应用重启命令已发送'
+    })
+    
+    // 延迟重启以确保响应发送
+    setTimeout(() => {
+      logger.info('应用重启中...')
+      process.exit(0)
+    }, 1000)
+  } catch (error) {
+    logger.error('重启应用失败:', error)
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : '重启失败'
+    })
+  }
+})
+
+// 获取系统时间
+router.get('/time', (req: Request, res: Response) => {
+  try {
+    const now = new Date()
+    
+    res.json({
+      success: true,
+      data: {
+        timestamp: now.getTime(),
+        iso: now.toISOString(),
+        local: now.toLocaleString(),
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        offset: now.getTimezoneOffset()
+      }
+    })
+  } catch (error) {
+    logger.error('获取系统时间失败:', error)
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : '获取时间失败'
+    })
+  }
+})
+
+// 工具函数：格式化字节数
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return '0 Bytes'
+  
+  const k = 1024
+  const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
+}
+
+// 工具函数：格式化运行时间
+function formatUptime(seconds: number): string {
+  const days = Math.floor(seconds / 86400)
+  const hours = Math.floor((seconds % 86400) / 3600)
+  const minutes = Math.floor((seconds % 3600) / 60)
+  const secs = Math.floor(seconds % 60)
+  
+  const parts = []
+  if (days > 0) parts.push(`${days}天`)
+  if (hours > 0) parts.push(`${hours}小时`)
+  if (minutes > 0) parts.push(`${minutes}分钟`)
+  if (secs > 0 || parts.length === 0) parts.push(`${secs}秒`)
+  
+  return parts.join(' ')
+}
+
+// 设置路由的函数
+export function setupSystemRoutes(manager: SystemManager) {
+  setSystemManager(manager)
+  return router
+}
+
+export default router

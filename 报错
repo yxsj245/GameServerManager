@@ -1,0 +1,24 @@
+react-dom.development.js:18704 
+ The above error occurred in the <App> component:
+
+    at App (http://localhost:3000/src/App.tsx:30:38)
+    at ErrorBoundary (http://localhost:3000/src/main.tsx:10:5)
+
+React will try to recreate this component tree from scratch using the error boundary you provided, ErrorBoundary.
+main.tsx:21 
+ 应用程序错误: TypeError: initializeTheme is not a function
+    at App.tsx:18:5
+ 
+{componentStack: '\n    at App (http://localhost:3000/src/App.tsx:30:…oundary (http://localhost:3000/src/main.tsx:10:5)'}
+react-dom.development.js:18704 
+ The above error occurred in the <App> component:
+
+    at App (http://localhost:3000/src/App.tsx:30:38)
+    at ErrorBoundary (http://localhost:3000/src/main.tsx:10:5)
+
+React will try to recreate this component tree from scratch using the error boundary you provided, ErrorBoundary.
+main.tsx:21 
+ 应用程序错误: TypeError: initializeTheme is not a function
+    at App.tsx:18:5
+ 
+{componentStack: '\n    at App (http://localhost:3000/src/App.tsx:30:…oundary (http://localhost:3000/src/main.tsx:10:5)'}

@@ -1,0 +1,21 @@
+{
+  "name": "gsm3-game-panel",
+  "version": "1.0.0",
+  "description": "游戏面板 - 支持Steam等游戏一键部署",
+  "main": "index.js",
+  "scripts": {
+    "dev": "concurrently \"npm run dev:client\" \"npm run dev:server\"",
+    "dev:client": "cd client && npm run dev",
+    "dev:server": "cd server && npm run dev",
+    "build": "npm run build:client && npm run build:server",
+    "build:client": "cd client && npm run build",
+    "build:server": "cd server && npm run build",
+    "install:all": "npm install && cd client && npm install && cd ../server && npm install"
+  },
+  "keywords": ["game", "panel", "steam", "deployment", "terminal"],
+  "author": "GSM3 Team",
+  "license": "MIT",
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
