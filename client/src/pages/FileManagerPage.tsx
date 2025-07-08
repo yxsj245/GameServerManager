@@ -27,7 +27,8 @@ import {
   CloseOutlined,
   CopyOutlined,
   ScissorOutlined,
-  SnippetsOutlined
+  SnippetsOutlined,
+  FileAddOutlined
 } from '@ant-design/icons'
 import { useFileStore } from '@/stores/fileStore'
 import { useNotificationStore } from '@/stores/notificationStore'
@@ -64,6 +65,7 @@ const FileManagerPage: React.FC = () => {
     unselectFile,
     clearSelection,
     toggleFileSelection,
+    createFile,
     createDirectory,
     deleteSelectedFiles,
     renameFile,
@@ -78,7 +80,8 @@ const FileManagerPage: React.FC = () => {
     closeFile,
     saveFile,
     setActiveFile,
-    setError
+    setError,
+    updateFileContent
   } = useFileStore()
   
   const { addNotification } = useNotificationStore()
@@ -382,8 +385,18 @@ const FileManagerPage: React.FC = () => {
         })
       }
     } else {
-      // TODO: 创建文件
-      message.info('创建文件功能开发中')
+      // 创建文件
+      const filePath = await createFile(name)
+      if (filePath) {
+        addNotification({
+          type: 'success',
+          title: '创建成功',
+          message: `文件 "${name}" 创建成功`
+        })
+        // 自动打开新创建的文件
+        await openFile(filePath)
+        setEditorModalVisible(true)
+      }
     }
     setCreateDialog({ visible: false, type: 'folder' })
   }
@@ -441,9 +454,7 @@ const FileManagerPage: React.FC = () => {
   
   // 编辑器相关
   const handleEditorChange = (path: string, content: string) => {
-    const newOpenFiles = new Map(openFiles)
-    newOpenFiles.set(path, content)
-    // 这里需要更新store中的openFiles
+    updateFileContent(path, content)
   }
   
   const handleSaveFile = async () => {
@@ -548,6 +559,14 @@ const FileManagerPage: React.FC = () => {
           
           {/* 操作按钮 */}
           <Space>
+            <Tooltip title="新建文件">
+              <Button 
+                icon={<FileAddOutlined />}
+                onClick={() => setCreateDialog({ visible: true, type: 'file' })}
+              >
+                新建文件
+              </Button>
+            </Tooltip>
             <Tooltip title="新建文件夹">
               <Button 
                 icon={<PlusOutlined />}
@@ -749,6 +768,10 @@ const FileManagerPage: React.FC = () => {
                 if (openFiles.size === 1) {
                   setEditorModalVisible(false)
                 }
+              } else if (action === 'add') {
+                // 点击+号创建新文件
+                setCreateDialog({ visible: true, type: 'file' })
+                setEditorModalVisible(false)
               }
             }}
             className="h-full"

@@ -30,6 +30,16 @@ export class FileApiClient {
     return response.data
   }
 
+  // 创建文件
+  async createFile(path: string, content: string = '', encoding: string = 'utf-8'): Promise<FileOperationResult> {
+    const response = await axios.post(`${API_BASE}/create`, {
+      path,
+      content,
+      encoding
+    })
+    return response.data
+  }
+
   // 创建目录
   async createDirectory(path: string): Promise<FileOperationResult> {
     const response = await axios.post(`${API_BASE}/mkdir`, {

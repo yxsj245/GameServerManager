@@ -30,6 +30,7 @@ interface FileStore {
   toggleFileSelection: (path: string) => void
   
   // 文件操作
+  createFile: (name: string, content?: string) => Promise<boolean>
   createDirectory: (name: string) => Promise<boolean>
   deleteSelectedFiles: () => Promise<boolean>
   renameFile: (oldPath: string, newName: string) => Promise<boolean>
@@ -50,6 +51,7 @@ interface FileStore {
   closeFile: (path: string) => void
   saveFile: (path: string, content: string) => Promise<boolean>
   setActiveFile: (path: string | null) => void
+  updateFileContent: (path: string, content: string) => void
   
   // 工具方法
   setLoading: (loading: boolean) => void
@@ -140,6 +142,21 @@ export const useFileStore = create<FileStore>((set, get) => ({
       selectedFiles.add(path)
     }
     set({ selectedFiles })
+  },
+
+  // 创建文件
+  createFile: async (name: string, content: string = '') => {
+    const { currentPath } = get()
+    const newPath = `${currentPath}/${name}`.replace(/\/+/g, '/')
+    
+    try {
+      await fileApiClient.createFile(newPath, content)
+      await get().loadFiles()
+      return newPath
+    } catch (error: any) {
+      set({ error: error.message || '创建文件失败' })
+      return false
+    }
   },
 
   // 创建目录
@@ -371,5 +388,13 @@ export const useFileStore = create<FileStore>((set, get) => ({
       set({ error: error.message || '解压文件失败' })
       return false
     }
+  },
+
+  // 更新文件内容
+  updateFileContent: (path: string, content: string) => {
+    const { openFiles } = get()
+    const newOpenFiles = new Map(openFiles)
+    newOpenFiles.set(path, content)
+    set({ openFiles: newOpenFiles })
   }
 }))

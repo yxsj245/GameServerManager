@@ -179,6 +179,55 @@ router.get('/read', async (req: Request, res: Response) => {
   }
 })
 
+// 新建文件
+router.post('/create', async (req: Request, res: Response) => {
+  try {
+    const { path: filePath, content = '', encoding = 'utf-8' } = req.body
+    
+    if (!filePath) {
+      return res.status(400).json({
+        status: 'error',
+        message: '缺少文件路径'
+      })
+    }
+    
+    if (!isValidPath(filePath)) {
+      return res.status(400).json({
+        status: 'error',
+        message: '无效的路径'
+      })
+    }
+
+    // 检查文件是否已存在
+    try {
+      await fs.access(filePath)
+      return res.status(400).json({
+        status: 'error',
+        message: '文件已存在'
+      })
+    } catch {
+      // 文件不存在，可以创建
+    }
+
+    // 确保父目录存在
+    const parentDir = path.dirname(filePath)
+    await fs.mkdir(parentDir, { recursive: true })
+    
+    // 创建文件
+    await fs.writeFile(filePath, content, encoding)
+    
+    res.json({
+      status: 'success',
+      message: '文件创建成功'
+    })
+  } catch (error: any) {
+    res.status(500).json({
+      status: 'error',
+      message: error.message
+    })
+  }
+})
+
 // 保存文件内容
 router.post('/save', async (req: Request, res: Response) => {
   try {
