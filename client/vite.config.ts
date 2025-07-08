@@ -23,6 +23,10 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  define: {
+    global: 'globalThis',
+    'process.env': {},
+  },
   server: {
     port: clientPort,
     proxy: {

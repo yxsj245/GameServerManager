@@ -198,3 +198,6 @@ export interface SettingsState {
   loading: boolean
   error: string | null
 }
+
+// 文件管理相关类型
+export * from './file'

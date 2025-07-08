@@ -19,6 +19,7 @@ import { setupGameRoutes } from './routes/games.js'
 import { setupSystemRoutes } from './routes/system.js'
 import { setupAuthRoutes } from './routes/auth.js'
 import { setAuthManager } from './middleware/auth.js'
+import filesRouter from './routes/files.js'
 
 // 获取当前文件目录
 const __filename = fileURLToPath(import.meta.url)
@@ -229,6 +230,7 @@ async function startServer() {
     app.use('/api/terminal', setupTerminalRoutes(terminalManager))
     app.use('/api/game', setupGameRoutes(gameManager))
     app.use('/api/system', setupSystemRoutes(systemManager))
+    app.use('/api/files', filesRouter)
 
     // 前端路由处理（SPA支持）
     app.get('*', (req, res) => {

@@ -12,7 +12,8 @@ import {
   Sun,
   Moon,
   User,
-  Gamepad2
+  Gamepad2,
+  FolderOpen
 } from 'lucide-react'
 
 interface LayoutProps {
@@ -28,6 +29,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const navigation = [
     { name: '首页', href: '/', icon: Home },
     { name: '终端', href: '/terminal', icon: Terminal },
+    { name: '文件管理', href: '/files', icon: FolderOpen },
     { name: '设置', href: '/settings', icon: Settings },
   ]
   

@@ -2,6 +2,98 @@
 @tailwind components;
 @tailwind utilities;
 
+/* 文件管理相关样式 */
+.file-context-menu .ant-dropdown-menu {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  border-radius: 8px;
+  padding: 4px;
+}
+
+.dark .file-context-menu .ant-dropdown-menu {
+  background: rgba(31, 41, 55, 0.95);
+  border: 1px solid rgba(75, 85, 99, 0.3);
+}
+
+.file-context-menu .ant-dropdown-menu-item {
+  border-radius: 4px;
+  margin: 1px 0;
+}
+
+.file-context-menu .ant-dropdown-menu-item:hover {
+  background: rgba(59, 130, 246, 0.1);
+}
+
+.file-context-menu .ant-dropdown-menu-item-danger:hover {
+  background: rgba(239, 68, 68, 0.1);
+}
+
+/* 文件网格项悬停效果 */
+.file-grid-item:hover {
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+}
+
+/* Monaco Editor 容器样式 */
+.monaco-editor-container {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.dark .monaco-editor-container {
+  border-color: #374151;
+}
+
+/* Ant Design 组件自定义样式 */
+.ant-modal {
+  backdrop-filter: blur(4px);
+}
+
+.ant-modal-content {
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.ant-tabs-content-holder {
+  height: calc(100% - 46px);
+}
+
+.ant-tabs-tabpane {
+  height: 100%;
+}
+
+/* 滚动条样式 */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.dark ::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.5);
+}
+
 /* 游戏风格自定义样式 */
 @layer base {
   * {

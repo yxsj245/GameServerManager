@@ -10,19 +10,22 @@
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0"
   },
   "dependencies": {
+    "@monaco-editor/react": "^4.6.0",
+    "antd": "^5.15.0",
+    "axios": "^1.6.8",
+    "clsx": "^2.0.0",
+    "jsonwebtoken": "^9.0.2",
+    "lucide-react": "^0.363.0",
+    "monaco-editor": "^0.47.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "react-router-dom": "^6.20.1",
-    "socket.io-client": "^4.7.4",
-    "zustand": "^4.4.7",
+    "react-router-dom": "^6.22.3",
+    "socket.io-client": "^4.7.5",
+    "tailwind-merge": "^2.1.0",
+    "zustand": "^4.5.2",
     "@xterm/addon-fit": "^0.10.0",
     "@xterm/addon-web-links": "^0.11.0",
-    "@xterm/xterm": "^5.5.0",
-    "lucide-react": "^0.294.0",
-    "clsx": "^2.0.0",
-    "tailwind-merge": "^2.1.0",
-    "jsonwebtoken": "^9.0.2",
-    "axios": "^1.6.2"
+    "@xterm/xterm": "^5.5.0"
   },
   "devDependencies": {
     "@types/react": "^18.2.43",
