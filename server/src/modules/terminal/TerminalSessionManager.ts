@@ -3,7 +3,7 @@ import path from 'path'
 import winston from 'winston'
 
 // 终端会话持久化数据接口
-interface PersistedTerminalSession {
+export interface PersistedTerminalSession {
   id: string
   name: string
   workingDirectory: string

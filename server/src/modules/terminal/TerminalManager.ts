@@ -5,7 +5,7 @@ import winston from 'winston'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import os from 'os'
-import { TerminalSessionManager } from './TerminalSessionManager.js'
+import { TerminalSessionManager, PersistedTerminalSession } from './TerminalSessionManager.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -58,10 +58,10 @@ export class TerminalManager {
     const platform = os.platform()
     if (platform === 'win32') {
       this.ptyPath = path.resolve(__dirname, '../../../PTY/pty_win32_x64.exe')
-      //this.ptyPath = path.resolve(__dirname, '../../PTY/pty_win32_x64.exe')
+      // this.ptyPath = path.resolve(__dirname, '../../PTY/pty_win32_x64.exe')
     } else {
       this.ptyPath = path.resolve(__dirname, '../../../PTY/pty_linux_x64')
-      //this.ptyPath = path.resolve(__dirname, '../../PTY/pty_linux_x64')
+      // this.ptyPath = path.resolve(__dirname, '../../PTY/pty_linux_x64')
     }
     
     this.logger.info(`终端管理器初始化完成，PTY路径: ${this.ptyPath}`)
@@ -551,7 +551,7 @@ export class TerminalManager {
   /**
    * 获取保存的会话列表
    */
-  public getSavedSessions() {
+  public getSavedSessions(): PersistedTerminalSession[] {
     return this.sessionManager.getSavedSessions()
   }
 

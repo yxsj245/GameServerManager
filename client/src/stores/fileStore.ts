@@ -155,7 +155,7 @@ export const useFileStore = create<FileStore>((set, get) => ({
     try {
       await fileApiClient.createFile(newPath, content)
       await get().loadFiles()
-      return newPath
+      return true
     } catch (error: any) {
       set({ error: error.message || '创建文件失败' })
       return false

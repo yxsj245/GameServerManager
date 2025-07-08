@@ -47,6 +47,10 @@ async function createPackage() {
       path.join(packageDir, '.env.example')
     )
     
+    // 创建uploads目录
+    await fs.ensureDir(path.join(packageDir, 'server', 'uploads'))
+    console.log('📁 创建uploads目录...')
+    
     console.log('📥 安装服务端生产依赖...')
     // 在打包的服务端目录中安装生产依赖
     try {

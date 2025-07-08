@@ -8,6 +8,7 @@ import dotenv from 'dotenv'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import winston from 'winston'
+import { promises as fs } from 'fs'
 
 import { TerminalManager } from './modules/terminal/TerminalManager.js'
 import { GameManager } from './modules/game/GameManager.js'
@@ -212,6 +213,15 @@ process.on('unhandledRejection', (reason, promise) => {
 // 启动服务器
 async function startServer() {
   try {
+    // 确保uploads目录存在
+    const uploadsDir = path.join(process.cwd(), 'uploads')
+    try {
+      await fs.access(uploadsDir)
+    } catch {
+      await fs.mkdir(uploadsDir, { recursive: true })
+      logger.info(`创建uploads目录: ${uploadsDir}`)
+    }
+
     // 初始化管理器
     configManager = new ConfigManager(logger)
     authManager = new AuthManager(configManager, logger)

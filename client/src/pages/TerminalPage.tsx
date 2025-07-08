@@ -40,9 +40,9 @@ const TerminalPage: React.FC = () => {
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null)
   const [editingName, setEditingName] = useState('')
   const [isFullscreen, setIsFullscreen] = useState(false)
+  const [sessionsLoaded, setSessionsLoaded] = useState(false)
   
   const terminalContainerRef = useRef<HTMLDivElement>(null)
-  const isSessionsLoadedRef = useRef(false)
   const { addNotification } = useNotificationStore()
   
   // 创建新的终端会话
@@ -279,21 +279,18 @@ const TerminalPage: React.FC = () => {
   // 检查URL参数中的cwd，如果存在则创建终端
   useEffect(() => {
     const cwd = searchParams.get('cwd')
-    if (cwd && sessions.length === 0 && isSessionsLoadedRef.current) {
+    if (cwd && sessionsLoaded) {
       createTerminalSession(cwd)
       // 清除URL参数，避免重复创建
       const newSearchParams = new URLSearchParams(searchParams)
       newSearchParams.delete('cwd')
       setSearchParams(newSearchParams, { replace: true })
     }
-  }, [searchParams, sessions.length, setSearchParams])
+  }, [searchParams, sessions.length, setSearchParams, sessionsLoaded])
 
   // 页面加载时获取现有终端会话
   useEffect(() => {
     const loadExistingSessions = async () => {
-      if (isSessionsLoadedRef.current) return
-      isSessionsLoadedRef.current = true
-      
       try {
         const response = await apiClient.getTerminalSessions()
         if (response.success && response.data) {
@@ -404,6 +401,8 @@ const TerminalPage: React.FC = () => {
           title: '加载会话失败',
           message: '无法从服务器获取现有的终端会话。'
         })
+      } finally {
+        setSessionsLoaded(true)
       }
     }
     

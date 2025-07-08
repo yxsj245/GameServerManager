@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { Modal, Input, Form, Upload, Button, message } from 'antd'
 import { InboxOutlined } from '@ant-design/icons'
-import type { UploadProps } from 'antd'
+import type { UploadProps, UploadFile } from 'antd'
 
 const { Dragger } = Upload
 
@@ -156,25 +156,26 @@ export const UploadDialog: React.FC<UploadDialogProps> = ({
   onConfirm,
   onCancel
 }) => {
-  const [fileList, setFileList] = useState<File[]>([])
+  const [fileList, setFileList] = useState<UploadFile[]>([])
   const [loading, setLoading] = useState(false)
 
   const uploadProps: UploadProps = {
     name: 'files',
     multiple: true,
     beforeUpload: (file) => {
-      setFileList(prev => [...prev, file])
+      const uploadFile: UploadFile = {
+        uid: file.name + file.size + Date.now(),
+        name: file.name,
+        status: 'done',
+        originFileObj: file as any
+      }
+      setFileList(prev => [...prev, uploadFile])
       return false // 阻止自动上传
     },
     onRemove: (file) => {
       setFileList(prev => prev.filter(f => f.uid !== file.uid))
     },
-    fileList: fileList.map(file => ({
-      uid: file.name + file.size,
-      name: file.name,
-      status: 'done' as const,
-      originFileObj: file
-    }))
+    fileList: fileList
   }
 
   const handleOk = async () => {
@@ -187,8 +188,10 @@ export const UploadDialog: React.FC<UploadDialogProps> = ({
     try {
       // 创建一个真正的FileList对象
       const dataTransfer = new DataTransfer()
-      fileList.forEach(file => {
-        dataTransfer.items.add(file)
+      fileList.forEach(uploadFile => {
+        if (uploadFile.originFileObj) {
+          dataTransfer.items.add(uploadFile.originFileObj as File)
+        }
       })
       const files = dataTransfer.files
       
