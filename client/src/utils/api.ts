@@ -211,6 +211,10 @@ class ApiClient {
     return this.post('/terminal/close', { sessionId })
   }
 
+  async updateTerminalSessionName(sessionId: string, name: string) {
+    return this.put(`/terminal/sessions/${sessionId}/name`, { name })
+  }
+
   // 游戏相关API
   async getGameServers() {
     return this.get('/game/servers')

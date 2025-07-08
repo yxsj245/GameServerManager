@@ -5,12 +5,14 @@ import winston from 'winston'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import os from 'os'
+import { TerminalSessionManager } from './TerminalSessionManager.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
 interface PtySession {
   id: string
+  name: string // 终端会话名称
   process: ChildProcess
   socket: Socket
   workingDirectory: string
@@ -23,6 +25,7 @@ interface PtySession {
 
 interface CreatePtyData {
   sessionId: string
+  name?: string // 会话名称
   cols: number
   rows: number
   workingDirectory?: string
@@ -44,10 +47,12 @@ export class TerminalManager {
   private io: SocketIOServer
   private logger: winston.Logger
   private ptyPath: string
+  private sessionManager: TerminalSessionManager
 
   constructor(io: SocketIOServer, logger: winston.Logger) {
     this.io = io
     this.logger = logger
+    this.sessionManager = new TerminalSessionManager(logger)
     
     // 根据操作系统选择PTY程序路径
     const platform = os.platform()
@@ -64,7 +69,19 @@ export class TerminalManager {
     // 定期清理不活跃的会话
     setInterval(() => {
       this.cleanupInactiveSessions()
-    }, 60000) // 每分钟检查一次
+    }, 5 * 60 * 1000) // 每5分钟检查一次
+    
+    // 定期清理过期的持久化会话
+    setInterval(() => {
+      this.sessionManager.cleanupExpiredSessions()
+    }, 24 * 60 * 60 * 1000) // 每24小时清理一次
+  }
+  
+  /**
+   * 初始化终端管理器
+   */
+  async initialize(): Promise<void> {
+    await this.sessionManager.initialize()
   }
 
   /**
@@ -72,9 +89,10 @@ export class TerminalManager {
    */
   public createPty(socket: Socket, data: CreatePtyData): void {
     try {
-      const { sessionId, cols, rows, workingDirectory = process.cwd() } = data
+      const { sessionId, name, cols, rows, workingDirectory = process.cwd() } = data
+      const sessionName = name || `终端会话 ${sessionId.slice(-8)}`
       
-      this.logger.info(`创建PTY会话: ${sessionId}, 大小: ${cols}x${rows}`)
+      this.logger.info(`创建PTY会话: ${sessionId} (${sessionName}), 大小: ${cols}x${rows}`)
       
       // 检查会话是否已存在
       if (this.sessions.has(sessionId)) {
@@ -114,15 +132,29 @@ export class TerminalManager {
       // 创建会话对象
       const session: PtySession = {
         id: sessionId,
+        name: sessionName,
         process: ptyProcess,
         socket,
         workingDirectory,
         createdAt: new Date(),
         lastActivity: new Date(),
-        outputBuffer: [] // 初始化输出缓存
+        outputBuffer: []
       }
       
+      // 保存会话到内存
       this.sessions.set(sessionId, session)
+      
+      // 持久化保存会话信息
+      this.sessionManager.saveSession({
+        id: sessionId,
+        name: sessionName,
+        workingDirectory,
+        createdAt: session.createdAt,
+        lastActivity: session.lastActivity,
+        isActive: true
+      }).catch(error => {
+        this.logger.error(`保存会话到配置文件失败: ${sessionId}`, error)
+      })
       
       // 处理PTY输出
       ptyProcess.stdout?.on('data', (data: Buffer) => {
@@ -307,6 +339,11 @@ export class TerminalManager {
       // 从会话列表中移除
       this.sessions.delete(sessionId)
       
+      // 从持久化存储中移除会话
+      this.sessionManager.removeSession(sessionId).catch(error => {
+        this.logger.error(`从配置文件删除会话失败: ${sessionId}`, error)
+      })
+      
       // 通知客户端会话已关闭
       socket.emit('pty-closed', { sessionId })
       
@@ -335,6 +372,13 @@ export class TerminalManager {
           // 标记会话为断开状态，但不关闭PTY进程
           session.disconnected = true
           session.disconnectedAt = new Date()
+          session.lastActivity = new Date()
+          
+          // 更新持久化状态
+          this.sessionManager.setSessionActive(sessionId, false).catch(error => {
+            this.logger.error(`更新会话断开状态失败: ${sessionId}`, error)
+          })
+          
           this.logger.info(`会话 ${sessionId} 已标记为断开状态`)
         }
       }
@@ -399,6 +443,11 @@ export class TerminalManager {
       session.disconnected = false
       session.disconnectedAt = undefined
       session.lastActivity = new Date()
+      
+      // 更新持久化状态
+      this.sessionManager.setSessionActive(sessionId, true).catch(error => {
+        this.logger.error(`更新会话重连状态失败: ${sessionId}`, error)
+      })
 
       this.logger.info(`会话 ${sessionId} 重新连接成功`)
       
@@ -454,12 +503,40 @@ export class TerminalManager {
   }
   
   /**
+   * 更新会话名称
+   */
+  public async updateSessionName(sessionId: string, newName: string): Promise<boolean> {
+    try {
+      const session = this.sessions.get(sessionId)
+      
+      if (!session) {
+        this.logger.warn(`尝试更新不存在的会话名称: ${sessionId}`)
+        return false
+      }
+      
+      // 更新内存中的会话名称
+      session.name = newName
+      session.lastActivity = new Date()
+      
+      // 更新持久化存储中的会话名称
+      await this.sessionManager.updateSessionName(sessionId, newName)
+      
+      this.logger.info(`会话名称已更新: ${sessionId} -> ${newName}`)
+      return true
+    } catch (error) {
+      this.logger.error(`更新会话名称失败: ${sessionId}`, error)
+      return false
+    }
+  }
+  
+  /**
    * 获取活跃会话统计
    */
-  public getSessionStats(): { total: number; sessions: Array<{ id: string; createdAt: Date; lastActivity: Date; disconnected?: boolean }> } {
+  public getSessionStats(): { total: number; sessions: Array<{ id: string; name: string; createdAt: Date; lastActivity: Date; disconnected?: boolean }> } {
     const sessions = Array.from(this.sessions.values())
       .map(session => ({
         id: session.id,
+        name: session.name,
         createdAt: session.createdAt,
         lastActivity: session.lastActivity,
         disconnected: session.disconnected
@@ -469,6 +546,13 @@ export class TerminalManager {
       total: sessions.length,
       sessions
     }
+  }
+  
+  /**
+   * 获取保存的会话列表
+   */
+  public getSavedSessions() {
+    return this.sessionManager.getSavedSessions()
   }
 
   /**

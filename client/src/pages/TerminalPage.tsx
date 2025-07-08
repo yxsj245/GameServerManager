@@ -178,13 +178,37 @@ const TerminalPage: React.FC = () => {
     setEditingName(currentName)
   }
   
-  const finishRenaming = () => {
+  const finishRenaming = async () => {
     if (editingSessionId && editingName.trim()) {
+      const newName = editingName.trim()
+      
+      // 更新本地状态
       setSessions(prev => prev.map(s => 
         s.id === editingSessionId 
-          ? { ...s, name: editingName.trim() }
+          ? { ...s, name: newName }
           : s
       ))
+      
+      // 调用后端API持久化保存
+      try {
+        const response = await apiClient.updateTerminalSessionName(editingSessionId, newName)
+        if (response.success) {
+          addNotification({
+            type: 'success',
+            title: '重命名成功',
+            message: `终端会话已重命名为 "${newName}"`
+          })
+        } else {
+          throw new Error(response.error || '重命名失败')
+        }
+      } catch (error) {
+        console.error('保存会话名称失败:', error)
+        addNotification({
+          type: 'error',
+          title: '保存失败',
+          message: '会话名称保存失败，但本地显示已更新'
+        })
+      }
     }
     setEditingSessionId(null)
     setEditingName('')
@@ -256,8 +280,15 @@ const TerminalPage: React.FC = () => {
       
       try {
         const response = await apiClient.getTerminalSessions()
-        if (response.success && response.data.sessions.length > 0) {
-          const sessionData = response.data.sessions
+        if (response.success && response.data) {
+          // 合并活跃会话和保存的会话
+          const activeSessions = response.data.activeSessions || []
+          const savedSessions = response.data.savedSessions || []
+          
+          // 优先使用活跃会话，如果没有则使用保存的会话
+          const sessionData = activeSessions.length > 0 ? activeSessions : savedSessions
+          
+          if (sessionData.length > 0) {
           
           const newSessions: TerminalSession[] = sessionData.map((session: any, index: number) => {
             const terminal = new Terminal({
@@ -348,6 +379,7 @@ const TerminalPage: React.FC = () => {
             
             attemptReconnect()
           }, 1000)
+          }
         }
       } catch (error) {
         console.error('获取现有终端会话失败:', error)

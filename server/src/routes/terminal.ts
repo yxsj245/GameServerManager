@@ -41,10 +41,13 @@ router.get('/sessions', (req: Request, res: Response) => {
     }
     
     const stats = terminalManager.getSessionStats()
+    const savedSessions = terminalManager.getSavedSessions()
+    
     res.json({
       success: true,
       data: {
-        sessions: stats.sessions,
+        activeSessions: stats.sessions,
+        savedSessions: savedSessions,
         total: stats.total
       }
     })
@@ -53,6 +56,45 @@ router.get('/sessions', (req: Request, res: Response) => {
     res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : '获取会话列表失败'
+    })
+  }
+})
+
+// 更新终端会话名称
+router.put('/sessions/:sessionId/name', async (req: Request, res: Response) => {
+  try {
+    if (!terminalManager) {
+      return res.status(500).json({ error: '终端管理器未初始化' })
+    }
+    
+    const { sessionId } = req.params
+    const { name } = req.body
+    
+    if (!name || typeof name !== 'string' || name.trim().length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: '会话名称不能为空'
+      })
+    }
+    
+    const success = await terminalManager.updateSessionName(sessionId, name.trim())
+    
+    if (success) {
+      res.json({
+        success: true,
+        message: '会话名称更新成功'
+      })
+    } else {
+      res.status(404).json({
+        success: false,
+        error: '会话不存在'
+      })
+    }
+  } catch (error) {
+    logger.error('更新会话名称失败:', error)
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : '更新会话名称失败'
     })
   }
 })

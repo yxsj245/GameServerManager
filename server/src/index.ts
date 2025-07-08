@@ -221,6 +221,7 @@ async function startServer() {
     // 初始化配置和认证
     await configManager.initialize()
     await authManager.initialize()
+    await terminalManager.initialize()
     setAuthManager(authManager)
 
     // 设置路由
