@@ -12,7 +12,12 @@ import {
   Minimize2,
   RotateCcw,
   Settings,
-  Terminal as TerminalIcon
+  Terminal as TerminalIcon,
+  ChevronLeft,
+  ChevronRight,
+  Edit3,
+  Check,
+  Folder
 } from 'lucide-react'
 import '@xterm/xterm/css/xterm.css'
 
@@ -27,10 +32,14 @@ interface TerminalSession {
 const TerminalPage: React.FC = () => {
   const [sessions, setSessions] = useState<TerminalSession[]>([])
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null)
-
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [sidebarHovered, setSidebarHovered] = useState(false)
+  const [editingSessionId, setEditingSessionId] = useState<string | null>(null)
+  const [editingName, setEditingName] = useState('')
   const [isFullscreen, setIsFullscreen] = useState(false)
+  
   const terminalContainerRef = useRef<HTMLDivElement>(null)
-  const isSessionsLoadedRef = useRef(false) // 防止重复加载现有会话
+  const isSessionsLoadedRef = useRef(false)
   const { addNotification } = useNotificationStore()
   
   // 创建新的终端会话
@@ -82,7 +91,7 @@ const TerminalPage: React.FC = () => {
       socketClient.sendTerminalInput(sessionId, data)
     })
     
-    // 监听终端大小变化（只在Socket连接时才发送）
+    // 监听终端大小变化
     terminal.onResize(({ cols, rows }) => {
       if (socketClient.isConnected()) {
         socketClient.resizeTerminal(sessionId, cols, rows)
@@ -163,6 +172,29 @@ const TerminalPage: React.FC = () => {
     setActiveSessionId(sessionId)
   }
   
+  // 重命名终端会话
+  const startRenaming = (sessionId: string, currentName: string) => {
+    setEditingSessionId(sessionId)
+    setEditingName(currentName)
+  }
+  
+  const finishRenaming = () => {
+    if (editingSessionId && editingName.trim()) {
+      setSessions(prev => prev.map(s => 
+        s.id === editingSessionId 
+          ? { ...s, name: editingName.trim() }
+          : s
+      ))
+    }
+    setEditingSessionId(null)
+    setEditingName('')
+  }
+  
+  const cancelRenaming = () => {
+    setEditingSessionId(null)
+    setEditingName('')
+  }
+  
   // 重置终端
   const resetTerminal = () => {
     const activeSession = sessions.find(s => s.id === activeSessionId)
@@ -192,7 +224,7 @@ const TerminalPage: React.FC = () => {
   // 页面加载时获取现有终端会话
   useEffect(() => {
     const loadExistingSessions = async () => {
-      if (isSessionsLoadedRef.current) return // 如果已经加载过，直接返回
+      if (isSessionsLoadedRef.current) return
       isSessionsLoadedRef.current = true
       
       try {
@@ -200,7 +232,6 @@ const TerminalPage: React.FC = () => {
         if (response.success && response.data.sessions.length > 0) {
           const sessionData = response.data.sessions
           
-          // 直接创建会话实例并恢复连接
           const newSessions: TerminalSession[] = sessionData.map((session: any, index: number) => {
             const terminal = new Terminal({
               theme: {
@@ -270,18 +301,16 @@ const TerminalPage: React.FC = () => {
             message: `找到 ${sessionData.length} 个现有终端会话，正在恢复...`
           })
           
-          // 延迟重连，确保Socket连接稳定
+          // 延迟重连
           setTimeout(() => {
             const attemptReconnect = () => {
               if (socketClient.isConnected()) {
                 newSessions.forEach(session => {
-                  console.log('发送重连请求:', session.id)
                   socketClient.emit('reconnect-session', { sessionId: session.id })
                 })
               } else {
                 const onConnect = () => {
                   newSessions.forEach(session => {
-                    console.log('Socket连接后发送重连请求:', session.id)
                     socketClient.emit('reconnect-session', { sessionId: session.id })
                   })
                   socketClient.off('connect', onConnect)
@@ -306,51 +335,61 @@ const TerminalPage: React.FC = () => {
     loadExistingSessions()
   }, [])
   
-
+  // 使用useRef来保存最新的sessions状态，避免重复注册事件监听器
+  const sessionsRef = useRef<TerminalSession[]>([])
+  
+  useEffect(() => {
+    sessionsRef.current = sessions
+  }, [sessions])
   
   useEffect(() => {
     // 监听终端输出
-    socketClient.on('terminal-output', ({ sessionId, data }) => {
-      const session = sessions.find(s => s.id === sessionId)
+    const handleTerminalOutput = ({ sessionId, data }: { sessionId: string; data: string }) => {
+      const session = sessionsRef.current.find(s => s.id === sessionId)
       if (session) {
         session.terminal.write(data)
       }
-    })
+    }
     
     // 监听终端创建成功
-    socketClient.on('terminal-created', ({ sessionId, name }) => {
+    const handleTerminalCreated = ({ sessionId, name }: { sessionId: string; name: string }) => {
       console.log(`终端创建成功: ${sessionId} - ${name}`)
-    })
+    }
     
     // 监听终端关闭
-    socketClient.on('terminal-closed', ({ sessionId }) => {
+    const handleTerminalClosed = ({ sessionId }: { sessionId: string }) => {
       console.log(`终端已关闭: ${sessionId}`)
-    })
+    }
     
     // 监听会话重连成功
-    socketClient.on('session-reconnected', ({ sessionId }: { sessionId: string }) => {
+    const handleSessionReconnected = ({ sessionId }: { sessionId: string }) => {
       console.log(`会话重连成功: ${sessionId}`)
-      // 不显示重连成功通知，避免过多提示
-    })
+    }
     
     // 监听会话重连失败
-    socketClient.on('session-reconnect-failed', ({ sessionId }: { sessionId: string }) => {
+    const handleSessionReconnectFailed = ({ sessionId }: { sessionId: string }) => {
       console.log(`会话重连失败: ${sessionId}`)
       addNotification({
         type: 'error',
         title: '会话重连失败',
         message: `终端会话 ${sessionId} 重连失败，可能已过期`
       })
-    })
+    }
+    
+    socketClient.on('terminal-output', handleTerminalOutput)
+    socketClient.on('terminal-created', handleTerminalCreated)
+    socketClient.on('terminal-closed', handleTerminalClosed)
+    socketClient.on('session-reconnected', handleSessionReconnected)
+    socketClient.on('session-reconnect-failed', handleSessionReconnectFailed)
     
     return () => {
-      socketClient.off('terminal-output')
-      socketClient.off('terminal-created')
-      socketClient.off('terminal-closed')
-      socketClient.off('session-reconnected')
-      socketClient.off('session-reconnect-failed')
+      socketClient.off('terminal-output', handleTerminalOutput)
+      socketClient.off('terminal-created', handleTerminalCreated)
+      socketClient.off('terminal-closed', handleTerminalClosed)
+      socketClient.off('session-reconnected', handleSessionReconnected)
+      socketClient.off('session-reconnect-failed', handleSessionReconnectFailed)
     }
-  }, [sessions])
+  }, [addNotification]) // 只依赖addNotification，不依赖sessions
   
   useEffect(() => {
     // 当活动会话改变时，挂载终端到DOM
@@ -358,29 +397,26 @@ const TerminalPage: React.FC = () => {
     if (activeSession && terminalContainerRef.current) {
       const container = terminalContainerRef.current
 
-      // 清空容器，这会从 DOM 中移除之前可能存在的终端
+      // 清空容器
       while (container.firstChild) {
         container.removeChild(container.firstChild)
       }
 
       try {
         if (!activeSession.terminal.element) {
-          // 如果终端尚未初始化，则打开它
           activeSession.terminal.open(container)
         } else {
-          // 如果已经初始化，则将其DOM元素重新附加
           container.appendChild(activeSession.terminal.element)
         }
 
-        // 终端获得焦点
         activeSession.terminal.focus()
 
-        // 延迟调整大小以确保正确渲染
+        // 延迟调整大小
         setTimeout(() => {
           activeSession.fitAddon.fit()
         }, 50)
       } catch (error) {
-        console.error('挂载或重新创建终端失败:', error)
+        console.error('挂载终端失败:', error)
       }
     }
   }, [activeSessionId, sessions])
@@ -400,142 +436,257 @@ const TerminalPage: React.FC = () => {
     return () => window.removeEventListener('resize', handleResize)
   }, [activeSessionId, sessions])
   
+  // 判断侧边栏是否应该显示
+  const shouldShowSidebar = !sidebarCollapsed || sidebarHovered
+  
   return (
-    <div className={`${isFullscreen ? 'fixed inset-0 z-50 bg-gray-900 flex flex-col' : ''}`}>
-      <div className={`${isFullscreen ? 'flex flex-col h-full' : 'space-y-4'}`}>
-        {/* 终端标签栏 */}
-        <div className={`card-game p-4 ${isFullscreen ? 'flex-shrink-0' : ''}`}>
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center space-x-2">
-              <TerminalIcon className="w-5 h-5 text-blue-500" />
-              <h2 className="text-lg font-semibold text-black dark:text-white font-display">
-                终端管理
-              </h2>
-            </div>
-            
-            <div className="flex items-center space-x-2">
-              <button
-                onClick={createTerminalSession}
-                className="btn-game px-4 py-2 text-sm flex items-center space-x-2"
-              >
-                <Plus className="w-4 h-4" />
-                <span>新建终端</span>
-              </button>
+    <div className={`${isFullscreen ? 'fixed inset-0 z-50 bg-gray-900' : 'h-screen'} flex`}>
+      {/* 左侧终端标签页侧边栏 */}
+      <div 
+        className={`
+          relative bg-gray-800/50 backdrop-blur-sm border-r border-gray-700/50 transition-all duration-300 ease-in-out
+          ${shouldShowSidebar ? 'w-80' : 'w-12'}
+          ${sidebarHovered ? 'shadow-xl' : ''}
+        `}
+        onMouseEnter={() => setSidebarHovered(true)}
+        onMouseLeave={() => setSidebarHovered(false)}
+      >
+        {/* 侧边栏头部 */}
+        <div className="flex items-center justify-between p-4 border-b border-gray-700/50">
+          {shouldShowSidebar && (
+            <>
+              <div className="flex items-center space-x-2">
+                <TerminalIcon className="w-5 h-5 text-blue-400" />
+                <h2 className="text-lg font-semibold text-white font-display">
+                  终端管理
+                </h2>
+              </div>
               
-              {activeSessionId && (
-                <>
-                  <button
-                    onClick={resetTerminal}
-                    className="p-2 text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white hover:bg-white/10 rounded-lg transition-colors"
-                    title="重置终端"
-                  >
-                    <RotateCcw className="w-4 h-4" />
-                  </button>
-                  
-                  <button
-                    onClick={toggleFullscreen}
-                    className="p-2 text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white hover:bg-white/10 rounded-lg transition-colors"
-                    title={isFullscreen ? '退出全屏' : '全屏模式'}
-                  >
-                    {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-                  </button>
-                  
-                  <button
-                    className="p-2 text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white hover:bg-white/10 rounded-lg transition-colors"
-                    title="终端设置"
-                  >
-                    <Settings className="w-4 h-4" />
-                  </button>
-                </>
-              )}
-            </div>
-          </div>
+              <button
+                onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+                className="p-1.5 text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+                title="折叠侧边栏"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+            </>
+          )}
           
-          {/* 终端标签 */}
-          {sessions.length > 0 && (
-            <div className="flex space-x-2 overflow-x-auto">
+          {!shouldShowSidebar && (
+            <button
+              onClick={() => setSidebarCollapsed(false)}
+              className="p-1.5 text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors mx-auto"
+              title="展开侧边栏"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+        
+        {/* 新建终端按钮 */}
+        {shouldShowSidebar && (
+          <div className="p-4 border-b border-gray-700/50">
+            <button
+              onClick={createTerminalSession}
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center justify-center space-x-2 transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+              <span>新建终端</span>
+            </button>
+          </div>
+        )}
+        
+        {/* 终端会话列表 */}
+        <div className="flex-1 overflow-y-auto">
+          {shouldShowSidebar ? (
+            <div className="p-2 space-y-1">
               {sessions.map((session) => (
                 <div
                   key={session.id}
                   className={`
-                    flex items-center space-x-2 px-3 py-2 rounded-lg cursor-pointer transition-all
+                    group relative p-3 rounded-lg cursor-pointer transition-all
                     ${session.active
                       ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30'
-                      : 'bg-white/5 text-gray-600 dark:text-gray-400 hover:bg-white/10 hover:text-black dark:hover:text-white'
+                      : 'text-gray-300 hover:bg-white/5 hover:text-white'
                     }
                   `}
                   onClick={() => switchTerminalSession(session.id)}
                 >
-                  <span className="text-sm font-medium whitespace-nowrap">
-                    {session.name}
-                  </span>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      closeTerminalSession(session.id)
-                    }}
-                    className="text-gray-500 hover:text-red-400 transition-colors"
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-2 flex-1 min-w-0">
+                      <Folder className="w-4 h-4 flex-shrink-0" />
+                      
+                      {editingSessionId === session.id ? (
+                        <input
+                          type="text"
+                          value={editingName}
+                          onChange={(e) => setEditingName(e.target.value)}
+                          onBlur={finishRenaming}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') finishRenaming()
+                            if (e.key === 'Escape') cancelRenaming()
+                          }}
+                          className="bg-gray-700 text-white px-2 py-1 rounded text-sm flex-1 min-w-0"
+                          autoFocus
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                      ) : (
+                        <span className="text-sm font-medium truncate flex-1">
+                          {session.name}
+                        </span>
+                      )}
+                    </div>
+                    
+                    <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      {editingSessionId === session.id ? (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            finishRenaming()
+                          }}
+                          className="p-1 text-green-400 hover:text-green-300 transition-colors"
+                          title="确认重命名"
+                        >
+                          <Check className="w-3 h-3" />
+                        </button>
+                      ) : (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            startRenaming(session.id, session.name)
+                          }}
+                          className="p-1 text-gray-400 hover:text-white transition-colors"
+                          title="重命名"
+                        >
+                          <Edit3 className="w-3 h-3" />
+                        </button>
+                      )}
+                      
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          closeTerminalSession(session.id)
+                        }}
+                        className="p-1 text-gray-400 hover:text-red-400 transition-colors"
+                        title="关闭终端"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  </div>
+                  
+                  <div className="text-xs text-gray-500 mt-1 truncate">
+                    {session.id}
+                  </div>
+                </div>
+              ))}
+              
+              {sessions.length === 0 && (
+                <div className="text-center py-8 text-gray-500">
+                  <TerminalIcon className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                  <p className="text-sm">暂无终端会话</p>
+                </div>
+              )}
+            </div>
+          ) : (
+            // 折叠状态下的简化显示
+            <div className="p-1 space-y-1">
+              {sessions.map((session) => (
+                <div
+                  key={session.id}
+                  className={`
+                    w-10 h-10 rounded-lg cursor-pointer transition-all flex items-center justify-center
+                    ${session.active
+                      ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30'
+                      : 'text-gray-400 hover:bg-white/5 hover:text-white'
+                    }
+                  `}
+                  onClick={() => switchTerminalSession(session.id)}
+                  title={session.name}
+                >
+                  <Folder className="w-4 h-4" />
                 </div>
               ))}
             </div>
           )}
         </div>
         
-        {/* 终端容器 */}
-        <div className={`terminal-container ${isFullscreen ? 'flex-1 min-h-0 flex flex-col' : 'h-96'}`}>
-          {sessions.length === 0 ? (
-            <div className="flex items-center justify-center h-full">
-              <div className="text-center">
-                <TerminalIcon className="w-16 h-16 text-gray-500 mx-auto mb-4" />
-                <p className="text-gray-600 dark:text-gray-400 mb-4">暂无终端会话</p>
+        {/* 侧边栏底部工具栏 */}
+        {shouldShowSidebar && activeSessionId && (
+          <div className="p-4 border-t border-gray-700/50">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
                 <button
-                  onClick={createTerminalSession}
-                  className="btn-game px-6 py-3"
+                  onClick={resetTerminal}
+                  className="p-2 text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+                  title="重置终端"
                 >
-                  创建第一个终端
+                  <RotateCcw className="w-4 h-4" />
+                </button>
+                
+                <button
+                  className="p-2 text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+                  title="终端设置"
+                >
+                  <Settings className="w-4 h-4" />
                 </button>
               </div>
+              
+              <button
+                onClick={toggleFullscreen}
+                className="p-2 text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+                title={isFullscreen ? '退出全屏' : '全屏模式'}
+              >
+                {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+              </button>
             </div>
-          ) : (
-            <>
-              {/* 终端头部 */}
-              <div className={`terminal-header ${isFullscreen ? 'flex-shrink-0' : ''}`}>
-                <div className="terminal-dots">
-                  <div className="terminal-dot red"></div>
-                  <div className="terminal-dot yellow"></div>
-                  <div className="terminal-dot green"></div>
+          </div>
+        )}
+      </div>
+      
+      {/* 右侧终端显示区域 */}
+      <div className="flex-1 flex flex-col min-w-0">
+        {sessions.length === 0 ? (
+          <div className="flex-1 flex items-center justify-center bg-gray-900">
+            <div className="text-center">
+              <TerminalIcon className="w-16 h-16 text-gray-500 mx-auto mb-4" />
+              <p className="text-gray-400 mb-4">暂无终端会话</p>
+              <button
+                onClick={createTerminalSession}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg transition-colors"
+              >
+                创建第一个终端
+              </button>
+            </div>
+          </div>
+        ) : (
+          <>
+            {/* 终端头部 */}
+            <div className="flex-shrink-0 bg-gray-800/50 backdrop-blur-sm border-b border-gray-700/50 px-4 py-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <div className="flex space-x-2">
+                    <div className="w-3 h-3 bg-red-500 rounded-full"></div>
+                    <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
+                    <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                  </div>
+                  <div className="text-sm font-medium text-white">
+                    {sessions.find(s => s.active)?.name || '终端'}
+                  </div>
                 </div>
-                <div className="text-sm text-gray-600 dark:text-gray-400">
-                  {sessions.find(s => s.active)?.name || '终端'}
-                </div>
-                <div className="text-xs text-gray-700 dark:text-gray-500">
+                
+                <div className="text-xs text-gray-400 font-mono">
                   {activeSessionId}
                 </div>
               </div>
-              
-              {/* 终端内容 */}
-              <div
-                ref={terminalContainerRef}
-                className={`${isFullscreen ? 'flex-1 min-h-0' : 'h-80'} bg-gray-900`}
-              />
-            </>
-          )}
-        </div>
-        
-        {/* 终端使用说明 */}
-        {!isFullscreen && (
-          <div className="card-game p-4">
-            <h3 className="text-sm font-semibold text-black dark:text-white mb-2">使用说明</h3>
-            <div className="text-xs text-gray-600 dark:text-gray-400 space-y-1">
-              <p>• 支持多终端会话，可以同时运行多个终端</p>
-              <p>• 终端会话在页面刷新后会自动恢复</p>
-              <p>• 支持全屏模式，提供更好的操作体验</p>
-              <p>• 支持所有标准终端操作和快捷键</p>
             </div>
-          </div>
+            
+            {/* 终端内容 */}
+            <div
+              ref={terminalContainerRef}
+              className="flex-1 bg-gray-900 min-h-0"
+            />
+          </>
         )}
       </div>
     </div>
