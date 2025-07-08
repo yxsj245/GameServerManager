@@ -9,8 +9,19 @@
   }
   
   body {
-    @apply bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100;
+    @apply bg-white dark:bg-gray-900 text-black dark:text-gray-100;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
     font-feature-settings: "rlig" 1, "calt" 1;
+  }
+  
+  /* 确保浅色模式以白色为主 */
+  html:not(.dark) {
+    background-color: #ffffff;
+  }
+  
+  html:not(.dark) body {
+    background-color: #ffffff;
+    color: #000000;
   }
 }
 
@@ -30,9 +41,9 @@
   
   /* 游戏风格卡片 */
   .card-game {
-    @apply bg-white/10 dark:bg-gray-800/50 backdrop-blur-sm border border-white/20 dark:border-gray-700/50;
+    @apply bg-white/90 dark:bg-gray-800/50 backdrop-blur-sm border border-gray-200 dark:border-gray-700/50;
     @apply rounded-xl shadow-xl hover:shadow-2xl transition-all duration-300;
-    @apply hover:bg-white/15 dark:hover:bg-gray-800/70;
+    @apply hover:bg-white dark:hover:bg-gray-800/70;
   }
   
   /* 霓虹效果 */
@@ -47,13 +58,13 @@
   
   /* 终端样式 */
   .terminal-container {
-    @apply bg-gray-900 border border-gray-700 rounded-lg overflow-hidden;
-    @apply shadow-2xl shadow-black/50;
+    @apply bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg overflow-hidden;
+    @apply shadow-2xl shadow-gray-500/20 dark:shadow-black/50;
   }
   
   .terminal-header {
-    @apply bg-gray-800 px-4 py-2 flex items-center justify-between;
-    @apply border-b border-gray-700;
+    @apply bg-gray-100 dark:bg-gray-800 px-4 py-2 flex items-center justify-between;
+    @apply border-b border-gray-300 dark:border-gray-700;
   }
   
   .terminal-dots {
@@ -111,20 +122,20 @@
   }
   
   .status-indicator.online {
-    @apply bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400;
+    @apply bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 border border-green-200 dark:border-green-700;
   }
   
   .status-indicator.offline {
-    @apply bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400;
+    @apply bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400 border border-red-200 dark:border-red-700;
   }
   
   .status-indicator.warning {
-    @apply bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400;
+    @apply bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400 border border-yellow-200 dark:border-yellow-700;
   }
   
   /* 渐变背景 */
   .bg-game-gradient {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: #ffffff;
   }
   
   .dark .bg-game-gradient {
@@ -133,7 +144,7 @@
   
   /* 玻璃态效果 */
   .glass {
-    @apply bg-white/10 dark:bg-gray-900/20 backdrop-blur-md border border-white/20 dark:border-gray-700/30;
+    @apply bg-white/95 dark:bg-gray-900/20 backdrop-blur-md border border-gray-200 dark:border-gray-700/30;
   }
   
   /* 悬浮效果 */
@@ -158,14 +169,16 @@
 
 /* 终端字体 */
 .font-mono {
-  font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', 'Monaco', monospace;
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
 }
 
-/* 游戏字体 */
+/* 游戏字体 - 使用系统字体 */
 .font-game {
-  font-family: 'Orbitron', 'Exo 2', sans-serif;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-weight: 600;
 }
 
 .font-display {
-  font-family: 'Rajdhani', 'Exo 2', sans-serif;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-weight: 500;
 }

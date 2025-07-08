@@ -61,7 +61,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             </div>
             <button
               onClick={() => setSidebarOpen(false)}
-              className="lg:hidden text-gray-400 hover:text-white transition-colors"
+              className="lg:hidden text-black dark:text-gray-400 hover:text-black dark:hover:text-white transition-colors"
             >
               <X className="w-6 h-6" />
             </button>
@@ -79,8 +79,8 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                   className={`
                     flex items-center space-x-3 px-4 py-3 rounded-lg transition-all duration-200
                     ${isActive
-                      ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30 shadow-lg'
-                      : 'text-gray-300 hover:bg-white/10 hover:text-white'
+                      ? 'bg-blue-600/20 text-blue-600 dark:text-blue-400 border border-blue-500/30 shadow-lg'
+                      : 'text-black dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/10 hover:text-black dark:hover:text-white'
                     }
                   `}
                 >
@@ -96,7 +96,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             {/* 主题切换 */}
             <button
               onClick={toggleTheme}
-              className="flex items-center space-x-3 w-full px-4 py-2 text-gray-300 hover:bg-white/10 hover:text-white rounded-lg transition-all duration-200"
+              className="flex items-center space-x-3 w-full px-4 py-2 text-black dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/10 hover:text-black dark:hover:text-white rounded-lg transition-all duration-200"
             >
               {theme === 'dark' ? (
                 <Sun className="w-5 h-5" />
@@ -109,15 +109,15 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             </button>
             
             {/* 用户信息 */}
-            <div className="flex items-center space-x-3 px-4 py-2 bg-white/5 rounded-lg">
+            <div className="flex items-center space-x-3 px-4 py-2 bg-gray-100 dark:bg-white/5 rounded-lg">
               <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
                 <User className="w-4 h-4 text-white" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-white truncate">
+                <p className="text-sm font-medium text-black dark:text-white truncate">
                   {user?.username}
                 </p>
-                <p className="text-xs text-gray-400">
+                <p className="text-xs text-gray-600 dark:text-gray-400">
                   {user?.role === 'admin' ? '管理员' : '用户'}
                 </p>
               </div>
@@ -138,7 +138,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       {/* 主内容区域 */}
       <div className="lg:pl-64">
         {/* 顶部栏 */}
-        <div className="sticky top-0 z-30 flex h-16 items-center justify-between px-6 glass border-b border-white/20 dark:border-gray-700/30">
+        <div className="sticky top-0 z-30 flex h-16 items-center justify-between px-6 glass border-b border-gray-200 dark:border-gray-700/30">
           <button
             onClick={() => setSidebarOpen(true)}
             className="lg:hidden text-gray-400 hover:text-white transition-colors"
@@ -147,7 +147,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           </button>
           
           <div className="flex items-center space-x-4">
-            <h1 className="text-xl font-semibold text-white font-display">
+            <h1 className="text-xl font-semibold text-black dark:text-white font-display">
               {navigation.find(item => item.href === location.pathname)?.name || 'GSM3 游戏面板'}
             </h1>
           </div>
@@ -156,7 +156,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             {/* 连接状态指示器 */}
             <div className="flex items-center space-x-2">
               <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-              <span className="text-sm text-gray-300">已连接</span>
+              <span className="text-sm text-black dark:text-gray-300">已连接</span>
             </div>
           </div>
         </div>

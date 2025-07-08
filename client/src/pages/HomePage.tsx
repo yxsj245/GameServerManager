@@ -100,16 +100,16 @@ const HomePage: React.FC = () => {
       <div className="card-game p-6">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-2xl font-bold text-white font-display mb-2">
+            <h2 className="text-2xl font-bold text-black dark:text-white font-display mb-2">
               欢迎回来，{user?.username}！
             </h2>
-            <p className="text-gray-300">
+            <p className="text-gray-700 dark:text-gray-300">
               GSM3 游戏服务器管理面板 - 让游戏服务器管理变得简单
             </p>
           </div>
           <div className="flex items-center space-x-2">
             <div className={`w-3 h-3 rounded-full ${connected ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></div>
-            <span className="text-sm text-gray-300">
+            <span className="text-sm text-gray-700 dark:text-gray-300">
               {connected ? '已连接' : '连接中断'}
             </span>
           </div>
@@ -123,8 +123,8 @@ const HomePage: React.FC = () => {
             <div className="flex items-center space-x-3">
               <Server className="w-8 h-8 text-blue-500" />
               <div>
-                <p className="text-sm text-gray-400">操作系统</p>
-                <p className="text-lg font-semibold text-white">{systemInfo.platform}</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400">操作系统</p>
+                <p className="text-lg font-semibold text-black dark:text-white">{systemInfo.platform}</p>
               </div>
             </div>
           </div>
@@ -133,8 +133,8 @@ const HomePage: React.FC = () => {
             <div className="flex items-center space-x-3">
               <Cpu className="w-8 h-8 text-green-500" />
               <div>
-                <p className="text-sm text-gray-400">架构</p>
-                <p className="text-lg font-semibold text-white">{systemInfo.arch}</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400">架构</p>
+                <p className="text-lg font-semibold text-black dark:text-white">{systemInfo.arch}</p>
               </div>
             </div>
           </div>
@@ -143,8 +143,8 @@ const HomePage: React.FC = () => {
             <div className="flex items-center space-x-3">
               <Network className="w-8 h-8 text-purple-500" />
               <div>
-                <p className="text-sm text-gray-400">主机名</p>
-                <p className="text-lg font-semibold text-white">{systemInfo.hostname}</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400">主机名</p>
+                <p className="text-lg font-semibold text-black dark:text-white">{systemInfo.hostname}</p>
               </div>
             </div>
           </div>
@@ -153,8 +153,8 @@ const HomePage: React.FC = () => {
             <div className="flex items-center space-x-3">
               <Zap className="w-8 h-8 text-yellow-500" />
               <div>
-                <p className="text-sm text-gray-400">Node.js</p>
-                <p className="text-lg font-semibold text-white">{systemInfo.nodeVersion}</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400">Node.js</p>
+                <p className="text-lg font-semibold text-black dark:text-white">{systemInfo.nodeVersion}</p>
               </div>
             </div>
           </div>
@@ -169,14 +169,14 @@ const HomePage: React.FC = () => {
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center space-x-3">
                 <Cpu className="w-6 h-6 text-blue-500" />
-                <h3 className="text-lg font-semibold text-white">CPU使用率</h3>
+                <h3 className="text-lg font-semibold text-black dark:text-white">CPU使用率</h3>
               </div>
               <span className={`text-2xl font-bold ${getUsageColor(systemStats.cpu.usage)}`}>
                 {systemStats.cpu.usage.toFixed(1)}%
               </span>
             </div>
             <div className="space-y-2">
-              <div className="flex justify-between text-sm text-gray-400">
+              <div className="flex justify-between text-sm text-gray-600 dark:text-gray-400">
                 <span>核心数: {systemStats.cpu.cores}</span>
                 <span>型号: {systemStats.cpu.model}</span>
               </div>
@@ -194,14 +194,14 @@ const HomePage: React.FC = () => {
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center space-x-3">
                 <MemoryStick className="w-6 h-6 text-green-500" />
-                <h3 className="text-lg font-semibold text-white">内存使用率</h3>
+                <h3 className="text-lg font-semibold text-black dark:text-white">内存使用率</h3>
               </div>
               <span className={`text-2xl font-bold ${getUsageColor(systemStats.memory.usage)}`}>
                 {systemStats.memory.usage.toFixed(1)}%
               </span>
             </div>
             <div className="space-y-2">
-              <div className="flex justify-between text-sm text-gray-400">
+              <div className="flex justify-between text-sm text-gray-600 dark:text-gray-400">
                 <span>已用: {formatBytes(systemStats.memory.used)}</span>
                 <span>总计: {formatBytes(systemStats.memory.total)}</span>
               </div>
@@ -219,14 +219,14 @@ const HomePage: React.FC = () => {
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center space-x-3">
                 <HardDrive className="w-6 h-6 text-purple-500" />
-                <h3 className="text-lg font-semibold text-white">磁盘使用率</h3>
+                <h3 className="text-lg font-semibold text-black dark:text-white">磁盘使用率</h3>
               </div>
               <span className={`text-2xl font-bold ${getUsageColor(systemStats.disk.usage)}`}>
                 {systemStats.disk.usage.toFixed(1)}%
               </span>
             </div>
             <div className="space-y-2">
-              <div className="flex justify-between text-sm text-gray-400">
+              <div className="flex justify-between text-sm text-gray-600 dark:text-gray-400">
                 <span>已用: {formatBytes(systemStats.disk.used)}</span>
                 <span>总计: {formatBytes(systemStats.disk.total)}</span>
               </div>
@@ -244,14 +244,14 @@ const HomePage: React.FC = () => {
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center space-x-3">
                 <Clock className="w-6 h-6 text-yellow-500" />
-                <h3 className="text-lg font-semibold text-white">系统运行时间</h3>
+                <h3 className="text-lg font-semibold text-black dark:text-white">系统运行时间</h3>
               </div>
             </div>
             <div className="space-y-2">
-              <p className="text-2xl font-bold text-white">
+              <p className="text-2xl font-bold text-black dark:text-white">
                 {formatUptime(systemStats.uptime)}
               </p>
-              <p className="text-sm text-gray-400">
+              <p className="text-sm text-gray-600 dark:text-gray-400">
                 最后更新: {new Date(systemStats.timestamp).toLocaleString()}
               </p>
             </div>
@@ -261,7 +261,7 @@ const HomePage: React.FC = () => {
       
       {/* 快速操作 */}
       <div className="card-game p-6">
-        <h3 className="text-lg font-semibold text-white mb-4 flex items-center space-x-2">
+        <h3 className="text-lg font-semibold text-black dark:text-white mb-4 flex items-center space-x-2">
           <Activity className="w-5 h-5" />
           <span>快速操作</span>
         </h3>

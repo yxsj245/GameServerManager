@@ -95,8 +95,9 @@ export default {
         }
       },
       fontFamily: {
-        'mono': ['JetBrains Mono', 'Fira Code', 'Consolas', 'monospace'],
-        'game': ['Orbitron', 'Exo 2', 'Rajdhani', 'sans-serif'],
+        'sans': ['system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'Helvetica Neue', 'Arial', 'sans-serif'],
+        'mono': ['Consolas', 'Monaco', 'Courier New', 'monospace'],
+        'game': ['system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
       },
       animation: {
         'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',

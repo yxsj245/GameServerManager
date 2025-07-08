@@ -46,7 +46,7 @@ const LoginPage: React.FC = () => {
       {/* 主题切换按钮 */}
       <button
         onClick={toggleTheme}
-        className="fixed top-4 right-4 p-3 glass rounded-full text-white hover:bg-white/20 transition-all duration-200"
+        className="fixed top-4 right-4 p-3 glass rounded-full text-black dark:text-white hover:bg-white/20 transition-all duration-200"
       >
         {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
       </button>
@@ -62,7 +62,7 @@ const LoginPage: React.FC = () => {
           <h1 className="text-4xl font-bold font-game neon-text mb-2">
             GSM3
           </h1>
-          <p className="text-gray-300 font-display">
+          <p className="text-gray-700 dark:text-gray-300 font-display">
             游戏服务器管理面板
           </p>
         </div>
@@ -72,7 +72,7 @@ const LoginPage: React.FC = () => {
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* 用户名输入 */}
             <div>
-              <label htmlFor="username" className="block text-sm font-medium text-gray-200 mb-2">
+              <label htmlFor="username" className="block text-sm font-medium text-gray-800 dark:text-gray-200 mb-2">
                 用户名
               </label>
               <input
@@ -82,7 +82,7 @@ const LoginPage: React.FC = () => {
                 onChange={(e) => setUsername(e.target.value)}
                 className="
                   w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg
-                  text-white placeholder-gray-400
+                  text-black dark:text-white placeholder-gray-400
                   focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent
                   transition-all duration-200
                 "
@@ -93,7 +93,7 @@ const LoginPage: React.FC = () => {
             
             {/* 密码输入 */}
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-200 mb-2">
+              <label htmlFor="password" className="block text-sm font-medium text-gray-800 dark:text-gray-200 mb-2">
                 密码
               </label>
               <div className="relative">
@@ -104,7 +104,7 @@ const LoginPage: React.FC = () => {
                   onChange={(e) => setPassword(e.target.value)}
                   className="
                     w-full px-4 py-3 pr-12 bg-white/10 border border-white/20 rounded-lg
-                    text-white placeholder-gray-400
+                    text-black dark:text-white placeholder-gray-400
                     focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent
                     transition-all duration-200
                   "
@@ -114,7 +114,7 @@ const LoginPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-white transition-colors"
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-black dark:hover:text-white transition-colors"
                   disabled={loading}
                 >
                   {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
@@ -152,7 +152,7 @@ const LoginPage: React.FC = () => {
           
           {/* 底部信息 */}
           <div className="mt-6 text-center">
-            <p className="text-sm text-gray-400">
+            <p className="text-sm text-gray-600 dark:text-gray-400">
               GSM3 游戏服务器管理面板 v1.0.0
             </p>
           </div>
