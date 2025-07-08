@@ -27,8 +27,10 @@ interface TerminalSession {
 const TerminalPage: React.FC = () => {
   const [sessions, setSessions] = useState<TerminalSession[]>([])
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null)
+
   const [isFullscreen, setIsFullscreen] = useState(false)
   const terminalContainerRef = useRef<HTMLDivElement>(null)
+  const isSessionsLoadedRef = useRef(false) // 防止重复加载现有会话
   const { addNotification } = useNotificationStore()
   
   // 创建新的终端会话
@@ -41,7 +43,7 @@ const TerminalPage: React.FC = () => {
         background: '#1a1a1a',
         foreground: '#ffffff',
         cursor: '#ffffff',
-        selection: '#ffffff30',
+        selectionBackground: '#ffffff30',
         black: '#000000',
         red: '#ff6b6b',
         green: '#51cf66',
@@ -190,17 +192,22 @@ const TerminalPage: React.FC = () => {
   // 页面加载时获取现有终端会话
   useEffect(() => {
     const loadExistingSessions = async () => {
+      if (isSessionsLoadedRef.current) return // 如果已经加载过，直接返回
+      isSessionsLoadedRef.current = true
+      
       try {
         const response = await apiClient.getTerminalSessions()
         if (response.success && response.data.sessions.length > 0) {
-          // 为现有会话创建前端终端实例
-          const existingSessions: TerminalSession[] = response.data.sessions.map((sessionData: any, index: number) => {
+          const sessionData = response.data.sessions
+          
+          // 直接创建会话实例并恢复连接
+          const newSessions: TerminalSession[] = sessionData.map((session: any, index: number) => {
             const terminal = new Terminal({
               theme: {
                 background: '#1a1a1a',
                 foreground: '#ffffff',
                 cursor: '#ffffff',
-                selection: '#ffffff30',
+                selectionBackground: '#ffffff30',
                 black: '#000000',
                 red: '#ff6b6b',
                 green: '#51cf66',
@@ -227,71 +234,79 @@ const TerminalPage: React.FC = () => {
               tabStopWidth: 4,
               allowTransparency: true
             })
-            
+
             const fitAddon = new FitAddon()
             const webLinksAddon = new WebLinksAddon()
-            
             terminal.loadAddon(fitAddon)
             terminal.loadAddon(webLinksAddon)
-            
-            // 监听用户输入
+
             terminal.onData((data) => {
-              socketClient.sendTerminalInput(sessionData.id, data)
+              socketClient.sendTerminalInput(session.id, data)
             })
-            
-            // 监听终端大小变化（只在Socket连接时才发送）
+
             terminal.onResize(({ cols, rows }) => {
               if (socketClient.isConnected()) {
-                socketClient.resizeTerminal(sessionData.id, cols, rows)
+                socketClient.resizeTerminal(session.id, cols, rows)
               }
             })
-            
+
             return {
-              id: sessionData.id,
-              name: `终端 ${index + 1}`,
-              active: index === 0,
+              id: session.id,
+              name: session.name || `终端 ${index + 1}`,
               terminal,
-              fitAddon
+              fitAddon,
+              active: index === 0
             }
           })
           
-          setSessions(existingSessions)
-          if (existingSessions.length > 0) {
-            setActiveSessionId(existingSessions[0].id)
+          setSessions(newSessions)
+          if (newSessions.length > 0) {
+            setActiveSessionId(newSessions[0].id)
           }
           
-          // 等待Socket连接成功后再尝试重连会话
-          const attemptReconnect = () => {
-            if (socketClient.isConnected()) {
-              existingSessions.forEach(session => {
-                socketClient.emit('reconnect-session', { sessionId: session.id })
-              })
-            } else {
-              // 如果Socket未连接，等待连接成功事件
-              const handleConnection = () => {
-                existingSessions.forEach(session => {
+          addNotification({
+            type: 'info',
+            title: '发现现有会话',
+            message: `找到 ${sessionData.length} 个现有终端会话，正在恢复...`
+          })
+          
+          // 延迟重连，确保Socket连接稳定
+          setTimeout(() => {
+            const attemptReconnect = () => {
+              if (socketClient.isConnected()) {
+                newSessions.forEach(session => {
+                  console.log('发送重连请求:', session.id)
                   socketClient.emit('reconnect-session', { sessionId: session.id })
                 })
-                socketClient.off('connection-status', handleConnection)
-              }
-              
-              socketClient.on('connection-status', ({ connected }) => {
-                if (connected) {
-                  handleConnection()
+              } else {
+                const onConnect = () => {
+                  newSessions.forEach(session => {
+                    console.log('Socket连接后发送重连请求:', session.id)
+                    socketClient.emit('reconnect-session', { sessionId: session.id })
+                  })
+                  socketClient.off('connect', onConnect)
                 }
-              })
+                socketClient.on('connect', onConnect as () => void)
+              }
             }
-          }
-          
-          attemptReconnect()
+            
+            attemptReconnect()
+          }, 1000)
         }
       } catch (error) {
         console.error('获取现有终端会话失败:', error)
+        addNotification({
+          type: 'error',
+          title: '加载会话失败',
+          message: '无法从服务器获取现有的终端会话。'
+        })
       }
     }
     
     loadExistingSessions()
   }, [])
+  
+
   
   useEffect(() => {
     // 监听终端输出
@@ -313,17 +328,13 @@ const TerminalPage: React.FC = () => {
     })
     
     // 监听会话重连成功
-    socketClient.on('session-reconnected', ({ sessionId }) => {
+    socketClient.on('session-reconnected', ({ sessionId }: { sessionId: string }) => {
       console.log(`会话重连成功: ${sessionId}`)
-      addNotification({
-        type: 'success',
-        title: '会话重连成功',
-        message: `终端会话 ${sessionId} 已重新连接`
-      })
+      // 不显示重连成功通知，避免过多提示
     })
     
     // 监听会话重连失败
-    socketClient.on('session-reconnect-failed', ({ sessionId }) => {
+    socketClient.on('session-reconnect-failed', ({ sessionId }: { sessionId: string }) => {
       console.log(`会话重连失败: ${sessionId}`)
       addNotification({
         type: 'error',
@@ -350,13 +361,108 @@ const TerminalPage: React.FC = () => {
       // 清空容器
       container.innerHTML = ''
       
-      // 挂载终端
-      activeSession.terminal.open(container)
-      
-      // 调整大小
-      setTimeout(() => {
-        activeSession.fitAddon.fit()
-      }, 100)
+      try {
+        // 检查终端是否已经挂载，如果是则先dispose
+        if (activeSession.terminal.element && activeSession.terminal.element.parentNode) {
+          console.log('终端已挂载，先dispose:', activeSession.id)
+          activeSession.terminal.dispose()
+          
+          // 重新创建终端实例
+          const newTerminal = new Terminal({
+            theme: {
+              background: '#1a1a1a',
+              foreground: '#ffffff',
+              cursor: '#ffffff',
+              selectionBackground: '#ffffff30',
+              black: '#000000',
+              red: '#ff6b6b',
+              green: '#51cf66',
+              yellow: '#ffd43b',
+              blue: '#74c0fc',
+              magenta: '#f06292',
+              cyan: '#4dd0e1',
+              white: '#ffffff',
+              brightBlack: '#666666',
+              brightRed: '#ff8a80',
+              brightGreen: '#69f0ae',
+              brightYellow: '#ffff8d',
+              brightBlue: '#82b1ff',
+              brightMagenta: '#ff80ab',
+              brightCyan: '#84ffff',
+              brightWhite: '#ffffff'
+            },
+            fontFamily: 'JetBrains Mono, Fira Code, Consolas, Monaco, monospace',
+            fontSize: 14,
+            lineHeight: 1.2,
+            cursorBlink: true,
+            cursorStyle: 'block',
+            scrollback: 1000,
+            tabStopWidth: 4,
+            allowTransparency: true
+          })
+          
+          const newFitAddon = new FitAddon()
+          const webLinksAddon = new WebLinksAddon()
+          
+          newTerminal.loadAddon(newFitAddon)
+          newTerminal.loadAddon(webLinksAddon)
+          
+          // 重新设置事件监听
+          newTerminal.onData((data) => {
+            socketClient.sendTerminalInput(activeSession.id, data)
+          })
+          
+          newTerminal.onResize(({ cols, rows }) => {
+            if (socketClient.isConnected()) {
+              socketClient.resizeTerminal(activeSession.id, cols, rows)
+            }
+          })
+          
+          // 更新会话中的终端实例
+          activeSession.terminal = newTerminal
+          activeSession.fitAddon = newFitAddon
+        }
+        
+        // 挂载终端
+        activeSession.terminal.open(container)
+        
+        // 调整大小
+        setTimeout(() => {
+          activeSession.fitAddon.fit()
+        }, 100)
+      } catch (error) {
+        console.error('挂载终端失败:', error)
+        // 如果出错，尝试重新创建终端实例
+        try {
+          const newTerminal = new Terminal({
+            theme: {
+              background: '#1a1a1a',
+              foreground: '#ffffff',
+              cursor: '#ffffff',
+              selectionBackground: '#ffffff30'
+            },
+            fontFamily: 'JetBrains Mono, Fira Code, Consolas, Monaco, monospace',
+            fontSize: 14
+          })
+          
+          const newFitAddon = new FitAddon()
+          newTerminal.loadAddon(newFitAddon)
+          
+          newTerminal.onData((data) => {
+            socketClient.sendTerminalInput(activeSession.id, data)
+          })
+          
+          activeSession.terminal = newTerminal
+          activeSession.fitAddon = newFitAddon
+          
+          newTerminal.open(container)
+          setTimeout(() => {
+            newFitAddon.fit()
+          }, 100)
+        } catch (recreateError) {
+          console.error('重新创建终端失败:', recreateError)
+        }
+      }
     }
   }, [activeSessionId, sessions])
   
