@@ -397,6 +397,15 @@ export class TerminalManager {
       session.disconnected = false
       session.disconnectedAt = undefined
       session.lastActivity = new Date()
+
+      // 发送历史输出
+      if (session.outputBuffer.length > 0) {
+        const history = session.outputBuffer.join('')
+        socket.emit('terminal-output', {
+          sessionId,
+          data: history
+        })
+      }
       
       this.logger.info(`会话 ${sessionId} 重新连接成功`)
       
