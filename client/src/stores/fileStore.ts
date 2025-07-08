@@ -18,6 +18,7 @@ interface FileStore {
   
   // 编辑器相关
   openFiles: Map<string, string> // path -> content
+  originalFiles: Map<string, string> // path -> original content
   activeFile: string | null
   
   // 操作方法
@@ -52,6 +53,7 @@ interface FileStore {
   saveFile: (path: string, content: string) => Promise<boolean>
   setActiveFile: (path: string | null) => void
   updateFileContent: (path: string, content: string) => void
+  isFileModified: (path: string) => boolean
   
   // 工具方法
   setLoading: (loading: boolean) => void
@@ -70,6 +72,7 @@ export const useFileStore = create<FileStore>((set, get) => ({
     operation: null
   },
   openFiles: new Map(),
+  originalFiles: new Map(),
   activeFile: null,
 
   // 设置当前路径
@@ -224,7 +227,7 @@ export const useFileStore = create<FileStore>((set, get) => ({
 
   // 打开文件
   openFile: async (path: string) => {
-    const { openFiles } = get()
+    const { openFiles, originalFiles } = get()
     
     if (openFiles.has(path)) {
       set({ activeFile: path })
@@ -234,10 +237,13 @@ export const useFileStore = create<FileStore>((set, get) => ({
     try {
       const fileContent = await fileApiClient.readFile(path)
       const newOpenFiles = new Map(openFiles)
+      const newOriginalFiles = new Map(originalFiles)
       newOpenFiles.set(path, fileContent.content)
+      newOriginalFiles.set(path, fileContent.content)
       
       set({ 
-        openFiles: newOpenFiles, 
+        openFiles: newOpenFiles,
+        originalFiles: newOriginalFiles,
         activeFile: path 
       })
     } catch (error: any) {
@@ -247,16 +253,19 @@ export const useFileStore = create<FileStore>((set, get) => ({
 
   // 关闭文件
   closeFile: (path: string) => {
-    const { openFiles, activeFile } = get()
+    const { openFiles, originalFiles, activeFile } = get()
     const newOpenFiles = new Map(openFiles)
+    const newOriginalFiles = new Map(originalFiles)
     newOpenFiles.delete(path)
+    newOriginalFiles.delete(path)
     
     const newActiveFile = activeFile === path ? 
       (newOpenFiles.size > 0 ? Array.from(newOpenFiles.keys())[0] : null) : 
       activeFile
     
     set({ 
-      openFiles: newOpenFiles, 
+      openFiles: newOpenFiles,
+      originalFiles: newOriginalFiles,
       activeFile: newActiveFile 
     })
   },
@@ -265,11 +274,16 @@ export const useFileStore = create<FileStore>((set, get) => ({
   saveFile: async (path: string, content: string) => {
     try {
       await fileApiClient.saveFile(path, content)
-      const { openFiles } = get()
+      const { openFiles, originalFiles } = get()
       const newOpenFiles = new Map(openFiles)
+      const newOriginalFiles = new Map(originalFiles)
       newOpenFiles.set(path, content)
+      newOriginalFiles.set(path, content) // 保存后更新原始内容
       
-      set({ openFiles: newOpenFiles })
+      set({ 
+        openFiles: newOpenFiles,
+        originalFiles: newOriginalFiles
+      })
       return true
     } catch (error: any) {
       set({ error: error.message || '保存文件失败' })
@@ -396,5 +410,13 @@ export const useFileStore = create<FileStore>((set, get) => ({
     const newOpenFiles = new Map(openFiles)
     newOpenFiles.set(path, content)
     set({ openFiles: newOpenFiles })
+  },
+
+  // 检查文件是否已修改
+  isFileModified: (path: string) => {
+    const { openFiles, originalFiles } = get()
+    const currentContent = openFiles.get(path)
+    const originalContent = originalFiles.get(path)
+    return currentContent !== originalContent
   }
 }))

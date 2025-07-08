@@ -81,7 +81,8 @@ const FileManagerPage: React.FC = () => {
     saveFile,
     setActiveFile,
     setError,
-    updateFileContent
+    updateFileContent,
+    isFileModified
   } = useFileStore()
   
   const { addNotification } = useNotificationStore()
@@ -799,6 +800,12 @@ const FileManagerPage: React.FC = () => {
                   <span className="flex items-center">
                     <FileTextOutlined className="mr-1" />
                     {getBasename(filePath)}
+                    {isFileModified(filePath) && (
+                      <span 
+                        className="ml-1 w-2 h-2 bg-orange-500 rounded-full" 
+                        title="文件已修改"
+                      />
+                    )}
                   </span>
                 }
                 closable
