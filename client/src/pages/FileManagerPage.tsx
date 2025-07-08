@@ -24,7 +24,10 @@ import {
   RightOutlined,
   FileTextOutlined,
   SaveOutlined,
-  CloseOutlined
+  CloseOutlined,
+  CopyOutlined,
+  ScissorOutlined,
+  SnippetsOutlined
 } from '@ant-design/icons'
 import { useFileStore } from '@/stores/fileStore'
 import { useNotificationStore } from '@/stores/notificationStore'
@@ -51,6 +54,7 @@ const FileManagerPage: React.FC = () => {
     selectedFiles,
     loading,
     error,
+    clipboard,
     openFiles,
     activeFile,
     setCurrentPath,
@@ -63,6 +67,10 @@ const FileManagerPage: React.FC = () => {
     deleteSelectedFiles,
     renameFile,
     uploadFiles,
+    copyFiles,
+    cutFiles,
+    pasteFiles,
+    clearClipboard,
     openFile,
     closeFile,
     saveFile,
@@ -104,6 +112,59 @@ const FileManagerPage: React.FC = () => {
   useEffect(() => {
     loadFiles()
   }, [])
+  
+  // 键盘快捷键
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // 检查焦点是否在输入框、文本区域或可编辑元素上
+      const activeElement = document.activeElement
+      const isInputFocused = activeElement && (
+        activeElement.tagName === 'INPUT' ||
+        activeElement.tagName === 'TEXTAREA' ||
+        activeElement.getAttribute('contenteditable') === 'true' ||
+        activeElement.closest('.ant-input') ||
+        activeElement.closest('.ant-select') ||
+        activeElement.closest('[role="textbox"]')
+      )
+      
+      // 如果焦点在输入框上，不处理文件操作快捷键
+      if (isInputFocused) {
+        return
+      }
+      
+      if (event.ctrlKey || event.metaKey) {
+        switch (event.key.toLowerCase()) {
+          case 'c':
+            if (selectedFiles.size > 0) {
+              event.preventDefault()
+              const selectedFileItems = Array.from(selectedFiles).map(path => 
+                files.find(f => f.path === path)
+              ).filter(Boolean) as FileItem[]
+              handleContextMenuCopy(selectedFileItems)
+            }
+            break
+          case 'x':
+            if (selectedFiles.size > 0) {
+              event.preventDefault()
+              const selectedFileItems = Array.from(selectedFiles).map(path => 
+                files.find(f => f.path === path)
+              ).filter(Boolean) as FileItem[]
+              handleContextMenuCut(selectedFileItems)
+            }
+            break
+          case 'v':
+            if (clipboard.operation && clipboard.items.length > 0) {
+              event.preventDefault()
+              handlePaste()
+            }
+            break
+        }
+      }
+    }
+    
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [selectedFiles, files, clipboard])
   
   // 错误处理
   useEffect(() => {
@@ -239,13 +300,41 @@ const FileManagerPage: React.FC = () => {
   }
   
   const handleContextMenuCopy = (files: FileItem[]) => {
-    // TODO: 实现复制功能
-    message.info('复制功能开发中')
+    const filePaths = files.map(file => file.path)
+    copyFiles(filePaths)
+    addNotification({
+      type: 'success',
+      title: '复制成功',
+      message: `已复制 ${files.length} 个项目到剪贴板`
+    })
   }
   
   const handleContextMenuCut = (files: FileItem[]) => {
-    // TODO: 实现剪切功能
-    message.info('剪切功能开发中')
+    const filePaths = files.map(file => file.path)
+    cutFiles(filePaths)
+    addNotification({
+      type: 'success',
+      title: '剪切成功',
+      message: `已剪切 ${files.length} 个项目到剪贴板`
+    })
+  }
+  
+  // 粘贴处理
+  const handlePaste = async () => {
+    if (!clipboard.operation || clipboard.items.length === 0) {
+      message.warning('剪贴板为空')
+      return
+    }
+    
+    const success = await pasteFiles()
+    if (success) {
+      const operationText = clipboard.operation === 'copy' ? '复制' : '移动'
+      addNotification({
+        type: 'success',
+        title: '粘贴成功',
+        message: `成功${operationText} ${clipboard.items.length} 个项目`
+      })
+    }
   }
   
   const handleContextMenuView = (file: FileItem) => {
@@ -438,6 +527,48 @@ const FileManagerPage: React.FC = () => {
                 上传
               </Button>
             </Tooltip>
+            {/* 剪贴板操作按钮 */}
+            {selectedFiles.size > 0 && (
+              <>
+                <Tooltip title="复制选中项 (Ctrl+C)">
+                  <Button 
+                    icon={<CopyOutlined />}
+                    onClick={() => {
+                      const selectedFileItems = Array.from(selectedFiles).map(path => 
+                        files.find(f => f.path === path)
+                      ).filter(Boolean) as FileItem[]
+                      handleContextMenuCopy(selectedFileItems)
+                    }}
+                  >
+                    复制
+                  </Button>
+                </Tooltip>
+                <Tooltip title="剪切选中项 (Ctrl+X)">
+                  <Button 
+                    icon={<ScissorOutlined />}
+                    onClick={() => {
+                      const selectedFileItems = Array.from(selectedFiles).map(path => 
+                        files.find(f => f.path === path)
+                      ).filter(Boolean) as FileItem[]
+                      handleContextMenuCut(selectedFileItems)
+                    }}
+                  >
+                    剪切
+                  </Button>
+                </Tooltip>
+              </>
+            )}
+            {clipboard.operation && clipboard.items.length > 0 && (
+              <Tooltip title={`粘贴 ${clipboard.items.length} 个项目 (Ctrl+V)`}>
+                <Button 
+                  type="primary"
+                  icon={<SnippetsOutlined />}
+                  onClick={handlePaste}
+                >
+                  粘贴 ({clipboard.items.length})
+                </Button>
+              </Tooltip>
+            )}
             {selectedFiles.size > 0 && (
               <Tooltip title="删除选中项">
                 <Button 
@@ -488,12 +619,14 @@ const FileManagerPage: React.FC = () => {
                 key={file.path}
                 file={file}
                 selectedFiles={selectedFiles}
+                clipboard={clipboard}
                 onOpen={handleContextMenuOpen}
                 onRename={handleContextMenuRename}
                 onDelete={handleContextMenuDelete}
                 onDownload={handleContextMenuDownload}
                 onCopy={handleContextMenuCopy}
                 onCut={handleContextMenuCut}
+                onPaste={handlePaste}
                 onView={handleContextMenuView}
               >
                 <FileGridItem

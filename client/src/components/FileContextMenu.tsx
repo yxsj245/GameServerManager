@@ -7,7 +7,8 @@ import {
   DownloadOutlined,
   FileOutlined,
   FolderOpenOutlined,
-  EyeOutlined
+  EyeOutlined,
+  SnippetsOutlined
 } from '@ant-design/icons'
 import { FileItem } from '@/types/file'
 
@@ -15,12 +16,17 @@ interface FileContextMenuProps {
   children: React.ReactNode
   file: FileItem
   selectedFiles: Set<string>
+  clipboard: {
+    items: string[]
+    operation: 'copy' | 'cut' | null
+  }
   onOpen: (file: FileItem) => void
   onRename: (file: FileItem) => void
   onDelete: (files: FileItem[]) => void
   onDownload: (file: FileItem) => void
   onCopy: (files: FileItem[]) => void
   onCut: (files: FileItem[]) => void
+  onPaste: () => void
   onView: (file: FileItem) => void
 }
 
@@ -28,12 +34,14 @@ export const FileContextMenu: React.FC<FileContextMenuProps> = ({
   children,
   file,
   selectedFiles,
+  clipboard,
   onOpen,
   onRename,
   onDelete,
   onDownload,
   onCopy,
   onCut,
+  onPaste,
   onView
 }) => {
   const isSelected = selectedFiles.has(file.path)
@@ -143,6 +151,17 @@ export const FileContextMenu: React.FC<FileContextMenuProps> = ({
             <ScissorOutlined className="mr-2" />
             {isMultipleSelected ? `剪切 ${selectedCount} 项` : '剪切'}
           </div>
+          
+          {/* 粘贴 */}
+          {clipboard.operation && clipboard.items.length > 0 && (
+            <div
+              className="px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer flex items-center"
+              onClick={onPaste}
+            >
+              <SnippetsOutlined className="mr-2" />
+              粘贴 {clipboard.items.length} 项
+            </div>
+          )}
           
           <div className="border-t border-gray-200 dark:border-gray-600 my-1"></div>
           

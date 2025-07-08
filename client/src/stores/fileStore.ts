@@ -10,6 +10,12 @@ interface FileStore {
   loading: boolean
   error: string | null
   
+  // 剪贴板相关
+  clipboard: {
+    items: string[] // 文件路径数组
+    operation: 'copy' | 'cut' | null // 操作类型
+  }
+  
   // 编辑器相关
   openFiles: Map<string, string> // path -> content
   activeFile: string | null
@@ -29,6 +35,12 @@ interface FileStore {
   renameFile: (oldPath: string, newName: string) => Promise<boolean>
   uploadFiles: (files: FileList) => Promise<boolean>
   
+  // 剪贴板操作
+  copyFiles: (filePaths: string[]) => void
+  cutFiles: (filePaths: string[]) => void
+  pasteFiles: () => Promise<boolean>
+  clearClipboard: () => void
+  
   // 编辑器操作
   openFile: (path: string) => Promise<void>
   closeFile: (path: string) => void
@@ -47,6 +59,10 @@ export const useFileStore = create<FileStore>((set, get) => ({
   selectedFiles: new Set(),
   loading: false,
   error: null,
+  clipboard: {
+    items: [],
+    operation: null
+  },
   openFiles: new Map(),
   activeFile: null,
 
@@ -253,5 +269,75 @@ export const useFileStore = create<FileStore>((set, get) => ({
   // 设置错误信息
   setError: (error: string | null) => {
     set({ error })
+  },
+
+  // 复制文件到剪贴板
+  copyFiles: (filePaths: string[]) => {
+    set({ 
+      clipboard: {
+        items: [...filePaths],
+        operation: 'copy'
+      }
+    })
+  },
+
+  // 剪切文件到剪贴板
+  cutFiles: (filePaths: string[]) => {
+    set({ 
+      clipboard: {
+        items: [...filePaths],
+        operation: 'cut'
+      }
+    })
+  },
+
+  // 粘贴文件
+  pasteFiles: async () => {
+    const { clipboard, currentPath } = get()
+    if (!clipboard.operation || clipboard.items.length === 0) {
+      return false
+    }
+
+    try {
+      if (clipboard.operation === 'copy') {
+        // 复制操作
+        for (const sourcePath of clipboard.items) {
+          // 兼容Windows和Unix路径分隔符
+          const separator = sourcePath.includes('\\') ? '\\' : '/'
+          const fileName = sourcePath.split(separator).pop() || 'unknown'
+          const targetPath = `${currentPath}${separator}${fileName}`.replace(/[\/\\]+/g, separator)
+          
+          await fileApiClient.copyItem(sourcePath, targetPath)
+        }
+      } else if (clipboard.operation === 'cut') {
+        // 剪切操作
+        for (const sourcePath of clipboard.items) {
+          // 兼容Windows和Unix路径分隔符
+          const separator = sourcePath.includes('\\') ? '\\' : '/'
+          const fileName = sourcePath.split(separator).pop() || 'unknown'
+          const targetPath = `${currentPath}${separator}${fileName}`.replace(/[\/\\]+/g, separator)
+          
+          await fileApiClient.moveItem(sourcePath, targetPath)
+        }
+        // 剪切后清空剪贴板
+        get().clearClipboard()
+      }
+      
+      await get().loadFiles()
+      return true
+    } catch (error: any) {
+      set({ error: error.message || '粘贴操作失败' })
+      return false
+    }
+  },
+
+  // 清空剪贴板
+  clearClipboard: () => {
+    set({ 
+      clipboard: {
+        items: [],
+        operation: null
+      }
+    })
   }
 }))
