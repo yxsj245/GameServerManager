@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express'
 import { promises as fs } from 'fs'
+import * as fsSync from 'fs'
 import path from 'path'
 import { createReadStream, createWriteStream } from 'fs'
 import archiver from 'archiver'
@@ -10,9 +11,72 @@ const router = Router()
 
 // 配置文件上传
 const upload = multer({
-  dest: 'uploads/',
+  storage: multer.diskStorage({
+    destination: (req, file, cb) => {
+      const uploadDir = path.join(process.cwd(), 'uploads')
+      cb(null, uploadDir)
+    },
+    filename: (req, file, cb) => {
+      // 处理中文文件名编码问题
+      let originalName = file.originalname
+      
+      // 检测并修复文件名编码
+      if (originalName && originalName.includes('�')) {
+        // 如果包含乱码字符，尝试重新编码
+        try {
+          const buffer = Buffer.from(originalName, 'binary')
+          originalName = buffer.toString('utf8')
+        } catch (error) {
+          console.warn('Failed to decode filename, using fallback')
+        }
+      }
+      
+      // 如果仍然有问题，使用安全的文件名
+      if (!originalName || originalName.includes('�') || !/^[\u4e00-\u9fa5\w\s.-]+$/u.test(originalName)) {
+        const timestamp = Date.now()
+        const ext = path.extname(file.originalname) || '.tmp'
+        originalName = `upload-${timestamp}${ext}`
+      }
+      
+      // 直接使用原文件名，清理特殊字符
+      let cleanedName = originalName.replace(/[^\u4e00-\u9fa5\w\s.-]/g, '_')
+      
+      // 检查文件是否已存在，如果存在则添加数字后缀
+      const uploadDir = path.join(process.cwd(), 'uploads')
+      let finalName = cleanedName
+      let counter = 1
+      
+      while (fsSync.existsSync(path.join(uploadDir, finalName))) {
+        const ext = path.extname(cleanedName)
+        const baseName = path.basename(cleanedName, ext)
+        finalName = `${baseName}(${counter})${ext}`
+        counter++
+      }
+      
+      cb(null, finalName)
+    }
+  }),
   limits: {
-    fileSize: 100 * 1024 * 1024 // 100MB
+    fileSize: 100 * 1024 * 1024, // 100MB
+    files: 10 // 最多10个文件
+  },
+  fileFilter: (req, file, cb) => {
+    // 处理文件名编码
+    let originalName = file.originalname
+    
+    // 检测并修复文件名编码
+    if (originalName && originalName.includes('�')) {
+      try {
+        const buffer = Buffer.from(originalName, 'binary')
+        originalName = buffer.toString('utf8')
+      } catch (error) {
+        console.warn('Failed to decode filename in filter, keeping original')
+      }
+    }
+    
+    // 更新文件名
+    file.originalname = originalName
+    cb(null, true)
   }
 })
 
@@ -32,14 +96,6 @@ const isValidPath = (filePath: string): boolean => {
   // 在Windows上，路径可能以盘符开头（如 C:\）或UNC路径（如 \\server\share）
   // 在Unix系统上，绝对路径以 / 开头
   const isAbsolute = path.isAbsolute(normalizedPath)
-  
-  // 添加调试日志
-  console.log('路径验证:', {
-    original: filePath,
-    normalized: normalizedPath,
-    isAbsolute,
-    platform: process.platform
-  })
   
   return isAbsolute
 }
@@ -407,46 +463,96 @@ router.get('/download', async (req: Request, res: Response) => {
 
 // 上传文件
 router.post('/upload', upload.array('files'), async (req: Request, res: Response) => {
+  console.log('Upload request received:')
+  console.log('Body:', req.body)
+  console.log('Files:', req.files)
+  console.log('Files length:', req.files?.length)
+  
   try {
     const { targetPath } = req.body
     const files = req.files as Express.Multer.File[]
-    
-    if (!isValidPath(targetPath)) {
-      return res.status(400).json({
-        status: 'error',
-        message: '无效的目标路径'
-      })
+
+    if (!targetPath) {
+      console.log('Error: Invalid target path')
+      return res.status(400).json({ success: false, message: 'Invalid target path' })
     }
 
     if (!files || files.length === 0) {
-      return res.status(400).json({
-        status: 'error',
-        message: '没有上传文件'
-      })
+      console.log('Error: No files uploaded')
+      return res.status(400).json({ success: false, message: 'No files uploaded' })
     }
 
-    const uploadedFiles = []
-    
-    for (const file of files) {
-      const targetFilePath = path.join(targetPath, file.originalname)
-      await fs.rename(file.path, targetFilePath)
-      uploadedFiles.push({
-        name: file.originalname,
-        path: targetFilePath,
-        size: file.size
-      })
+    // 处理Windows路径格式，确保使用绝对路径
+    let fullTargetPath: string
+    if (path.isAbsolute(targetPath)) {
+      fullTargetPath = targetPath
+    } else {
+      // 如果是相对路径，转换为绝对路径（基于当前工作目录）
+      fullTargetPath = path.resolve(process.cwd(), targetPath.replace(/^\//, ''))
     }
     
+    console.log('Resolved target path:', fullTargetPath)
+
+    // 确保目标目录存在
+    await fs.mkdir(fullTargetPath, { recursive: true })
+
+    // 移动文件到目标目录
+    const results = []
+    for (const file of files) {
+      try {
+        // 处理中文文件名编码问题
+        let originalName = file.originalname
+        
+        // 检测并修复文件名编码
+        if (originalName && originalName.includes('�')) {
+          try {
+            const buffer = Buffer.from(originalName, 'binary')
+            originalName = buffer.toString('utf8')
+          } catch (error) {
+            console.warn('Failed to decode filename in upload, using fallback')
+          }
+        }
+        
+        // 如果仍然有问题，使用安全的文件名
+        if (!originalName || originalName.includes('�') || !/^[\u4e00-\u9fa5\w\s.-]+$/u.test(originalName)) {
+          const timestamp = Date.now()
+          const ext = path.extname(file.originalname) || '.tmp'
+          originalName = `upload-${timestamp}${ext}`
+        }
+        
+        // 清理文件名中的特殊字符
+        originalName = originalName.replace(/[^\u4e00-\u9fa5\w\s.-]/g, '_')
+        
+        const targetFilePath = path.join(fullTargetPath, originalName)
+        console.log(`Moving file from ${file.path} to ${targetFilePath}`)
+        
+        // 使用diskStorage时，文件已经在临时目录中，需要移动到目标目录
+        await fs.rename(file.path, targetFilePath)
+        results.push({ name: originalName, success: true })
+      } catch (error: any) {
+        console.error(`Failed to move file ${file.originalname}:`, error)
+        results.push({ name: file.originalname, success: false, error: error.message })
+        
+        // 清理已上传的文件
+        try {
+          const fileExists = await fs.stat(file.path).then(() => true).catch(() => false)
+          if (fileExists) {
+            await fs.unlink(file.path)
+          }
+        } catch (unlinkError) {
+          console.error(`Failed to cleanup file ${file.path}:`, unlinkError)
+        }
+      }
+    }
+
     res.json({
-      status: 'success',
-      message: '文件上传成功',
-      files: uploadedFiles
+      success: true,
+      message: `Successfully uploaded ${results.filter(r => r.success).length} of ${files.length} files`,
+      data: results
     })
   } catch (error: any) {
-    res.status(500).json({
-      status: 'error',
-      message: error.message
-    })
+    console.error('Upload error:', error)
+    res.status(500).json({ success: false, message: 'Upload failed', error: error.message })
   }
 })
 
@@ -602,38 +708,56 @@ async function compressFiles(
   format: string, 
   compressionLevel: number
 ) {
-  return new Promise<void>((resolve, reject) => {
-    const output = createWriteStream(archivePath)
-    const archive = archiver(format as any, {
-      zlib: { level: compressionLevel }
-    })
-    
-    output.on('close', () => resolve())
-    archive.on('error', (err) => reject(err))
-    
-    archive.pipe(output)
-    
-    for (const sourcePath of sourcePaths) {
-      const stats = require('fs').statSync(sourcePath)
-      const name = path.basename(sourcePath)
+  return new Promise<void>(async (resolve, reject) => {
+    try {
+      const output = createWriteStream(archivePath)
+      const archive = archiver(format as any, {
+        zlib: { level: compressionLevel }
+      })
       
-      if (stats.isDirectory()) {
-        archive.directory(sourcePath, name)
-      } else {
-        archive.file(sourcePath, { name })
+      output.on('close', () => resolve())
+      archive.on('error', (err) => reject(err))
+      
+      archive.pipe(output)
+      
+      for (const sourcePath of sourcePaths) {
+        const stats = await fs.stat(sourcePath)
+        const name = path.basename(sourcePath)
+        
+        if (stats.isDirectory()) {
+          archive.directory(sourcePath, name)
+        } else {
+          archive.file(sourcePath, { name })
+        }
       }
+      
+      archive.finalize()
+    } catch (error) {
+      reject(error)
     }
-    
-    archive.finalize()
   })
 }
 
 async function extractArchive(archivePath: string, targetPath: string) {
-  return new Promise<void>((resolve, reject) => {
-    createReadStream(archivePath)
-      .pipe(unzipper.Extract({ path: targetPath }))
-      .on('close', () => resolve())
-      .on('error', (err) => reject(err))
+  return new Promise<void>(async (resolve, reject) => {
+    try {
+      const ext = path.extname(archivePath).toLowerCase()
+      
+      // 确保目标目录存在
+      await fs.mkdir(targetPath, { recursive: true })
+      
+      if (ext === '.zip') {
+        createReadStream(archivePath)
+          .pipe(unzipper.Extract({ path: targetPath }))
+          .on('close', () => resolve())
+          .on('error', (err) => reject(err))
+      } else {
+        // 对于其他格式，返回不支持的错误
+        reject(new Error(`不支持的压缩格式: ${ext}。目前只支持 .zip 格式`))
+      }
+    } catch (error) {
+      reject(error)
+    }
   })
 }
 

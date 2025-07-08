@@ -39,6 +39,7 @@ import {
   UploadDialog, 
   DeleteConfirmDialog 
 } from '@/components/FileDialogs'
+import { CompressDialog } from '@/components/CompressDialog'
 import { MonacoEditor } from '@/components/MonacoEditor'
 import { FileItem } from '@/types/file'
 import { fileApiClient } from '@/utils/fileApi'
@@ -71,6 +72,8 @@ const FileManagerPage: React.FC = () => {
     cutFiles,
     pasteFiles,
     clearClipboard,
+    compressFiles,
+    extractArchive,
     openFile,
     closeFile,
     saveFile,
@@ -93,6 +96,10 @@ const FileManagerPage: React.FC = () => {
   
   const [uploadDialog, setUploadDialog] = useState(false)
   const [deleteDialog, setDeleteDialog] = useState(false)
+  const [compressDialog, setCompressDialog] = useState<{
+    visible: boolean
+    files: FileItem[]
+  }>({ visible: false, files: [] })
   
   // 路径输入
   const [pathInput, setPathInput] = useState('')
@@ -345,6 +352,23 @@ const FileManagerPage: React.FC = () => {
       message.info('该文件类型不支持预览')
     }
   }
+
+  // 压缩处理
+  const handleContextMenuCompress = (files: FileItem[]) => {
+    setCompressDialog({ visible: true, files })
+  }
+
+  // 解压处理
+  const handleContextMenuExtract = async (file: FileItem) => {
+    const success = await extractArchive(file.path)
+    if (success) {
+      addNotification({
+        type: 'success',
+        title: '解压成功',
+        message: `文件 "${file.name}" 解压完成`
+      })
+    }
+  }
   
   // 对话框处理
   const handleCreateConfirm = async (name: string) => {
@@ -400,6 +424,19 @@ const FileManagerPage: React.FC = () => {
       })
     }
     setDeleteDialog(false)
+  }
+
+  const handleCompressConfirm = async (archiveName: string, format: string, compressionLevel: number) => {
+    const filePaths = compressDialog.files.map(file => file.path)
+    const success = await compressFiles(filePaths, archiveName, format)
+    if (success) {
+      addNotification({
+        type: 'success',
+        title: '压缩成功',
+        message: `成功创建压缩文件 "${archiveName}"`
+      })
+    }
+    setCompressDialog({ visible: false, files: [] })
   }
   
   // 编辑器相关
@@ -628,6 +665,8 @@ const FileManagerPage: React.FC = () => {
                 onCut={handleContextMenuCut}
                 onPaste={handlePaste}
                 onView={handleContextMenuView}
+                onCompress={handleContextMenuCompress}
+                onExtract={handleContextMenuExtract}
               >
                 <FileGridItem
                   file={file}
@@ -667,6 +706,13 @@ const FileManagerPage: React.FC = () => {
         fileNames={Array.from(selectedFiles).map(path => path.split('/').pop() || '')}
         onConfirm={handleDeleteConfirm}
         onCancel={() => setDeleteDialog(false)}
+      />
+      
+      <CompressDialog
+        visible={compressDialog.visible}
+        fileCount={compressDialog.files.length}
+        onConfirm={handleCompressConfirm}
+        onCancel={() => setCompressDialog({ visible: false, files: [] })}
       />
       
       {/* 编辑器模态框 */}

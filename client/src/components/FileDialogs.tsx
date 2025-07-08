@@ -185,15 +185,12 @@ export const UploadDialog: React.FC<UploadDialogProps> = ({
 
     setLoading(true)
     try {
-      const files = {
-        length: fileList.length,
-        item: (index: number) => fileList[index],
-        [Symbol.iterator]: function* () {
-          for (let i = 0; i < this.length; i++) {
-            yield this.item(i)
-          }
-        }
-      } as FileList
+      // 创建一个真正的FileList对象
+      const dataTransfer = new DataTransfer()
+      fileList.forEach(file => {
+        dataTransfer.items.add(file)
+      })
+      const files = dataTransfer.files
       
       onConfirm(files)
       setFileList([])

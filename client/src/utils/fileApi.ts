@@ -120,6 +120,33 @@ export class FileApiClient {
     })
     return response.data
   }
+
+  // 压缩文件
+  async compressFiles(
+    sourcePaths: string[],
+    targetPath: string,
+    archiveName: string,
+    format: string = 'zip',
+    compressionLevel: number = 6
+  ): Promise<FileOperationResult> {
+    const response = await axios.post(`${API_BASE}/compress`, {
+      sourcePaths,
+      targetPath,
+      archiveName,
+      format,
+      compressionLevel
+    })
+    return response.data
+  }
+
+  // 解压文件
+  async extractArchive(archivePath: string, targetPath: string): Promise<FileOperationResult> {
+    const response = await axios.post(`${API_BASE}/extract`, {
+      archivePath,
+      targetPath
+    })
+    return response.data
+  }
 }
 
 export const fileApiClient = new FileApiClient()

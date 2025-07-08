@@ -41,6 +41,10 @@ interface FileStore {
   pasteFiles: () => Promise<boolean>
   clearClipboard: () => void
   
+  // 压缩解压操作
+  compressFiles: (filePaths: string[], archiveName: string, format?: string) => Promise<boolean>
+  extractArchive: (archivePath: string) => Promise<boolean>
+  
   // 编辑器操作
   openFile: (path: string) => Promise<void>
   closeFile: (path: string) => void
@@ -339,5 +343,33 @@ export const useFileStore = create<FileStore>((set, get) => ({
         operation: null
       }
     })
+  },
+
+  // 压缩文件
+  compressFiles: async (filePaths: string[], archiveName: string, format: string = 'zip') => {
+    const { currentPath } = get()
+    
+    try {
+      await fileApiClient.compressFiles(filePaths, currentPath, archiveName, format)
+      await get().loadFiles()
+      return true
+    } catch (error: any) {
+      set({ error: error.message || '压缩文件失败' })
+      return false
+    }
+  },
+
+  // 解压文件
+  extractArchive: async (archivePath: string) => {
+    const { currentPath } = get()
+    
+    try {
+      await fileApiClient.extractArchive(archivePath, currentPath)
+      await get().loadFiles()
+      return true
+    } catch (error: any) {
+      set({ error: error.message || '解压文件失败' })
+      return false
+    }
   }
 }))

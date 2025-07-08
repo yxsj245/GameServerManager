@@ -8,7 +8,9 @@ import {
   FileOutlined,
   FolderOpenOutlined,
   EyeOutlined,
-  SnippetsOutlined
+  SnippetsOutlined,
+  FileZipOutlined,
+  FolderOutlined
 } from '@ant-design/icons'
 import { FileItem } from '@/types/file'
 
@@ -28,6 +30,8 @@ interface FileContextMenuProps {
   onCut: (files: FileItem[]) => void
   onPaste: () => void
   onView: (file: FileItem) => void
+  onCompress: (files: FileItem[]) => void
+  onExtract: (file: FileItem) => void
 }
 
 export const FileContextMenu: React.FC<FileContextMenuProps> = ({
@@ -42,7 +46,9 @@ export const FileContextMenu: React.FC<FileContextMenuProps> = ({
   onCopy,
   onCut,
   onPaste,
-  onView
+  onView,
+  onCompress,
+  onExtract
 }) => {
   const isSelected = selectedFiles.has(file.path)
   const selectedCount = selectedFiles.size
@@ -160,6 +166,29 @@ export const FileContextMenu: React.FC<FileContextMenuProps> = ({
             >
               <SnippetsOutlined className="mr-2" />
               粘贴 {clipboard.items.length} 项
+            </div>
+          )}
+          
+          <div className="border-t border-gray-200 dark:border-gray-600 my-1"></div>
+          
+          {/* 压缩 */}
+          <div
+            className="px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer flex items-center"
+            onClick={() => onCompress(getSelectedFiles())}
+          >
+            <FileZipOutlined className="mr-2" />
+            {isMultipleSelected ? `压缩 ${selectedCount} 项` : '压缩'}
+          </div>
+          
+          {/* 解压（仅zip文件） */}
+          {file.type === 'file' && !isMultipleSelected && 
+            file.name.toLowerCase().endsWith('.zip') && (
+            <div
+              className="px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer flex items-center"
+              onClick={() => onExtract(file)}
+            >
+              <FolderOutlined className="mr-2" />
+              解压
             </div>
           )}
           
