@@ -155,7 +155,11 @@ export const useFileStore = create<FileStore>((set, get) => ({
 
   // 重命名文件
   renameFile: async (oldPath: string, newName: string) => {
-    const newPath = oldPath.replace(/[^/]*$/, newName)
+    // 兼容Windows和Unix路径分隔符
+    const separator = oldPath.includes('\\') ? '\\' : '/'
+    const pathParts = oldPath.split(separator)
+    pathParts[pathParts.length - 1] = newName
+    const newPath = pathParts.join(separator)
     
     try {
       await fileApiClient.renameItem(oldPath, newPath)

@@ -18,8 +18,30 @@ const upload = multer({
 
 // 安全路径检查
 const isValidPath = (filePath: string): boolean => {
+  if (!filePath || typeof filePath !== 'string') {
+    return false
+  }
+  
   const normalizedPath = path.normalize(filePath)
-  return !normalizedPath.includes('..') && path.isAbsolute(normalizedPath)
+  
+  // 检查是否包含危险的路径遍历
+  if (normalizedPath.includes('..')) {
+    return false
+  }
+  
+  // 在Windows上，路径可能以盘符开头（如 C:\）或UNC路径（如 \\server\share）
+  // 在Unix系统上，绝对路径以 / 开头
+  const isAbsolute = path.isAbsolute(normalizedPath)
+  
+  // 添加调试日志
+  console.log('路径验证:', {
+    original: filePath,
+    normalized: normalizedPath,
+    isAbsolute,
+    platform: process.platform
+  })
+  
+  return isAbsolute
 }
 
 // 获取目录内容
@@ -209,6 +231,18 @@ router.delete('/delete', async (req: Request, res: Response) => {
 router.post('/rename', async (req: Request, res: Response) => {
   try {
     const { oldPath, newPath } = req.body
+    
+    // 添加调试日志
+    console.log('重命名请求:', { oldPath, newPath })
+    console.log('oldPath验证:', isValidPath(oldPath))
+    console.log('newPath验证:', isValidPath(newPath))
+    
+    if (!oldPath || !newPath) {
+      return res.status(400).json({
+        status: 'error',
+        message: '缺少必要的路径参数'
+      })
+    }
     
     if (!isValidPath(oldPath) || !isValidPath(newPath)) {
       return res.status(400).json({
