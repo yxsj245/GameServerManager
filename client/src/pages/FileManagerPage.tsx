@@ -387,7 +387,7 @@ const FileManagerPage: React.FC = () => {
     } else {
       // 创建文件
       const filePath = await createFile(name)
-      if (filePath) {
+      if (typeof filePath === 'string') {
         addNotification({
           type: 'success',
           title: '创建成功',
@@ -456,19 +456,35 @@ const FileManagerPage: React.FC = () => {
   const handleEditorChange = (path: string, content: string) => {
     updateFileContent(path, content)
   }
-  
-  const handleSaveFile = async () => {
-    if (activeFile && openFiles.has(activeFile)) {
-      const content = openFiles.get(activeFile)!
-      const success = await saveFile(activeFile, content)
-      if (success) {
-        addNotification({
-          type: 'success',
-          title: '保存成功',
-          message: `文件已保存`
-        })
-      }
+
+  const handleSaveFile = async (content?: string | React.MouseEvent) => {
+    if (!activeFile) {
+      addNotification({
+        type: 'warning',
+        title: '没有活动文件',
+        message: '请先选择一个文件进行保存。'
+      })
+      return
     }
+
+    let fileContent: string | undefined;
+    
+    if (typeof content === 'string') {
+      fileContent = content;
+    } else {
+      fileContent = openFiles.get(activeFile);
+    }
+
+    if (fileContent === undefined) {
+      addNotification({
+        type: 'error',
+        title: '无法保存文件',
+        message: '找不到文件内容。'
+      });
+      return;
+    }
+    
+    await saveFile(activeFile, fileContent)
   }
   
   // 生成面包屑
@@ -750,7 +766,7 @@ const FileManagerPage: React.FC = () => {
             key="save" 
             type="primary" 
             icon={<SaveOutlined />}
-            onClick={handleSaveFile}
+            onClick={() => handleSaveFile()}
             disabled={!activeFile}
           >
             保存
@@ -792,7 +808,7 @@ const FileManagerPage: React.FC = () => {
                     value={content}
                     onChange={(value) => handleEditorChange(filePath, value)}
                     fileName={getBasename(filePath)}
-                    onSave={handleSaveFile}
+                    onSave={(value) => handleSaveFile(value)}
                   />
                 </div>
               </TabPane>

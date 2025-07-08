@@ -10,7 +10,7 @@ interface MonacoEditorProps {
   fileName?: string
   readOnly?: boolean
   height?: string | number
-  onSave?: () => void
+  onSave?: (value: string) => void
 }
 
 // 根据文件扩展名获取语言
@@ -72,7 +72,9 @@ export const MonacoEditor: React.FC<MonacoEditorProps> = ({
       // Ctrl+S 或 Cmd+S
       2048 | 49, // monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS
       () => {
-        onSave?.()
+        if (onSave && editorRef.current) {
+          onSave(editorRef.current.getValue())
+        }
       }
     )
     
