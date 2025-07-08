@@ -1,5 +1,6 @@
 import express from 'express'
 import { createServer } from 'http'
+import type { Socket } from 'net'
 import { Server as SocketIOServer } from 'socket.io'
 import cors from 'cors'
 import helmet from 'helmet'
@@ -54,10 +55,19 @@ const app = express()
 const server = createServer(app)
 const io = new SocketIOServer(server, {
   cors: {
-    origin: process.env.CLIENT_URL || 'http://localhost:3000',
+    origin: process.env.CLIENT_URL || 'http://localhost:5173',
     methods: ['GET', 'POST']
   },
   transports: ['websocket', 'polling']
+})
+
+// 追踪所有活动的socket连接
+const sockets = new Set<Socket>()
+server.on('connection', socket => {
+  sockets.add(socket)
+  socket.on('close', () => {
+    sockets.delete(socket)
+  })
 })
 
 // 中间件配置
@@ -66,7 +76,7 @@ app.use(helmet({
 }))
 
 app.use(cors({
-  origin: process.env.CLIENT_URL || 'http://localhost:3000',
+  origin: process.env.CLIENT_URL || 'http://localhost:5173',
   credentials: true
 }))
 
@@ -124,27 +134,68 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
 // 404处理将在startServer函数中设置
 
 // 优雅关闭处理
-process.on('SIGTERM', () => {
-  logger.info('收到SIGTERM信号，开始优雅关闭...')
-  server.close(() => {
-    logger.info('HTTP服务器已关闭')
-    terminalManager.cleanup()
-    gameManager.cleanup()
-    systemManager.cleanup()
-    process.exit(0)
-  })
-})
+let shuttingDown = false
+function gracefulShutdown(signal: string) {
+  if (shuttingDown) {
+    logger.warn('已在关闭中，忽略重复信号。')
+    return
+  }
+  shuttingDown = true
 
-process.on('SIGINT', () => {
-  logger.info('收到SIGINT信号，开始优雅关闭...')
-  server.close(() => {
-    logger.info('HTTP服务器已关闭')
-    terminalManager.cleanup()
-    gameManager.cleanup()
-    systemManager.cleanup()
+  logger.info(`收到${signal}信号，开始优雅关闭...`)
+
+  // 1. 立即清理所有管理器，特别是会创建子进程的TerminalManager
+  logger.info('开始清理管理器...')
+  try {
+    if (terminalManager) {
+      terminalManager.cleanup()
+      logger.info('TerminalManager 已清理')
+    }
+    if (gameManager) {
+      gameManager.cleanup()
+      logger.info('GameManager 已清理')
+    }
+    if (systemManager) {
+      systemManager.cleanup()
+      logger.info('SystemManager 已清理')
+    }
+    logger.info('管理器清理完成。')
+  } catch (cleanupErr) {
+    logger.error('清理管理器时出错:', cleanupErr)
+  }
+
+  // 2. 关闭服务器
+  logger.info('开始关闭服务器...')
+  // 强制销毁所有活动的socket
+  logger.info(`正在销毁 ${sockets.size} 个活动的socket...`)
+  for (const socket of sockets) {
+    socket.destroy()
+  }
+
+  server.close(err => {
+    if (err && (err as NodeJS.ErrnoException).code !== 'ERR_SERVER_NOT_RUNNING') {
+      logger.error('关闭HTTP服务器时出错:', err)
+    } else {
+      logger.info('HTTP服务器已关闭。')
+    }
+    // 无论HTTP服务器关闭是否出错，都准备退出
+    logger.info('优雅关闭完成，服务器退出。')
     process.exit(0)
   })
-})
+
+  io.close(() => {
+    logger.info('Socket.IO 服务器已关闭')
+  })
+
+  // 3. 设置超时强制退出
+  setTimeout(() => {
+    logger.error('优雅关闭超时，强制退出！')
+    process.exit(1)
+  }, 5000) // 5秒超时
+}
+
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'))
+process.on('SIGINT', () => gracefulShutdown('SIGINT'))
 
 // 未捕获异常处理
 process.on('uncaughtException', (error) => {
