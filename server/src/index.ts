@@ -204,6 +204,15 @@ async function startServer() {
         terminalManager.closePty(socket, data)
       })
       
+      socket.on('reconnect-session', (data) => {
+        const success = terminalManager.reconnectSession(socket, data.sessionId)
+        if (success) {
+          socket.emit('session-reconnected', { sessionId: data.sessionId })
+        } else {
+          socket.emit('session-reconnect-failed', { sessionId: data.sessionId })
+        }
+      })
+      
       // 游戏管理事件
       socket.on('game-start', (data) => {
         gameManager.startGame(socket, data)

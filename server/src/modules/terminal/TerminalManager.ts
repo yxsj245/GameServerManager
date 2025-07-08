@@ -16,6 +16,9 @@ interface PtySession {
   workingDirectory: string
   createdAt: Date
   lastActivity: Date
+  disconnected?: boolean
+  disconnectedAt?: Date
+  outputBuffer: string[] // 存储终端输出历史
 }
 
 interface CreatePtyData {
@@ -113,7 +116,8 @@ export class TerminalManager {
         socket,
         workingDirectory,
         createdAt: new Date(),
-        lastActivity: new Date()
+        lastActivity: new Date(),
+        outputBuffer: [] // 初始化输出缓存
       }
       
       this.sessions.set(sessionId, session)
@@ -122,6 +126,13 @@ export class TerminalManager {
       ptyProcess.stdout?.on('data', (data: Buffer) => {
         session.lastActivity = new Date()
         const output = data.toString()
+        
+        // 保存到输出缓存，限制缓存大小为1000条
+        session.outputBuffer.push(output)
+        if (session.outputBuffer.length > 1000) {
+          session.outputBuffer.shift() // 移除最旧的输出
+        }
+        
         this.logger.debug(`PTY输出 ${sessionId}: ${JSON.stringify(output)}`)
         socket.emit('terminal-output', {
           sessionId,
@@ -133,6 +144,13 @@ export class TerminalManager {
       ptyProcess.stderr?.on('data', (data: Buffer) => {
         session.lastActivity = new Date()
         const output = data.toString()
+        
+        // 保存到输出缓存，限制缓存大小为1000条
+        session.outputBuffer.push(output)
+        if (session.outputBuffer.length > 1000) {
+          session.outputBuffer.shift() // 移除最旧的输出
+        }
+        
         this.logger.warn(`PTY错误输出 ${sessionId}: ${JSON.stringify(output)}`)
         socket.emit('terminal-output', {
           sessionId,
@@ -201,6 +219,14 @@ export class TerminalManager {
           error: '会话不存在'
         })
         return
+      }
+      
+      // 如果会话之前断开连接，现在重新连接
+      if (session.disconnected) {
+        session.disconnected = false
+        session.disconnectedAt = undefined
+        session.socket = socket
+        this.logger.info(`会话 ${sessionId} 重新连接成功`)
       }
       
       // 更新最后活动时间
@@ -292,21 +318,27 @@ export class TerminalManager {
    */
   public handleDisconnect(socket: Socket): void {
     try {
-      // 找到属于该socket的所有会话并关闭
-      const sessionsToClose: string[] = []
+      // 找到属于该socket的所有会话并标记为断开状态
+      const sessionsToMark: string[] = []
       
       for (const [sessionId, session] of this.sessions.entries()) {
         if (session.socket.id === socket.id) {
-          sessionsToClose.push(sessionId)
+          sessionsToMark.push(sessionId)
         }
       }
       
-      for (const sessionId of sessionsToClose) {
-        this.closePty(socket, { sessionId })
+      for (const sessionId of sessionsToMark) {
+        const session = this.sessions.get(sessionId)
+        if (session) {
+          // 标记会话为断开状态，但不关闭PTY进程
+          session.disconnected = true
+          session.disconnectedAt = new Date()
+          this.logger.info(`会话 ${sessionId} 已标记为断开状态`)
+        }
       }
       
-      if (sessionsToClose.length > 0) {
-        this.logger.info(`客户端断开连接，关闭了 ${sessionsToClose.length} 个会话`)
+      if (sessionsToMark.length > 0) {
+        this.logger.info(`客户端断开连接，标记了 ${sessionsToMark.length} 个会话为断开状态`)
       }
       
     } catch (error) {
@@ -321,12 +353,16 @@ export class TerminalManager {
     try {
       const now = new Date()
       const inactiveThreshold = 30 * 60 * 1000 // 30分钟
+      const disconnectedThreshold = 5 * 60 * 1000 // 断开连接5分钟后清理
       const sessionsToClose: string[] = []
       
       for (const [sessionId, session] of this.sessions.entries()) {
         const inactiveTime = now.getTime() - session.lastActivity.getTime()
+        const disconnectedTime = session.disconnectedAt ? now.getTime() - session.disconnectedAt.getTime() : 0
         
-        if (inactiveTime > inactiveThreshold) {
+        // 如果会话断开连接超过5分钟，或者不活跃超过30分钟，则清理
+        if ((session.disconnected && disconnectedTime > disconnectedThreshold) || 
+            (!session.disconnected && inactiveTime > inactiveThreshold)) {
           sessionsToClose.push(sessionId)
         }
       }
@@ -334,7 +370,7 @@ export class TerminalManager {
       for (const sessionId of sessionsToClose) {
         const session = this.sessions.get(sessionId)
         if (session) {
-          this.logger.info(`清理不活跃会话: ${sessionId}`)
+          this.logger.info(`清理会话: ${sessionId} (${session.disconnected ? '断开连接' : '不活跃'})`)
           this.closePty(session.socket, { sessionId })
         }
       }
@@ -345,14 +381,87 @@ export class TerminalManager {
   }
 
   /**
+   * 重新连接现有会话
+   */
+  public reconnectSession(socket: Socket, sessionId: string): boolean {
+    try {
+      const session = this.sessions.get(sessionId)
+      
+      if (!session) {
+        this.logger.warn(`尝试重连不存在的会话: ${sessionId}`)
+        return false
+      }
+      
+      // 更新socket连接
+      session.socket = socket
+      session.disconnected = false
+      session.disconnectedAt = undefined
+      session.lastActivity = new Date()
+      
+      this.logger.info(`会话 ${sessionId} 重新连接成功`)
+      
+      // 重新设置PTY输出监听
+      session.process.stdout?.removeAllListeners('data')
+      session.process.stderr?.removeAllListeners('data')
+      
+      // 发送历史输出给重连的客户端
+      if (session.outputBuffer.length > 0) {
+        const historicalOutput = session.outputBuffer.join('')
+        socket.emit('terminal-output', {
+          sessionId: session.id,
+          data: historicalOutput,
+          isHistorical: true
+        })
+      }
+      
+      session.process.stdout?.on('data', (data: Buffer) => {
+        const output = data.toString()
+        
+        // 保存到输出缓存，限制缓存大小为1000条
+        session.outputBuffer.push(output)
+        if (session.outputBuffer.length > 1000) {
+          session.outputBuffer.shift() // 移除最旧的输出
+        }
+        
+        socket.emit('terminal-output', {
+          sessionId: session.id,
+          data: output
+        })
+      })
+      
+      session.process.stderr?.on('data', (data: Buffer) => {
+        const output = data.toString()
+        
+        // 保存到输出缓存，限制缓存大小为1000条
+        session.outputBuffer.push(output)
+        if (session.outputBuffer.length > 1000) {
+          session.outputBuffer.shift() // 移除最旧的输出
+        }
+        
+        socket.emit('terminal-output', {
+          sessionId: session.id,
+          data: output
+        })
+      })
+      
+      return true
+    } catch (error) {
+      this.logger.error(`重连会话失败:`, error)
+      return false
+    }
+  }
+  
+  /**
    * 获取活跃会话统计
    */
-  public getSessionStats(): { total: number; sessions: Array<{ id: string; createdAt: Date; lastActivity: Date }> } {
-    const sessions = Array.from(this.sessions.values()).map(session => ({
-      id: session.id,
-      createdAt: session.createdAt,
-      lastActivity: session.lastActivity
-    }))
+  public getSessionStats(): { total: number; sessions: Array<{ id: string; createdAt: Date; lastActivity: Date; disconnected?: boolean }> } {
+    const sessions = Array.from(this.sessions.values())
+      .map(session => ({
+        id: session.id,
+        createdAt: session.createdAt,
+        lastActivity: session.lastActivity,
+        disconnected: session.disconnected
+      }))
     
     return {
       total: sessions.length,

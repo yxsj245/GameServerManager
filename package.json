@@ -1,21 +1,55 @@
 {
-  "name": "gsm3-game-panel",
+  "name": "gsm3-management-panel",
   "version": "1.0.0",
-  "description": "游戏面板 - 支持Steam等游戏一键部署",
-  "main": "index.js",
+  "description": "GSM3游戏服务端管理面板",
+  "main": "dist/index.js",
   "scripts": {
-    "dev": "concurrently \"npm run dev:client\" \"npm run dev:server\"",
-    "dev:client": "cd client && npm run dev",
+    "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
     "dev:server": "cd server && npm run dev",
-    "build": "npm run build:client && npm run build:server",
-    "build:client": "cd client && npm run build",
+    "dev:client": "cd client && npm run dev",
+    "build": "npm run build:server && npm run build:client",
     "build:server": "cd server && npm run build",
-    "install:all": "npm install && cd client && npm install && cd ../server && npm install"
+    "build:client": "cd client && npm run build",
+    "package": "npm run build && npm run package:create",
+    "package:create": "node scripts/package.js",
+    "start": "cd server && npm start",
+    "start:prod": "cd dist && node index.js",
+    "install:all": "npm install && cd server && npm install && cd ../client && npm install",
+    "clean": "rimraf dist && rimraf server/dist && rimraf client/dist",
+    "test": "cd server && npm test",
+    "lint": "cd client && npm run lint"
   },
-  "keywords": ["game", "panel", "steam", "deployment", "terminal"],
-  "author": "GSM3 Team",
-  "license": "MIT",
   "devDependencies": {
-    "concurrently": "^8.2.2"
-  }
+    "concurrently": "^8.2.2",
+    "rimraf": "^5.0.5",
+    "archiver": "^6.0.1",
+    "fs-extra": "^11.2.0",
+    "@types/fs-extra": "^11.0.4",
+    "@types/archiver": "^6.0.2"
+  },
+  "keywords": [
+    "game",
+    "server",
+    "management",
+    "panel",
+    "react",
+    "typescript",
+    "gsm3",
+    "gaming"
+  ],
+  "author": "",
+  "license": "ISC",
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=8.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": ""
+  },
+  "bugs": {
+    "url": ""
+  },
+  "homepage": "",
+  "private": true
 }
