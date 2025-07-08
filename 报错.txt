@@ -1,0 +1,76 @@
+20:35:24 [vite] Pre-transform error: D:\Cursor项目\GSM3\client\src\pages\TerminalPage.tsx: Unexpected token, expected "," (703:6)
+
+  701 |       </div>
+  702 |
+> 703 |       {/* 右侧终端显示区域 */}
+      |       ^
+  704 |       <div className="flex-1 flex flex-col min-w-0">
+  705 |         {sessions.length === 0 ? (
+  706 |           <div className="flex-1 flex items-center justify-center bg-gray-900">
+20:35:24 [vite] Internal server error: D:\Cursor项目\GSM3\client\src\pages\TerminalPage.tsx: Unexpected token, expected "," (703:6)
+
+  701 |       </div>
+  702 |
+> 703 |       {/* 右侧终端显示区域 */}
+      |       ^
+  704 |       <div className="flex-1 flex flex-col min-w-0">
+  705 |         {sessions.length === 0 ? (
+  706 |           <div className="flex-1 flex items-center justify-center bg-gray-900">
+  Plugin: vite:react-babel
+  File: D:/Cursor项目/GSM3/client/src/pages/TerminalPage.tsx:703:6
+  719|            <>
+  720|              {/* 终端头部 */}
+  721|              <div className="flex-shrink-0 bg-gray-800/50 backdrop-blur-sm border-b border-gray-700/50 px-4 py-3">
+     |        ^
+  722|                <div className="flex items-center justify-between">
+  723|                  <div className="flex items-center space-x-3">
+      at constructor (D:\Cursor项目\GSM3\client\node_modules\@babel\parser\lib\index.js:367:19)
+      at TypeScriptParserMixin.raise (D:\Cursor项目\GSM3\client\node_modules\@babel\parser\lib\index.js:6627:19)
+      at TypeScriptParserMixin.unexpected (D:\Cursor项目\GSM3\client\node_modules\@babel\parser\lib\index.js:6647:16)
+      at TypeScriptParserMixin.expect (D:\Cursor项目\GSM3\client\node_modules\@babel\parser\lib\index.js:6927:12)
+      at TypeScriptParserMixin.parseParenAndDistinguishExpression (D:\Cursor项目\GSM3\client\node_modules\@babel\parser\lib\index.js:11660:14)
+      at TypeScriptParserMixin.parseExprAtom (D:\Cursor项目\GSM3\client\node_modules\@babel\parser\lib\index.js:11326:23)
+      at TypeScriptParserMixin.parseExprAtom (D:\Cursor项目\GSM3\client\node_modules\@babel\parser\lib\index.js:4794:20)
+      at TypeScriptParserMixin.parseExprSubscripts (D:\Cursor项目\GSM3\client\node_modules\@babel\parser\lib\index.js:11076:23)
+      at TypeScriptParserMixin.parseUpdate (D:\Cursor项目\GSM3\client\node_modules\@babel\parser\lib\index.js:11061:21)
+      at TypeScriptParserMixin.parseMaybeUnary (D:\Cursor项目\GSM3\client\node_modules\@babel\parser\lib\index.js:11041:23)
+      at TypeScriptParserMixin.parseMaybeUnary (D:\Cursor项目\GSM3\client\node_modules\@babel\parser\lib\index.js:9852:18)
+      at TypeScriptParserMixin.parseMaybeUnaryOrPrivate (D:\Cursor项目\GSM3\client\node_modules\@babel\parser\lib\index.js:10894:61)
+      at TypeScriptParserMixin.parseExprOpBaseRightExpr (D:\Cursor项目\GSM3\client\node_modules\@babel\parser\lib\index.js:10981:34)
+      at TypeScriptParserMixin.parseExprOpRightExpr (D:\Cursor项目\GSM3\client\node_modules\@babel\parser\lib\index.js:10976:21)
+      at TypeScriptParserMixin.parseExprOp (D:\Cursor项目\GSM3\client\node_modules\@babel\parser\lib\index.js:10942:27)
+      at TypeScriptParserMixin.parseExprOp (D:\Cursor项目\GSM3\client\node_modules\@babel\parser\lib\index.js:9389:18)
+      at TypeScriptParserMixin.parseExprOps (D:\Cursor项目\GSM3\client\node_modules\@babel\parser\lib\index.js:10903:17)
+      at TypeScriptParserMixin.parseMaybeConditional (D:\Cursor项目\GSM3\client\node_modules\@babel\parser\lib\index.js:10876:23)
+      at TypeScriptParserMixin.parseMaybeAssign (D:\Cursor项目\GSM3\client\node_modules\@babel\parser\lib\index.js:10826:21)
+      at TypeScriptParserMixin.parseMaybeAssign (D:\Cursor项目\GSM3\client\node_modules\@babel\parser\lib\index.js:9801:20)
+      at TypeScriptParserMixin.parseExpressionBase (D:\Cursor项目\GSM3\client\node_modules\@babel\parser\lib\index.js:10779:23)
+      at D:\Cursor项目\GSM3\client\node_modules\@babel\parser\lib\index.js:10775:39
+      at TypeScriptParserMixin.allowInAnd (D:\Cursor项目\GSM3\client\node_modules\@babel\parser\lib\index.js:12427:12)
+      at TypeScriptParserMixin.parseExpression (D:\Cursor项目\GSM3\client\node_modules\@babel\parser\lib\index.js:10775:17)
+      at TypeScriptParserMixin.jsxParseExpressionContainer (D:\Cursor项目\GSM3\client\node_modules\@babel\parser\lib\index.js:4662:31)
+      at TypeScriptParserMixin.jsxParseElementAt (D:\Cursor项目\GSM3\client\node_modules\@babel\parser\lib\index.js:4741:36)
+      at TypeScriptParserMixin.jsxParseElement (D:\Cursor项目\GSM3\client\node_modules\@babel\parser\lib\index.js:4779:17)
+      at TypeScriptParserMixin.parseExprAtom (D:\Cursor项目\GSM3\client\node_modules\@babel\parser\lib\index.js:4789:19)
+      at TypeScriptParserMixin.parseExprSubscripts (D:\Cursor项目\GSM3\client\node_modules\@babel\parser\lib\index.js:11076:23)
+      at TypeScriptParserMixin.parseUpdate (D:\Cursor项目\GSM3\client\node_modules\@babel\parser\lib\index.js:11061:21)
+      at TypeScriptParserMixin.parseMaybeUnary (D:\Cursor项目\GSM3\client\node_modules\@babel\parser\lib\index.js:11041:23)
+      at TypeScriptParserMixin.parseMaybeUnary (D:\Cursor项目\GSM3\client\node_modules\@babel\parser\lib\index.js:9852:18)
+      at TypeScriptParserMixin.parseMaybeUnaryOrPrivate (D:\Cursor项目\GSM3\client\node_modules\@babel\parser\lib\index.js:10894:61)
+      at TypeScriptParserMixin.parseExprOps (D:\Cursor项目\GSM3\client\node_modules\@babel\parser\lib\index.js:10899:23)
+      at TypeScriptParserMixin.parseMaybeConditional (D:\Cursor项目\GSM3\client\node_modules\@babel\parser\lib\index.js:10876:23)
+      at TypeScriptParserMixin.parseMaybeAssign (D:\Cursor项目\GSM3\client\node_modules\@babel\parser\lib\index.js:10826:21)
+      at D:\Cursor项目\GSM3\client\node_modules\@babel\parser\lib\index.js:9790:39
+      at TypeScriptParserMixin.tryParse (D:\Cursor项目\GSM3\client\node_modules\@babel\parser\lib\index.js:6935:20)
+      at TypeScriptParserMixin.parseMaybeAssign (D:\Cursor项目\GSM3\client\node_modules\@babel\parser\lib\index.js:9790:18)
+      at D:\Cursor项目\GSM3\client\node_modules\@babel\parser\lib\index.js:10795:39
+      at TypeScriptParserMixin.allowInAnd (D:\Cursor项目\GSM3\client\node_modules\@babel\parser\lib\index.js:12427:12)
+      at TypeScriptParserMixin.parseMaybeAssignAllowIn (D:\Cursor项目\GSM3\client\node_modules\@babel\parser\lib\index.js:10795:17)
+      at TypeScriptParserMixin.parseMaybeAssignAllowInOrVoidPattern (D:\Cursor项目\GSM3\client\node_modules\@babel\parser\lib\index.js:12494:17)
+      at TypeScriptParserMixin.parseParenAndDistinguishExpression (D:\Cursor项目\GSM3\client\node_modules\@babel\parser\lib\index.js:11674:28)
+      at TypeScriptParserMixin.parseExprAtom (D:\Cursor项目\GSM3\client\node_modules\@babel\parser\lib\index.js:11326:23)
+      at TypeScriptParserMixin.parseExprAtom (D:\Cursor项目\GSM3\client\node_modules\@babel\parser\lib\index.js:4794:20)
+      at TypeScriptParserMixin.parseExprSubscripts (D:\Cursor项目\GSM3\client\node_modules\@babel\parser\lib\index.js:11076:23)
+      at TypeScriptParserMixin.parseUpdate (D:\Cursor项目\GSM3\client\node_modules\@babel\parser\lib\index.js:11061:21)
+      at TypeScriptParserMixin.parseMaybeUnary (D:\Cursor项目\GSM3\client\node_modules\@babel\parser\lib\index.js:11041:23)
+      at TypeScriptParserMixin.parseMaybeUnary (D:\Cursor项目\GSM3\client\node_modules\@babel\parser\lib\index.js:9852:18)

@@ -209,16 +209,43 @@ const TerminalPage: React.FC = () => {
   }
   
   // 切换全屏模式
-  const toggleFullscreen = () => {
-    setIsFullscreen(!isFullscreen)
-    
-    // 延迟调整终端大小
-    setTimeout(() => {
-      const activeSession = sessions.find(s => s.id === activeSessionId)
-      if (activeSession) {
-        activeSession.fitAddon.fit()
+  const toggleFullscreen = async () => {
+    try {
+      if (!isFullscreen) {
+        // 进入全屏模式
+        await document.documentElement.requestFullscreen()
+        setIsFullscreen(true)
+        addNotification({
+          type: 'info',
+          title: '已进入全屏模式',
+          message: '按 ESC 键或点击全屏按钮退出全屏'
+        })
+      } else {
+        // 退出全屏模式
+        await document.exitFullscreen()
+        setIsFullscreen(false)
+        addNotification({
+          type: 'info',
+          title: '已退出全屏模式',
+          message: '全屏模式已关闭'
+        })
       }
-    }, 100)
+      
+      // 延迟调整终端大小
+      setTimeout(() => {
+        const activeSession = sessions.find(s => s.id === activeSessionId)
+        if (activeSession) {
+          activeSession.fitAddon.fit()
+        }
+      }, 200)
+    } catch (error) {
+      console.error('全屏切换失败:', error)
+      addNotification({
+        type: 'error',
+        title: '全屏切换失败',
+        message: '浏览器不支持全屏模式或操作被阻止'
+      })
+    }
   }
   
   // 页面加载时获取现有终端会话
@@ -432,25 +459,53 @@ const TerminalPage: React.FC = () => {
       }
     }
     
+    // 监听全屏状态变化
+    const handleFullscreenChange = () => {
+      const isCurrentlyFullscreen = !!document.fullscreenElement
+      if (isCurrentlyFullscreen !== isFullscreen) {
+        setIsFullscreen(isCurrentlyFullscreen)
+        if (!isCurrentlyFullscreen) {
+          addNotification({
+            type: 'info',
+            title: '已退出全屏模式',
+            message: '全屏模式已关闭'
+          })
+        }
+        // 调整终端大小
+        setTimeout(() => {
+          const activeSession = sessions.find(s => s.id === activeSessionId)
+          if (activeSession) {
+            activeSession.fitAddon.fit()
+          }
+        }, 200)
+      }
+    }
+    
     window.addEventListener('resize', handleResize)
-    return () => window.removeEventListener('resize', handleResize)
-  }, [activeSessionId, sessions])
+    document.addEventListener('fullscreenchange', handleFullscreenChange)
+    
+    return () => {
+      window.removeEventListener('resize', handleResize)
+      document.removeEventListener('fullscreenchange', handleFullscreenChange)
+    }
+  }, [activeSessionId, sessions, isFullscreen, addNotification])
   
   // 判断侧边栏是否应该显示
-  const shouldShowSidebar = !sidebarCollapsed || sidebarHovered
+  const shouldShowSidebar = !isFullscreen && (!sidebarCollapsed || sidebarHovered)
   
   return (
     <div className={`${isFullscreen ? 'fixed inset-0 z-50 bg-gray-900' : 'h-screen'} flex`}>
       {/* 左侧终端标签页侧边栏 */}
-      <div 
-        className={`
-          relative bg-gray-800/50 backdrop-blur-sm border-r border-gray-700/50 transition-all duration-300 ease-in-out
-          ${shouldShowSidebar ? 'w-80' : 'w-12'}
-          ${sidebarHovered ? 'shadow-xl' : ''}
-        `}
-        onMouseEnter={() => setSidebarHovered(true)}
-        onMouseLeave={() => setSidebarHovered(false)}
-      >
+      {!isFullscreen && (
+        <div 
+          className={`
+            relative bg-gray-800/50 backdrop-blur-sm border-r border-gray-700/50 transition-all duration-300 ease-in-out
+            ${shouldShowSidebar ? 'w-80' : 'w-12'}
+            ${sidebarHovered ? 'shadow-xl' : ''}
+          `}
+          onMouseEnter={() => setSidebarHovered(true)}
+          onMouseLeave={() => setSidebarHovered(false)}
+        >
         {/* 侧边栏头部 */}
         <div className="flex items-center justify-between p-4 border-b border-gray-700/50">
           {shouldShowSidebar && (
@@ -642,7 +697,8 @@ const TerminalPage: React.FC = () => {
             </div>
           </div>
         )}
-      </div>
+        </div>
+      )}
       
       {/* 右侧终端显示区域 */}
       <div className="flex-1 flex flex-col min-w-0">
@@ -675,8 +731,19 @@ const TerminalPage: React.FC = () => {
                   </div>
                 </div>
                 
-                <div className="text-xs text-gray-400 font-mono">
-                  {activeSessionId}
+                <div className="flex items-center space-x-3">
+                  {isFullscreen && (
+                    <button
+                      onClick={toggleFullscreen}
+                      className="p-2 text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+                      title="退出全屏"
+                    >
+                      <Minimize2 className="w-4 h-4" />
+                    </button>
+                  )}
+                  <div className="text-xs text-gray-400 font-mono">
+                    {activeSessionId}
+                  </div>
                 </div>
               </div>
             </div>
