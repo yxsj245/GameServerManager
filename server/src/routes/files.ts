@@ -41,19 +41,7 @@ const upload = multer({
       // 直接使用原文件名，清理特殊字符
       let cleanedName = originalName.replace(/[^\u4e00-\u9fa5\w\s.-]/g, '_')
       
-      // 检查文件是否已存在，如果存在则添加数字后缀
-      const uploadDir = path.join(process.cwd(), 'uploads')
-      let finalName = cleanedName
-      let counter = 1
-      
-      while (fsSync.existsSync(path.join(uploadDir, finalName))) {
-        const ext = path.extname(cleanedName)
-        const baseName = path.basename(cleanedName, ext)
-        finalName = `${baseName}(${counter})${ext}`
-        counter++
-      }
-      
-      cb(null, finalName)
+      cb(null, cleanedName)
     }
   }),
   limits: {
