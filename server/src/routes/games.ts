@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express'
-import { GameManager } from '../modules/game/GameManager'
-import logger from '../utils/logger'
+import { GameManager } from '../modules/game/GameManager.js'
+import logger from '../utils/logger.js'
 import Joi from 'joi'
 
 const router = Router()

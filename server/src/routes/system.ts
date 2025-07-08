@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express'
-import { SystemManager } from '../modules/system/SystemManager'
-import logger from '../utils/logger'
+import { SystemManager } from '../modules/system/SystemManager.js'
+import logger from '../utils/logger.js'
 import os from 'os'
 import fs from 'fs/promises'
 import path from 'path'

@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express'
-import { TerminalManager } from '../modules/terminal/TerminalManager'
-import logger from '../utils/logger'
+import { TerminalManager } from '../modules/terminal/TerminalManager.js'
+import logger from '../utils/logger.js'
 
 const router = Router()
 

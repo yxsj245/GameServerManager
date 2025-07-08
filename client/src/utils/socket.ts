@@ -1,5 +1,6 @@
 import { io, Socket } from 'socket.io-client'
 import { SocketEvents } from '@/types'
+import config from '@/config'
 
 class SocketClient {
   private socket: Socket | null = null
@@ -15,12 +16,12 @@ class SocketClient {
   private connect() {
     const token = localStorage.getItem('gsm3_token')
     
-    this.socket = io('http://localhost:3001', {
+    this.socket = io(config.serverUrl, {
       auth: {
         token,
       },
       transports: ['websocket', 'polling'],
-      timeout: 20000,
+      timeout: config.socketTimeout,
       forceNew: true,
     })
 

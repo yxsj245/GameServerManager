@@ -1,5 +1,6 @@
 import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios'
 import { LoginRequest, LoginResponse, ApiResponse, User } from '@/types'
+import config from '@/config'
 
 class ApiClient {
   private client: AxiosInstance
@@ -7,8 +8,8 @@ class ApiClient {
 
   constructor() {
     this.client = axios.create({
-      baseURL: 'http://localhost:3001/api',
-      timeout: 30000,
+      baseURL: config.apiBaseUrl,
+      timeout: config.requestTimeout,
       headers: {
         'Content-Type': 'application/json',
       },

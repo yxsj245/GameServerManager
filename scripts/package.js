@@ -36,6 +36,30 @@ async function createPackage() {
       path.join(packageDir, 'server', 'PTY')
     )
     
+    // 复制环境变量配置文件
+    await fs.copy(
+      path.join(__dirname, '..', 'server', '.env.example'),
+      path.join(packageDir, 'server', '.env.example')
+    )
+    
+    await fs.copy(
+      path.join(__dirname, '..', '.env.example'),
+      path.join(packageDir, '.env.example')
+    )
+    
+    console.log('📥 安装服务端生产依赖...')
+    // 在打包的服务端目录中安装生产依赖
+    try {
+      execSync('npm install --production --omit=dev', {
+        cwd: path.join(packageDir, 'server'),
+        stdio: 'inherit'
+      })
+      console.log('✅ 服务端依赖安装完成')
+    } catch (error) {
+      console.error('❌ 服务端依赖安装失败:', error)
+      throw error
+    }
+    
     console.log('🎨 复制前端文件...')
     // 复制前端构建文件
     await fs.copy(
@@ -48,7 +72,7 @@ async function createPackage() {
     const startScript = `@echo off
 echo 正在启动GSM3管理面板...
 cd server
-node index.js
+node_app.exe index.js
 pause`
     
     await fs.writeFile(
@@ -60,7 +84,7 @@ pause`
     const startShScript = `#!/bin/bash
 echo "正在启动GSM3管理面板..."
 cd server
-node index.js`
+/opt/node-v22.17.0-linux-x64/bin/node index.js`
     
     await fs.writeFile(
       path.join(packageDir, 'start.sh'),
@@ -81,20 +105,29 @@ node index.js`
 ## 安装说明
 
 1. 确保已安装 Node.js (版本 >= 18)
-2. 进入 server 目录
-3. 运行 \`npm install --production\` 安装依赖
-4. 复制 .env.example 为 .env 并配置相关参数
-5. 运行启动脚本:
+2. 解压缩包到目标目录
+3. (可选) 配置端口和其他参数:
+   - 复制 .env.example 为 .env 并修改 SERVER_PORT 等配置
+   - 复制 server/.env.example 为 server/.env 并配置详细参数
+4. 运行启动脚本:
    - Windows: 双击 start.bat
    - Linux/Mac: 运行 ./start.sh
 
 ## 默认访问地址
 
-http://localhost:3000
+http://localhost:3001
+
+## 端口配置
+
+- 修改根目录 .env 文件中的 SERVER_PORT 可以更改服务端口
+- 修改后需要重启服务才能生效
+- 确保防火墙允许新端口访问
 
 ## 注意事项
 
-- 首次运行需要创建管理员账户
+- 依赖已预装，无需手动安装
+- 首次运行会自动创建默认管理员账户 (admin/admin123)
+- 请立即登录并修改默认密码
 - 确保防火墙允许相关端口访问
 - 建议在生产环境中使用 PM2 等进程管理工具
 

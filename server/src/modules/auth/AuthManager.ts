@@ -3,7 +3,7 @@ import jwt from 'jsonwebtoken'
 import fs from 'fs/promises'
 import path from 'path'
 import winston from 'winston'
-import { ConfigManager } from '../config/ConfigManager'
+import { ConfigManager } from '../config/ConfigManager.js'
 
 export interface User {
   id: string
@@ -223,7 +223,7 @@ export class AuthManager {
         role: user.role
       },
       jwtConfig.secret,
-      { expiresIn: jwtConfig.expiresIn }
+      { expiresIn: jwtConfig.expiresIn as `${number}h` }
     )
 
     this.logger.info(`用户 ${username} 登录成功`)

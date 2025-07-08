@@ -1,8 +1,8 @@
 import { Router } from 'express'
-import terminalRoutes from './terminal'
-import gameRoutes from './games'
-import systemRoutes from './system'
-import fileRoutes from './files'
+import terminalRoutes from './terminal.js'
+import gameRoutes from './games.js'
+import systemRoutes from './system.js'
+import fileRoutes from './files.js'
 
 const router = Router()
 

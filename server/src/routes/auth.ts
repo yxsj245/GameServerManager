@@ -1,8 +1,8 @@
 import { Router, Request, Response } from 'express'
 import rateLimit from 'express-rate-limit'
-import { AuthManager } from '../modules/auth/AuthManager'
-import { authenticateToken, AuthenticatedRequest, requireAdmin } from '../middleware/auth'
-import logger from '../utils/logger'
+import { AuthManager } from '../modules/auth/AuthManager.js'
+import { authenticateToken, AuthenticatedRequest, requireAdmin } from '../middleware/auth.js'
+import logger from '../utils/logger.js'
 import Joi from 'joi'
 
 const router = Router()

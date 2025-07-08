@@ -8,22 +8,24 @@ import path from 'path'
 import { fileURLToPath } from 'url'
 import winston from 'winston'
 
-import { TerminalManager } from './modules/terminal/TerminalManager'
-import { GameManager } from './modules/game/GameManager'
-import { SystemManager } from './modules/system/SystemManager'
-import { ConfigManager } from './modules/config/ConfigManager'
-import { AuthManager } from './modules/auth/AuthManager'
-import { setupTerminalRoutes } from './routes/terminal'
-import { setupGameRoutes } from './routes/games'
-import { setupSystemRoutes } from './routes/system'
-import { setupAuthRoutes } from './routes/auth'
-import { setAuthManager } from './middleware/auth'
+import { TerminalManager } from './modules/terminal/TerminalManager.js'
+import { GameManager } from './modules/game/GameManager.js'
+import { SystemManager } from './modules/system/SystemManager.js'
+import { ConfigManager } from './modules/config/ConfigManager.js'
+import { AuthManager } from './modules/auth/AuthManager.js'
+import { setupTerminalRoutes } from './routes/terminal.js'
+import { setupGameRoutes } from './routes/games.js'
+import { setupSystemRoutes } from './routes/system.js'
+import { setupAuthRoutes } from './routes/auth.js'
+import { setAuthManager } from './middleware/auth.js'
 
 // 获取当前文件目录
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
 // 加载环境变量
+// 首先尝试加载根目录的.env文件，然后加载server目录的.env文件
+dotenv.config({ path: path.join(__dirname, '../../.env') })
 dotenv.config()
 
 // 配置日志
@@ -73,6 +75,7 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }))
 
 // 静态文件服务
 app.use('/static', express.static(path.join(__dirname, '../public')))
+app.use(express.static(path.join(__dirname, '../public')))
 
 // 管理器变量声明
 let configManager: ConfigManager
@@ -175,12 +178,18 @@ async function startServer() {
     app.use('/api/game', setupGameRoutes(gameManager))
     app.use('/api/system', setupSystemRoutes(systemManager))
 
-    // 404处理（必须在所有路由之后）
-    app.use('*', (req, res) => {
-      res.status(404).json({
-        error: '接口不存在',
-        path: req.originalUrl
-      })
+    // 前端路由处理（SPA支持）
+    app.get('*', (req, res) => {
+      // 如果是API请求，返回404
+      if (req.path.startsWith('/api/')) {
+        res.status(404).json({
+          error: '接口不存在',
+          path: req.originalUrl
+        })
+      } else {
+        // 其他请求返回前端页面
+        res.sendFile(path.join(__dirname, '../public/index.html'))
+      }
     })
 
     // Socket.IO 连接处理
@@ -250,7 +259,7 @@ async function startServer() {
       })
     })
 
-    const PORT = parseInt(process.env.PORT || '3001', 10)
+    const PORT = parseInt(process.env.SERVER_PORT || process.env.PORT || '3001', 10)
     const HOST = process.env.HOST || '0.0.0.0'
 
     server.listen(PORT, HOST, () => {
