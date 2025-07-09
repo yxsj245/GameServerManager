@@ -89,6 +89,7 @@ export interface SystemInfo {
 }
 
 export interface ProcessInfo {
+  id: string
   pid: number
   name: string
   cpu: number
