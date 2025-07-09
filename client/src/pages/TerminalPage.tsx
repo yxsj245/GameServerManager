@@ -126,10 +126,13 @@ const TerminalPage: React.FC = () => {
       if (terminalContainerRef.current && !newSession.terminal.element) {
         try {
           newSession.terminal.open(terminalContainerRef.current)
+          // 确保终端获得焦点
           newSession.terminal.focus()
           // 调整终端大小
           setTimeout(() => {
             newSession.fitAddon.fit()
+            // 再次确保焦点，防止在调整大小过程中丢失焦点
+            newSession.terminal.focus()
           }, 50)
         } catch (error) {
           console.error('挂载新终端失败:', error)
@@ -195,6 +198,14 @@ const TerminalPage: React.FC = () => {
       active: s.id === sessionId
     })))
     setActiveSessionId(sessionId)
+    
+    // 延迟聚焦到切换的终端
+    setTimeout(() => {
+      const session = sessionsRef.current.find(s => s.id === sessionId)
+      if (session && session.terminal.element) {
+        session.terminal.focus()
+      }
+    }, 50)
   }, [])
   
   // 重命名终端会话
@@ -499,7 +510,19 @@ const TerminalPage: React.FC = () => {
       return
     }
 
-    createTerminalSession(cwd)
+    // 延迟创建新终端，确保现有会话加载完成
+    setTimeout(() => {
+      createTerminalSession(cwd)
+      
+      // 确保新创建的终端获得焦点，延迟时间更长
+      setTimeout(() => {
+        const activeSession = sessionsRef.current.find(s => s.active)
+        if (activeSession && activeSession.terminal.element) {
+          activeSession.terminal.focus()
+        }
+      }, 500)
+    }, 100)
+    
     urlParamProcessed.current = true
     navigate('/terminal', { replace: true })
     
@@ -526,16 +549,26 @@ const TerminalPage: React.FC = () => {
           container.appendChild(activeSession.terminal.element)
         }
 
+        // 确保终端获得焦点
         activeSession.terminal.focus()
 
         // 延迟调整大小，确保DOM更新完成
         setTimeout(() => {
           try {
             activeSession.fitAddon.fit()
+            // 在调整大小后再次确保焦点
+            activeSession.terminal.focus()
           } catch (error) {
             console.error('调整终端大小失败:', error)
           }
         }, 100)
+        
+        // 额外的焦点确保机制
+        setTimeout(() => {
+          if (activeSession.terminal.element) {
+            activeSession.terminal.focus()
+          }
+        }, 200)
       } catch (error) {
         console.error('挂载终端失败:', error)
       }
