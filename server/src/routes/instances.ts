@@ -251,13 +251,16 @@ router.post('/:id/start', async (req: Request, res: Response) => {
     }
     
     const { id } = req.params
-    await instanceManager.startInstance(id)
+    const result = await instanceManager.startInstance(id)
     
     logger.info(`用户启动实例: ${id}`)
     
     res.json({
       success: true,
-      message: '实例启动成功'
+      message: '实例启动成功',
+      data: {
+        terminalSessionId: result.terminalSessionId
+      }
     })
   } catch (error: any) {
     logger.error('启动实例失败:', error)

@@ -506,8 +506,41 @@ const TerminalPage: React.FC = () => {
 
     const cwd = searchParams.get('cwd')
     const instanceId = searchParams.get('instance')
+    const sessionId = searchParams.get('sessionId')
 
-    if (instanceId) {
+    if (sessionId) {
+      // 如果有sessionId参数，直接查找对应的终端会话
+      const targetSession = sessionsRef.current.find(s => s.id === sessionId)
+      
+      if (targetSession) {
+        // 如果找到对应的会话，切换到该会话
+        switchTerminalSession(targetSession.id)
+        addNotification({
+          type: 'success',
+          title: '已连接到实例终端',
+          message: `已切换到实例终端会话`
+        })
+      } else {
+        // 如果没有找到对应的会话，等待一段时间后再次查找
+        setTimeout(() => {
+          const delayedSession = sessionsRef.current.find(s => s.id === sessionId)
+          if (delayedSession) {
+            switchTerminalSession(delayedSession.id)
+            addNotification({
+              type: 'success',
+              title: '已连接到实例终端',
+              message: `已切换到实例终端会话`
+            })
+          } else {
+            addNotification({
+              type: 'warning',
+              title: '终端会话未找到',
+              message: `指定的终端会话可能还在启动中，请稍后刷新页面`
+            })
+          }
+        }, 3000)
+      }
+    } else if (instanceId) {
       // 如果有instance参数，查找对应的终端会话
       const instanceSession = sessionsRef.current.find(s => 
         s.name.includes(instanceId) || s.id.includes(instanceId)

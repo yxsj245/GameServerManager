@@ -120,8 +120,15 @@ const InstanceManagerPage: React.FC = () => {
           title: '启动成功',
           message: `实例 "${instance.name}" 正在启动`
         })
-        // 跳转到终端页面，同时传递工作目录
-        navigate(`/terminal?instance=${instance.id}&cwd=${encodeURIComponent(instance.workingDirectory)}`)
+        
+        // 如果返回了终端会话ID，使用sessionId参数跳转到终端页面
+        if (response.data?.terminalSessionId) {
+          navigate(`/terminal?sessionId=${response.data.terminalSessionId}&instance=${instance.id}&cwd=${encodeURIComponent(instance.workingDirectory)}`)
+        } else {
+          // 兼容旧版本，使用instance参数
+          navigate(`/terminal?instance=${instance.id}&cwd=${encodeURIComponent(instance.workingDirectory)}`)
+        }
+        
         fetchInstances()
       }
     } catch (error) {

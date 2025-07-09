@@ -1,29 +1,45 @@
-POST http://localhost:5173/api/instances/8a9ecd34-e946-409b-a5cc-6a559dc268c8/start 500 (Internal Server Error)
-dispatchXhrRequest @ xhr.js:195
-xhr @ xhr.js:15
-dispatchRequest @ dispatchRequest.js:51
-Promise.then
-_request @ Axios.js:163
-request @ Axios.js:40
-wrap @ bind.js:5
-request @ api.ts:77
-post @ api.ts:102
-startInstance @ api.ts:327
-handleStartInstance @ InstanceManagerPage.tsx:116
-onClick @ InstanceManagerPage.tsx:364
-callCallback2 @ react-dom.development.js:4164
-invokeGuardedCallbackDev @ react-dom.development.js:4213
-invokeGuardedCallback @ react-dom.development.js:4277
-invokeGuardedCallbackAndCatchFirstError @ react-dom.development.js:4291
-executeDispatch @ react-dom.development.js:9041
-processDispatchQueueItemsInOrder @ react-dom.development.js:9073
-processDispatchQueue @ react-dom.development.js:9086
-dispatchEventsForPlugins @ react-dom.development.js:9097
-(匿名) @ react-dom.development.js:9288
-batchedUpdates$1 @ react-dom.development.js:26179
-batchedUpdates @ react-dom.development.js:3991
-dispatchEventForPluginEventSystem @ react-dom.development.js:9287
-dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ react-dom.development.js:6465
-dispatchEvent @ react-dom.development.js:6457
-dispatchDiscreteEvent @ react-dom.development.js:6430
-InstanceManagerPage.tsx:128  启动实例失败: {success: false, error: '启动实例失败', message: '终端会话创建超时'}
+ncaught ReferenceError: Cannot access 'findInstanceSession' before initialization
+    at TerminalPage (TerminalPage.tsx:578:110)
+    at renderWithHooks (react-dom.development.js:15486:18)
+    at mountIndeterminateComponent (react-dom.development.js:20103:13)
+    at beginWork (react-dom.development.js:21626:16)
+    at HTMLUnknownElement.callCallback2 (react-dom.development.js:4164:14)
+    at Object.invokeGuardedCallbackDev (react-dom.development.js:4213:16)
+    at invokeGuardedCallback (react-dom.development.js:4277:31)
+    at beginWork$1 (react-dom.development.js:27490:7)
+    at performUnitOfWork (react-dom.development.js:26596:12)
+    at workLoopSync (react-dom.development.js:26505:5)
+react-dom.development.js:18704  The above error occurred in the <TerminalPage> component:
+
+    at TerminalPage (http://localhost:5173/src/pages/TerminalPage.tsx?t=1752039302298:43:43)
+    at RenderedRoute (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=81945fac:4088:5)
+    at Routes (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=81945fac:4558:5)
+    at main
+    at div
+    at div
+    at Layout (http://localhost:5173/src/components/Layout.tsx?t=1752039010510:36:19)
+    at ProtectedRoute (http://localhost:5173/src/App.tsx?t=1752039302298:32:27)
+    at RenderedRoute (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=81945fac:4088:5)
+    at Routes (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=81945fac:4558:5)
+    at div
+    at MotionWrapper (http://localhost:5173/node_modules/.vite/deps/antd.js?v=81945fac:6541:32)
+    at ProviderChildren (http://localhost:5173/node_modules/.vite/deps/antd.js?v=81945fac:6649:5)
+    at ConfigProvider (http://localhost:5173/node_modules/.vite/deps/antd.js?v=81945fac:6938:27)
+    at App (http://localhost:5173/src/App.tsx?t=1752039302298:88:39)
+    at Router (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=81945fac:4501:15)
+    at BrowserRouter (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=81945fac:5247:5)
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://reactjs.org/link/error-boundaries to learn more about error boundaries.
+logCapturedError @ react-dom.development.js:18704
+react-dom.development.js:26962  Uncaught ReferenceError: Cannot access 'findInstanceSession' before initialization
+    at TerminalPage (TerminalPage.tsx:578:110)
+    at renderWithHooks (react-dom.development.js:15486:18)
+    at mountIndeterminateComponent (react-dom.development.js:20103:13)
+    at beginWork (react-dom.development.js:21626:16)
+    at beginWork$1 (react-dom.development.js:27465:14)
+    at performUnitOfWork (react-dom.development.js:26596:12)
+    at workLoopSync (react-dom.development.js:26505:5)
+    at renderRootSync (react-dom.development.js:26473:7)
+    at recoverFromConcurrentError (react-dom.development.js:25889:20)
+    at performConcurrentWorkOnRoot (react-dom.development.js:25789:22)
