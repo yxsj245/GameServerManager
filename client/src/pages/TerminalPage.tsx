@@ -55,10 +55,18 @@ const TerminalPage: React.FC = () => {
       const containerWidth = container.clientWidth || 800
       const containerHeight = container.clientHeight || 600
       
-      // 基于容器大小计算合适的列数和行数
-      // 假设每个字符宽度约为8px，高度约为16px
-      const cols = Math.floor(containerWidth / 8) || 100
-      const rows = Math.floor(containerHeight / 16) || 30
+      // 基于实际字体大小计算字符尺寸
+      // 字体大小为14px，行高为1.2，所以行高约为16.8px
+      // 等宽字体的字符宽度通常约为字体大小的0.6倍
+      const fontSize = 14
+      const lineHeight = 1.2
+      const charWidth = fontSize * 0.6 // 约8.4px
+      const charHeight = fontSize * lineHeight // 约16.8px
+      
+      const cols = Math.floor(containerWidth / charWidth)
+      const rows = Math.floor(containerHeight / charHeight)
+      
+      console.log(`容器大小: ${containerWidth}x${containerHeight}, 计算终端大小: ${cols}x${rows}`)
       
       return { cols: Math.max(cols, 80), rows: Math.max(rows, 24) }
     }
@@ -72,7 +80,12 @@ const TerminalPage: React.FC = () => {
       ? `终端 - ${cwd.split(/[/\\]/).pop()}` 
       : `终端 ${sessionsRef.current.length + 1}`
     
+    // 计算初始终端大小
+    const { cols, rows } = calculateTerminalSize()
+    
     const terminal = new Terminal({
+      cols: cols,
+      rows: rows,
       theme: {
         background: '#1a1a1a',
         foreground: '#ffffff',
@@ -156,8 +169,6 @@ const TerminalPage: React.FC = () => {
         }
       }
     }, 100)
-
-    const { cols, rows } = calculateTerminalSize()
     
     // 请求创建PTY
     socketClient.createTerminal({
@@ -218,13 +229,38 @@ const TerminalPage: React.FC = () => {
     })))
     setActiveSessionId(sessionId)
     
-    // 延迟聚焦到切换的终端
+    // 延迟聚焦到切换的终端并调整大小
     setTimeout(() => {
       const session = sessionsRef.current.find(s => s.id === sessionId)
       if (session && session.terminal.element) {
         session.terminal.focus()
+        
+        // 在全屏模式下或容器大小可能变化时，调整终端大小
+        if (terminalContainerRef.current) {
+          try {
+            // 重新计算理想的终端大小
+            const { cols: targetCols, rows: targetRows } = calculateTerminalSize()
+            
+            // 先设置终端的目标大小
+            session.terminal.resize(targetCols, targetRows)
+            
+            // 调整终端大小以适应容器
+            session.fitAddon.fit()
+            
+            // 获取调整后的实际大小
+            const { cols, rows } = session.terminal
+            
+            // 通知服务端新的大小
+            if (cols && rows && socketClient.isConnected()) {
+              console.log(`切换终端会话，终端 ${session.id} 大小调整为: ${cols}x${rows} (目标: ${targetCols}x${targetRows})`)
+              socketClient.resizeTerminal(session.id, cols, rows)
+            }
+          } catch (error) {
+            console.error(`切换终端会话时调整大小失败:`, error)
+          }
+        }
       }
-    }, 50)
+    }, 100)
   }, [])
   
   // 重命名终端会话
@@ -312,47 +348,48 @@ const TerminalPage: React.FC = () => {
       
       // 调整终端大小 - 增加延迟确保DOM完全更新
         setTimeout(() => {
-          const activeSession = sessions.find(s => s.id === activeSessionId)
-          if (activeSession && terminalContainerRef.current) {
+          if (terminalContainerRef.current) {
             try {
               // 强制重新计算容器大小
               const container = terminalContainerRef.current
               
-              // 在全屏模式下，强制刷新容器布局
-               if (isFullscreen) {
-                 container.style.width = '100vw'
-                 container.style.height = 'calc(100vh - 60px)'
-                 container.style.maxWidth = '100vw'
-               } else {
-                 container.style.width = ''
-                 container.style.height = ''
-                 container.style.maxWidth = ''
-               }
+              // 强制浏览器重新计算布局
+              container.offsetHeight
                
-               // 强制浏览器重新计算布局
-               container.offsetHeight
+              const containerWidth = container.clientWidth || 800
+              const containerHeight = container.clientHeight || 600
                
-               const containerWidth = container.clientWidth || 800
-               const containerHeight = container.clientHeight || 600
-               
-               console.log(`全屏切换后容器大小: ${containerWidth}x${containerHeight}, 全屏状态: ${isFullscreen}`)
+              console.log(`全屏切换后容器大小: ${containerWidth}x${containerHeight}, 全屏状态: ${!isFullscreen}`)
               
-              // 调整终端大小以适应新的容器
-              activeSession.fitAddon.fit()
+              // 重新计算理想的终端大小
+              const { cols: targetCols, rows: targetRows } = calculateTerminalSize()
               
-              // 获取调整后的实际大小
-              const { cols, rows } = activeSession.terminal
-              
-              // 通知服务端新的大小
-              if (cols && rows && socketClient.isConnected()) {
-                console.log(`全屏状态变化，终端大小调整为: ${cols}x${rows}`)
-                socketClient.resizeTerminal(activeSession.id, cols, rows)
-              }
+              // 遍历所有终端会话并调整大小
+              sessions.forEach(session => {
+                try {
+                  // 先设置终端的目标大小
+                  session.terminal.resize(targetCols, targetRows)
+                  
+                  // 然后调整终端大小以适应容器
+                  session.fitAddon.fit()
+                  
+                  // 获取调整后的实际大小
+                  const { cols, rows } = session.terminal
+                  
+                  // 通知服务端新的大小
+                  if (cols && rows && socketClient.isConnected()) {
+                    console.log(`全屏状态变化，终端 ${session.id} 大小调整为: ${cols}x${rows} (目标: ${targetCols}x${targetRows})`)
+                    socketClient.resizeTerminal(session.id, cols, rows)
+                  }
+                } catch (error) {
+                  console.error(`调整终端 ${session.id} 大小失败:`, error)
+                }
+              })
             } catch (error) {
               console.error('全屏状态变化时调整终端失败:', error)
             }
           }
-        }, 500)
+        }, 800)
     } catch (error) {
       console.error('全屏切换失败:', error)
       addNotification({
@@ -604,7 +641,7 @@ const TerminalPage: React.FC = () => {
             console.log(`切换到实例终端，调整大小为: ${cols}x${rows}`)
             socketClient.resizeTerminal(targetSession.id, cols, rows)
           }
-        }, 300)
+        }, 800)
         
         addNotification({
           type: 'success',
@@ -762,6 +799,12 @@ const TerminalPage: React.FC = () => {
       if (activeSession) {
         setTimeout(() => {
           try {
+            // 重新计算理想的终端大小
+            const { cols: targetCols, rows: targetRows } = calculateTerminalSize()
+            
+            // 先设置终端的目标大小
+            activeSession.terminal.resize(targetCols, targetRows)
+            
             // 调整终端大小以适应容器
             activeSession.fitAddon.fit()
             
@@ -770,7 +813,7 @@ const TerminalPage: React.FC = () => {
             
             // 通知服务端新的大小
             if (cols && rows && socketClient.isConnected()) {
-              console.log(`窗口大小变化，终端大小调整为: ${cols}x${rows}`)
+              console.log(`窗口大小变化，终端大小调整为: ${cols}x${rows} (目标: ${targetCols}x${targetRows})`)
               socketClient.resizeTerminal(activeSession.id, cols, rows)
             }
           } catch (error) {
@@ -792,24 +835,18 @@ const TerminalPage: React.FC = () => {
             message: '全屏模式已关闭'
           })
         }
-        // 调整终端大小 - 增加延迟确保DOM完全更新
+        
+        // 调整所有终端大小 - 增加延迟确保DOM完全更新
         setTimeout(() => {
-          const activeSession = sessions.find(s => s.id === activeSessionId)
-          if (activeSession && terminalContainerRef.current) {
+          if (terminalContainerRef.current) {
             try {
               // 强制重新计算容器大小
               const container = terminalContainerRef.current
               
-              // 在全屏模式下，强制刷新容器布局
-               if (isCurrentlyFullscreen) {
-                 container.style.width = '100vw'
-                 container.style.height = 'calc(100vh - 60px)'
-                 container.style.maxWidth = '100vw'
-               } else {
-                 container.style.width = ''
-                 container.style.height = ''
-                 container.style.maxWidth = ''
-               }
+              // 清除所有内联样式，让CSS类控制布局
+              container.style.width = ''
+              container.style.height = ''
+              container.style.maxWidth = ''
               
               // 强制浏览器重新计算布局
               container.offsetHeight
@@ -819,22 +856,35 @@ const TerminalPage: React.FC = () => {
               
               console.log(`全屏模式切换后容器大小: ${containerWidth}x${containerHeight}, 全屏状态: ${isCurrentlyFullscreen}`)
               
-              // 调整终端大小以适应新的容器
-              activeSession.fitAddon.fit()
+              // 重新计算理想的终端大小
+              const { cols: targetCols, rows: targetRows } = calculateTerminalSize()
               
-              // 获取调整后的实际大小
-              const { cols, rows } = activeSession.terminal
-              
-              // 通知服务端新的大小
-              if (cols && rows && socketClient.isConnected()) {
-                console.log(`全屏模式切换，终端大小调整为: ${cols}x${rows}`)
-                socketClient.resizeTerminal(activeSession.id, cols, rows)
-              }
+              // 调整所有终端的大小，不仅仅是当前活动的
+              sessions.forEach(session => {
+                try {
+                  // 先设置终端的目标大小
+                  session.terminal.resize(targetCols, targetRows)
+                  
+                  // 调整终端大小以适应新的容器
+                  session.fitAddon.fit()
+                  
+                  // 获取调整后的实际大小
+                  const { cols, rows } = session.terminal
+                  
+                  // 通知服务端新的大小
+                  if (cols && rows && socketClient.isConnected()) {
+                    console.log(`终端 ${session.id} 大小调整为: ${cols}x${rows} (目标: ${targetCols}x${targetRows})`)
+                    socketClient.resizeTerminal(session.id, cols, rows)
+                  }
+                } catch (error) {
+                  console.error(`调整终端 ${session.id} 大小失败:`, error)
+                }
+              })
             } catch (error) {
               console.error('全屏模式切换时调整终端大小失败:', error)
             }
           }
-        }, 500)
+        }, 300)
       }
     }
     
