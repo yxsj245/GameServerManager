@@ -310,11 +310,34 @@ const TerminalPage: React.FC = () => {
         })
       }
       
-      // 调整终端大小
+      // 调整终端大小 - 增加延迟确保DOM完全更新
         setTimeout(() => {
           const activeSession = sessions.find(s => s.id === activeSessionId)
-          if (activeSession) {
+          if (activeSession && terminalContainerRef.current) {
             try {
+              // 强制重新计算容器大小
+              const container = terminalContainerRef.current
+              
+              // 在全屏模式下，强制刷新容器布局
+               if (isFullscreen) {
+                 container.style.width = '100vw'
+                 container.style.height = 'calc(100vh - 60px)'
+                 container.style.maxWidth = '100vw'
+               } else {
+                 container.style.width = ''
+                 container.style.height = ''
+                 container.style.maxWidth = ''
+               }
+               
+               // 强制浏览器重新计算布局
+               container.offsetHeight
+               
+               const containerWidth = container.clientWidth || 800
+               const containerHeight = container.clientHeight || 600
+               
+               console.log(`全屏切换后容器大小: ${containerWidth}x${containerHeight}, 全屏状态: ${isFullscreen}`)
+              
+              // 调整终端大小以适应新的容器
               activeSession.fitAddon.fit()
               
               // 获取调整后的实际大小
@@ -329,7 +352,7 @@ const TerminalPage: React.FC = () => {
               console.error('全屏状态变化时调整终端失败:', error)
             }
           }
-        }, 200)
+        }, 500)
     } catch (error) {
       console.error('全屏切换失败:', error)
       addNotification({
@@ -769,11 +792,34 @@ const TerminalPage: React.FC = () => {
             message: '全屏模式已关闭'
           })
         }
-        // 调整终端大小
+        // 调整终端大小 - 增加延迟确保DOM完全更新
         setTimeout(() => {
           const activeSession = sessions.find(s => s.id === activeSessionId)
-          if (activeSession) {
+          if (activeSession && terminalContainerRef.current) {
             try {
+              // 强制重新计算容器大小
+              const container = terminalContainerRef.current
+              
+              // 在全屏模式下，强制刷新容器布局
+               if (isCurrentlyFullscreen) {
+                 container.style.width = '100vw'
+                 container.style.height = 'calc(100vh - 60px)'
+                 container.style.maxWidth = '100vw'
+               } else {
+                 container.style.width = ''
+                 container.style.height = ''
+                 container.style.maxWidth = ''
+               }
+              
+              // 强制浏览器重新计算布局
+              container.offsetHeight
+              
+              const containerWidth = container.clientWidth || 800
+              const containerHeight = container.clientHeight || 600
+              
+              console.log(`全屏模式切换后容器大小: ${containerWidth}x${containerHeight}, 全屏状态: ${isCurrentlyFullscreen}`)
+              
+              // 调整终端大小以适应新的容器
               activeSession.fitAddon.fit()
               
               // 获取调整后的实际大小
@@ -785,10 +831,10 @@ const TerminalPage: React.FC = () => {
                 socketClient.resizeTerminal(activeSession.id, cols, rows)
               }
             } catch (error) {
-              console.error('全屏模式切换时调整终端失败:', error)
+              console.error('全屏模式切换时调整终端大小失败:', error)
             }
           }
-        }, 200)
+        }, 500)
       }
     }
     
@@ -801,22 +847,287 @@ const TerminalPage: React.FC = () => {
     }
   }, [activeSessionId, sessions, isFullscreen, addNotification])
   
-  // 判断侧边栏是否应该显示
-  const shouldShowSidebar = !isFullscreen && (!sidebarCollapsed || sidebarHovered)
+  // 计算是否应该显示侧边栏内容
+  const shouldShowSidebar = !sidebarCollapsed || sidebarHovered
   
+  // 全屏模式下的渲染
+  if (isFullscreen) {
+    return (
+      <div className="fixed inset-0 z-50 bg-gray-900 flex">
+         {/* 左侧边栏 */}
+         <div className={`
+           ${sidebarCollapsed && !sidebarHovered ? 'w-16' : 'w-80'}
+           transition-all duration-300 ease-in-out
+           bg-gray-800/50 backdrop-blur-sm border-r border-gray-700/50
+           flex flex-col
+         `}
+         onMouseEnter={() => setSidebarHovered(true)}
+         onMouseLeave={() => setSidebarHovered(false)}
+         >
+            {/* 侧边栏头部 */}
+            <div className="flex items-center justify-between p-4 border-b border-gray-700/50">
+              {shouldShowSidebar && (
+                <>
+                  <div className="flex items-center space-x-2">
+                    <TerminalIcon className="w-5 h-5 text-blue-400" />
+                    <h2 className="text-lg font-semibold text-white font-display">
+                      终端管理
+                    </h2>
+                  </div>
+                  
+                  <button
+                    onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+                    className="p-1.5 text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+                    title="折叠侧边栏"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                </>
+              )}
+              
+              {!shouldShowSidebar && (
+                <button
+                  onClick={() => setSidebarCollapsed(false)}
+                  className="p-1.5 text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors mx-auto"
+                  title="展开侧边栏"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+            
+            {/* 新建终端按钮 */}
+            {shouldShowSidebar && (
+              <div className="p-4 border-b border-gray-700/50">
+                <button
+                  onClick={() => createTerminalSession()}
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center justify-center space-x-2 transition-colors"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>新建终端</span>
+                </button>
+              </div>
+            )}
+            
+            {/* 终端会话列表 */}
+            <div className="flex-1 overflow-y-auto">
+              {shouldShowSidebar ? (
+                <div className="p-2 space-y-1">
+                  {sessions.map((session) => (
+                    <div
+                      key={session.id}
+                      className={`
+                        group relative p-3 rounded-lg cursor-pointer transition-all
+                        ${session.active
+                          ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30'
+                          : 'text-gray-300 hover:bg-white/5 hover:text-white'
+                        }
+                      `}
+                      onClick={() => switchTerminalSession(session.id)}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-2 flex-1 min-w-0">
+                          <Folder className="w-4 h-4 flex-shrink-0" />
+                          
+                          {editingSessionId === session.id ? (
+                            <input
+                              type="text"
+                              value={editingName}
+                              onChange={(e) => setEditingName(e.target.value)}
+                              onBlur={finishRenaming}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') finishRenaming()
+                                if (e.key === 'Escape') cancelRenaming()
+                              }}
+                              className="bg-gray-700 text-white px-2 py-1 rounded text-sm flex-1 min-w-0"
+                              autoFocus
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                          ) : (
+                            <span className="text-sm font-medium truncate flex-1">
+                              {session.name}
+                            </span>
+                          )}
+                        </div>
+                        
+                        <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          {editingSessionId === session.id ? (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                finishRenaming()
+                              }}
+                              className="p-1 text-green-400 hover:text-green-300 transition-colors"
+                              title="确认重命名"
+                            >
+                              <Check className="w-3 h-3" />
+                            </button>
+                          ) : (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                startRenaming(session.id, session.name)
+                              }}
+                              className="p-1 text-gray-400 hover:text-white transition-colors"
+                              title="重命名"
+                            >
+                              <Edit3 className="w-3 h-3" />
+                            </button>
+                          )}
+                          
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              closeTerminalSession(session.id)
+                            }}
+                            className="p-1 text-gray-400 hover:text-red-400 transition-colors"
+                            title="关闭终端"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+                      </div>
+                      
+                      <div className="text-xs text-gray-500 mt-1 truncate">
+                        {session.id}
+                      </div>
+                    </div>
+                  ))}
+                  
+                  {sessions.length === 0 && (
+                    <div className="text-center py-8 text-gray-500">
+                      <TerminalIcon className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                      <p className="text-sm">暂无终端会话</p>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                // 折叠状态下的简化显示
+                <div className="p-1 space-y-1">
+                  {sessions.map((session) => (
+                    <div
+                      key={session.id}
+                      className={`
+                        w-10 h-10 rounded-lg cursor-pointer transition-all flex items-center justify-center
+                        ${session.active
+                          ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30'
+                          : 'text-gray-400 hover:bg-white/5 hover:text-white'
+                        }
+                      `}
+                      onClick={() => switchTerminalSession(session.id)}
+                      title={session.name}
+                    >
+                      <Folder className="w-4 h-4" />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            
+            {/* 侧边栏底部工具栏 */}
+            {shouldShowSidebar && activeSessionId && (
+              <div className="p-4 border-t border-gray-700/50">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <button
+                      onClick={resetTerminal}
+                      className="p-2 text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+                      title="重置终端"
+                    >
+                      <RotateCcw className="w-4 h-4" />
+                    </button>
+                    
+                    <button
+                      className="p-2 text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+                      title="终端设置"
+                    >
+                      <Settings className="w-4 h-4" />
+                    </button>
+                  </div>
+                  
+                  <button
+                    onClick={toggleFullscreen}
+                    className="p-2 text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+                    title={isFullscreen ? '退出全屏' : '全屏模式'}
+                  >
+                    {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+             )}
+           </div>
+        
+        {/* 右侧终端显示区域 */}
+        <div className="flex-1 flex flex-col min-w-0">
+          {sessions.length === 0 ? (
+            <div className="flex-1 flex items-center justify-center bg-gray-900">
+              <div className="text-center">
+                <TerminalIcon className="w-16 h-16 text-gray-500 mx-auto mb-4" />
+                <p className="text-gray-400 mb-4">暂无终端会话</p>
+                <button
+                  onClick={() => createTerminalSession()}
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg transition-colors"
+                >
+                  创建第一个终端
+                </button>
+              </div>
+            </div>
+          ) : (
+            <>
+              {/* 终端头部 */}
+              <div className="flex-shrink-0 bg-gray-800/50 backdrop-blur-sm border-b border-gray-700/50 px-4 py-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <div className="flex space-x-2">
+                      <div className="w-3 h-3 bg-red-500 rounded-full"></div>
+                      <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
+                      <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                    </div>
+                    <div className="text-sm font-medium text-white">
+                      {sessions.find(s => s.active)?.name || '终端'}
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center space-x-3">
+                    <button
+                      onClick={toggleFullscreen}
+                      className="p-2 text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+                      title="退出全屏"
+                    >
+                      <Minimize2 className="w-4 h-4" />
+                    </button>
+                    <div className="text-xs text-gray-400 font-mono">
+                      {activeSessionId}
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              {/* 终端内容 */}
+              <div
+                ref={terminalContainerRef}
+                className="flex-1 bg-gray-900 min-h-0 w-full h-full"
+              />
+            </>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  // 普通模式下的渲染
   return (
-    <div className={`${isFullscreen ? 'fixed inset-0 z-50 bg-gray-900' : 'h-screen'} flex`}>
+    <div className="h-screen flex">
       {/* 左侧终端标签页侧边栏 */}
-      {!isFullscreen && (
-        <div 
-          className={`
-            relative bg-gray-800/50 backdrop-blur-sm border-r border-gray-700/50 transition-all duration-300 ease-in-out
-            ${shouldShowSidebar ? 'w-80' : 'w-12'}
-            ${sidebarHovered ? 'shadow-xl' : ''}
-          `}
-          onMouseEnter={() => setSidebarHovered(true)}
-          onMouseLeave={() => setSidebarHovered(false)}
-        >
+      <div 
+        className={`
+          relative bg-gray-800/50 backdrop-blur-sm border-r border-gray-700/50 transition-all duration-300 ease-in-out
+          ${shouldShowSidebar ? 'w-80' : 'w-12'}
+          ${sidebarHovered ? 'shadow-xl' : ''}
+        `}
+        onMouseEnter={() => setSidebarHovered(true)}
+        onMouseLeave={() => setSidebarHovered(false)}
+      >
         {/* 侧边栏头部 */}
         <div className="flex items-center justify-between p-4 border-b border-gray-700/50">
           {shouldShowSidebar && (
@@ -1009,7 +1320,6 @@ const TerminalPage: React.FC = () => {
           </div>
         )}
         </div>
-      )}
       
       {/* 右侧终端显示区域 */}
       <div className="flex-1 flex flex-col min-w-0">
@@ -1043,15 +1353,6 @@ const TerminalPage: React.FC = () => {
                 </div>
                 
                 <div className="flex items-center space-x-3">
-                  {isFullscreen && (
-                    <button
-                      onClick={toggleFullscreen}
-                      className="p-2 text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
-                      title="退出全屏"
-                    >
-                      <Minimize2 className="w-4 h-4" />
-                    </button>
-                  )}
                   <div className="text-xs text-gray-400 font-mono">
                     {activeSessionId}
                   </div>
