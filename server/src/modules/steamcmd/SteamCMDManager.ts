@@ -61,12 +61,21 @@ export class SteamCMDManager {
    */
   async checkSteamCMDExists(installPath: string): Promise<boolean> {
     try {
-      const isWindows = os.platform() === 'win32'
-      const executableName = isWindows ? 'steamcmd.exe' : 'steamcmd.sh'
-      const executablePath = path.join(installPath, executableName)
+      // 检查 steamcmd.exe (Windows)
+      const exePath = path.join(installPath, 'steamcmd.exe')
+      try {
+        await fs.access(exePath)
+        return true
+      } catch {}
       
-      await fs.access(executablePath)
-      return true
+      // 检查 steamcmd.sh (Linux/Unix)
+      const shPath = path.join(installPath, 'steamcmd.sh')
+      try {
+        await fs.access(shPath)
+        return true
+      } catch {}
+      
+      return false
     } catch {
       return false
     }
@@ -276,9 +285,27 @@ export class SteamCMDManager {
       return null
     }
     
+    // 优先检查当前平台对应的可执行文件
     const isWindows = os.platform() === 'win32'
-    const executableName = isWindows ? 'steamcmd.exe' : 'steamcmd.sh'
-    return path.join(config.installPath, executableName)
+    const primaryExecutable = isWindows ? 'steamcmd.exe' : 'steamcmd.sh'
+    const primaryPath = path.join(config.installPath, primaryExecutable)
+    
+    // 如果主要可执行文件存在，返回它
+    try {
+      require('fs').accessSync(primaryPath)
+      return primaryPath
+    } catch {}
+    
+    // 否则检查另一个可执行文件
+    const alternativeExecutable = isWindows ? 'steamcmd.sh' : 'steamcmd.exe'
+    const alternativePath = path.join(config.installPath, alternativeExecutable)
+    
+    try {
+      require('fs').accessSync(alternativePath)
+      return alternativePath
+    } catch {}
+    
+    return null
   }
 
   /**

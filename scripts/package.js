@@ -100,6 +100,7 @@ pause`
     // 创建Linux启动脚本
     const startShScript = `#!/bin/bash
 echo "正在启动GSM3管理面板..."
+chmod +x server/PTY/pty_linux_x64
 cd server
 /opt/node-v22.17.0-linux-x64/bin/node index.js`
     
