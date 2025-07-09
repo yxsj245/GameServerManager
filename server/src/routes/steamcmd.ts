@@ -1,8 +1,8 @@
 import { Router } from 'express'
-import { SteamCMDManager } from '../modules/steamcmd/SteamCMDManager'
-import { ConfigManager } from '../modules/config/ConfigManager'
+import { SteamCMDManager } from '../modules/steamcmd/SteamCMDManager.js'
+import { ConfigManager } from '../modules/config/ConfigManager.js'
 import winston from 'winston'
-import { authenticateToken } from '../middleware/auth'
+import { authenticateToken } from '../middleware/auth.js'
 
 const router = Router()
 let steamcmdManager: SteamCMDManager

@@ -51,6 +51,19 @@ async function createPackage() {
     await fs.ensureDir(path.join(packageDir, 'server', 'uploads'))
     console.log('📁 创建uploads目录...')
     
+    // 复制server/data/games目录（包含游戏配置文件）
+    const serverGamesPath = path.join(__dirname, '..', 'server', 'data', 'games')
+    if (await fs.pathExists(serverGamesPath)) {
+      await fs.ensureDir(path.join(packageDir, 'server', 'data'))
+      await fs.copy(
+        serverGamesPath,
+        path.join(packageDir, 'server', 'data', 'games')
+      )
+      console.log('📋 复制游戏配置文件...')
+    } else {
+      console.log('⚠️  警告: server/data/games 目录不存在，跳过复制')
+    }
+    
     console.log('📥 安装服务端生产依赖...')
     // 在打包的服务端目录中安装生产依赖
     try {

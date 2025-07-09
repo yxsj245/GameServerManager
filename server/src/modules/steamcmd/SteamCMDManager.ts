@@ -7,7 +7,7 @@ import { Extract } from 'unzipper'
 import tar from 'tar'
 import winston from 'winston'
 import os from 'os'
-import { ConfigManager } from '../config/ConfigManager'
+import { ConfigManager } from '../config/ConfigManager.js'
 
 export interface SteamCMDInstallOptions {
   installPath: string
