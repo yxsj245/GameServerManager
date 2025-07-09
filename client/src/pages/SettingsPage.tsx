@@ -11,12 +11,13 @@ import {
   RotateCcw,
   Eye,
   EyeOff,
-  Check
+  Check,
+  Edit2
 } from 'lucide-react'
 
 const SettingsPage: React.FC = () => {
   const { theme, toggleTheme } = useThemeStore()
-  const { user, changePassword } = useAuthStore()
+  const { user, changePassword, changeUsername } = useAuthStore()
   const { addNotification } = useNotificationStore()
   
   // 密码修改状态
@@ -29,6 +30,13 @@ const SettingsPage: React.FC = () => {
     showConfirmPassword: false
   })
   const [passwordLoading, setPasswordLoading] = useState(false)
+  
+  // 用户名修改状态
+  const [usernameForm, setUsernameForm] = useState({
+    newUsername: '',
+    isEditing: false
+  })
+  const [usernameLoading, setUsernameLoading] = useState(false)
   
 
   
@@ -90,6 +98,77 @@ const SettingsPage: React.FC = () => {
     } finally {
       setPasswordLoading(false)
     }
+  }
+  
+  // 处理用户名修改
+  const handleUsernameChange = async () => {
+    if (!usernameForm.newUsername.trim()) {
+      addNotification({
+        type: 'error',
+        title: '输入错误',
+        message: '请输入新用户名'
+      })
+      return
+    }
+    
+    if (!/^[a-zA-Z0-9]{3,30}$/.test(usernameForm.newUsername)) {
+      addNotification({
+        type: 'error',
+        title: '格式错误',
+        message: '用户名只能包含字母和数字，长度为3-30个字符'
+      })
+      return
+    }
+    
+    if (usernameForm.newUsername === user?.username) {
+      addNotification({
+        type: 'warning',
+        title: '无需修改',
+        message: '新用户名与当前用户名相同'
+      })
+      return
+    }
+    
+    setUsernameLoading(true)
+    
+    try {
+      const result = await changeUsername(usernameForm.newUsername)
+      
+      if (result.success) {
+        addNotification({
+          type: 'success',
+          title: '用户名修改成功',
+          message: '您的用户名已成功更新'
+        })
+        
+        setUsernameForm({
+          newUsername: '',
+          isEditing: false
+        })
+      } else {
+        addNotification({
+          type: 'error',
+          title: '用户名修改失败',
+          message: result.message
+        })
+      }
+    } catch (error) {
+      addNotification({
+        type: 'error',
+        title: '修改失败',
+        message: '网络错误，请稍后重试'
+      })
+    } finally {
+      setUsernameLoading(false)
+    }
+  }
+  
+  // 取消用户名编辑
+  const handleCancelUsernameEdit = () => {
+    setUsernameForm({
+      newUsername: '',
+      isEditing: false
+    })
   }
   
   // 保存设置
@@ -175,13 +254,60 @@ const SettingsPage: React.FC = () => {
           
           {/* 用户信息 */}
           <div className="mb-6 p-4 bg-white/5 rounded-lg">
-            <div className="flex items-center space-x-3">
-              <User className="w-8 h-8 text-blue-500" />
-              <div>
-                <p className="text-black dark:text-white font-medium">{user?.username}</p>
-                <p className="text-sm text-gray-600 dark:text-gray-400">
-                  {user?.role === 'admin' ? '管理员' : '普通用户'}
-                </p>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                <User className="w-8 h-8 text-blue-500" />
+                <div>
+                  {usernameForm.isEditing ? (
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="text"
+                        value={usernameForm.newUsername}
+                        onChange={(e) => setUsernameForm(prev => ({
+                          ...prev,
+                          newUsername: e.target.value
+                        }))}
+                        className="px-2 py-1 bg-white/10 border border-white/20 rounded text-black dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="输入新用户名"
+                        disabled={usernameLoading}
+                      />
+                      <button
+                        onClick={handleUsernameChange}
+                        disabled={usernameLoading}
+                        className="p-1 text-green-500 hover:text-green-400 disabled:opacity-50"
+                        title="确认修改"
+                      >
+                        <Check className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={handleCancelUsernameEdit}
+                        disabled={usernameLoading}
+                        className="p-1 text-gray-500 hover:text-gray-400 disabled:opacity-50"
+                        title="取消修改"
+                      >
+                        <RotateCcw className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center space-x-2">
+                       <p className="text-black dark:text-white font-medium">{user?.username}</p>
+                       <button
+                         onClick={() => setUsernameForm(prev => ({
+                           ...prev,
+                           isEditing: true,
+                           newUsername: user?.username || ''
+                         }))}
+                         className="p-1 text-blue-500 hover:text-blue-400"
+                         title="修改用户名"
+                       >
+                         <Edit2 className="w-4 h-4" />
+                       </button>
+                     </div>
+                  )}
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    {user?.role === 'admin' ? '管理员' : '普通用户'}
+                  </p>
+                </div>
               </div>
             </div>
           </div>

@@ -189,6 +189,31 @@ class ApiClient {
     }
   }
 
+  async changeUsername(
+    newUsername: string
+  ): Promise<{ success: boolean; message: string; user?: User }> {
+    try {
+      const response = await this.client.post('/auth/change-username', {
+        newUsername,
+      })
+      
+      // 如果修改成功，更新本地存储的用户信息
+      if (response.data.success && response.data.user) {
+        localStorage.setItem('gsm3_user', JSON.stringify(response.data.user))
+      }
+      
+      return response.data
+    } catch (error: any) {
+      if (error.response?.data) {
+        return error.response.data
+      }
+      return {
+        success: false,
+        message: error.message || '修改用户名失败',
+      }
+    }
+  }
+
   // 系统相关API
   async getSystemStats() {
     return this.get('/system/stats')

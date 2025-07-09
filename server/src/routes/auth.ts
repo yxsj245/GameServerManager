@@ -43,6 +43,15 @@ const changePasswordSchema = Joi.object({
   })
 })
 
+const changeUsernameSchema = Joi.object({
+  newUsername: Joi.string().alphanum().min(3).max(30).required().messages({
+    'string.alphanum': '用户名只能包含字母和数字',
+    'string.min': '用户名至少3个字符',
+    'string.max': '用户名最多30个字符',
+    'any.required': '新用户名是必填项'
+  })
+})
+
 // 设置认证路由的函数
 export function setupAuthRoutes(authManager: AuthManager): Router {
   // 登录接口
@@ -134,6 +143,55 @@ export function setupAuthRoutes(authManager: AuthManager): Router {
       res.status(500).json({
         error: '服务器内部错误',
         message: '修改密码失败，请稍后重试'
+      })
+    }
+  })
+
+  // 修改用户名接口
+  router.post('/change-username', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      if (!authManager) {
+        return res.status(500).json({ error: '认证管理器未初始化' })
+      }
+
+      // 验证请求数据
+      const { error, value } = changeUsernameSchema.validate(req.body)
+      if (error) {
+        return res.status(400).json({
+          error: '请求数据无效',
+          message: error.details[0].message
+        })
+      }
+
+      const { newUsername } = value
+      const currentUsername = req.user!.username
+      
+      const result = await authManager.changeUsername(currentUsername, newUsername)
+      
+      if (result.success) {
+        // 更新用户信息
+        req.user!.username = newUsername
+        
+        res.json({
+          success: true,
+          message: result.message,
+          user: {
+            id: req.user!.userId,
+            username: newUsername,
+            role: req.user!.role
+          }
+        })
+      } else {
+        res.status(400).json({
+          success: false,
+          message: result.message
+        })
+      }
+    } catch (error) {
+      logger.error('修改用户名接口错误:', error)
+      res.status(500).json({
+        error: '服务器内部错误',
+        message: '修改用户名失败，请稍后重试'
       })
     }
   })

@@ -9,6 +9,7 @@ interface AuthStore extends AuthState {
   logout: () => Promise<void>
   verifyToken: () => Promise<boolean>
   changePassword: (oldPassword: string, newPassword: string) => Promise<{ success: boolean; message: string }>
+  changeUsername: (newUsername: string) => Promise<{ success: boolean; message: string }>
   clearError: () => void
   setLoading: (loading: boolean) => void
 }
@@ -156,6 +157,38 @@ export const useAuthStore = create<AuthStore>()(
           return response
         } catch (error: any) {
           const errorMessage = error.message || '修改密码失败'
+          set({
+            loading: false,
+            error: errorMessage,
+          })
+          
+          return { success: false, message: errorMessage }
+        }
+      },
+
+      changeUsername: async (newUsername: string) => {
+        set({ loading: true, error: null })
+        
+        try {
+          const response = await apiClient.changeUsername(newUsername)
+          
+          if (response.success && response.user) {
+            // 更新用户信息
+            set({
+              user: response.user,
+              loading: false,
+              error: null,
+            })
+          } else {
+            set({
+              loading: false,
+              error: response.message,
+            })
+          }
+          
+          return response
+        } catch (error: any) {
+          const errorMessage = error.message || '修改用户名失败'
           set({
             loading: false,
             error: errorMessage,

@@ -303,6 +303,49 @@ export class AuthManager {
     }
   }
 
+  async changeUsername(currentUsername: string, newUsername: string): Promise<{ success: boolean; message: string }> {
+    const user = this.users.get(currentUsername)
+    
+    if (!user) {
+      return {
+        success: false,
+        message: '用户不存在'
+      }
+    }
+
+    // 检查新用户名是否已存在
+    if (this.users.has(newUsername)) {
+      return {
+        success: false,
+        message: '用户名已存在'
+      }
+    }
+
+    // 验证新用户名格式
+    if (!/^[a-zA-Z0-9]{3,30}$/.test(newUsername)) {
+      return {
+        success: false,
+        message: '用户名只能包含字母和数字，长度为3-30个字符'
+      }
+    }
+
+    // 更新用户名
+    user.username = newUsername
+    
+    // 删除旧的用户名映射，添加新的
+    this.users.delete(currentUsername)
+    this.users.set(newUsername, user)
+    
+    await this.saveUsers()
+    
+    this.logger.info(`用户 ${currentUsername} 修改用户名为 ${newUsername} 成功`)
+    
+    return {
+      success: true,
+      message: '用户名修改成功'
+    }
+  }
+
   getUsers(): Omit<User, 'password'>[] {
     return Array.from(this.users.values()).map(user => ({
       id: user.id,
