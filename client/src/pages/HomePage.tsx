@@ -8,12 +8,8 @@ import {
   HardDrive,
   MemoryStick,
   Network,
-  Clock,
   Server,
-  Activity,
-  Zap,
-  Users,
-  Terminal as TerminalIcon
+  Activity
 } from 'lucide-react'
 
 const HomePage: React.FC = () => {
@@ -68,19 +64,7 @@ const HomePage: React.FC = () => {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
   }
   
-  const formatUptime = (seconds: number) => {
-    const days = Math.floor(seconds / 86400)
-    const hours = Math.floor((seconds % 86400) / 3600)
-    const minutes = Math.floor((seconds % 3600) / 60)
-    
-    if (days > 0) {
-      return `${days}天 ${hours}小时 ${minutes}分钟`
-    } else if (hours > 0) {
-      return `${hours}小时 ${minutes}分钟`
-    } else {
-      return `${minutes}分钟`
-    }
-  }
+
   
   const getUsageColor = (usage: number) => {
     if (usage >= 90) return 'text-red-500'
@@ -149,15 +133,7 @@ const HomePage: React.FC = () => {
             </div>
           </div>
           
-          <div className="card-game p-6">
-            <div className="flex items-center space-x-3">
-              <Zap className="w-8 h-8 text-yellow-500" />
-              <div>
-                <p className="text-sm text-gray-600 dark:text-gray-400">Node.js</p>
-                <p className="text-lg font-semibold text-black dark:text-white">{systemInfo.nodeVersion}</p>
-              </div>
-            </div>
-          </div>
+
         </div>
       )}
       
@@ -239,47 +215,11 @@ const HomePage: React.FC = () => {
             </div>
           </div>
           
-          {/* 系统运行时间 */}
-          <div className="card-game p-6">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center space-x-3">
-                <Clock className="w-6 h-6 text-yellow-500" />
-                <h3 className="text-lg font-semibold text-black dark:text-white">系统运行时间</h3>
-              </div>
-            </div>
-            <div className="space-y-2">
-              <p className="text-2xl font-bold text-black dark:text-white">
-                {formatUptime(systemStats.uptime)}
-              </p>
-              <p className="text-sm text-gray-600 dark:text-gray-400">
-                最后更新: {new Date(systemStats.timestamp).toLocaleString()}
-              </p>
-            </div>
-          </div>
+
         </div>
       )}
       
-      {/* 快速操作 */}
-      <div className="card-game p-6">
-        <h3 className="text-lg font-semibold text-black dark:text-white mb-4 flex items-center space-x-2">
-          <Activity className="w-5 h-5" />
-          <span>快速操作</span>
-        </h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <button className="btn-game flex items-center justify-center space-x-2 py-4">
-            <TerminalIcon className="w-5 h-5" />
-            <span>打开终端</span>
-          </button>
-          <button className="btn-game flex items-center justify-center space-x-2 py-4">
-            <Server className="w-5 h-5" />
-            <span>服务器状态</span>
-          </button>
-          <button className="btn-game flex items-center justify-center space-x-2 py-4">
-            <Users className="w-5 h-5" />
-            <span>用户管理</span>
-          </button>
-        </div>
-      </div>
+
     </div>
   )
 }
