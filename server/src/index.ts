@@ -222,6 +222,18 @@ async function startServer() {
       logger.info(`创建uploads目录: ${uploadsDir}`)
     }
 
+    // 删除之前的终端会话文件
+    const terminalSessionsPath = path.join(process.cwd(), 'data', 'terminal-sessions.json')
+    try {
+      await fs.unlink(terminalSessionsPath)
+      logger.info('已删除之前的终端会话文件')
+    } catch (error: any) {
+      // 文件不存在时忽略错误
+      if (error.code !== 'ENOENT') {
+        logger.warn('删除终端会话文件时出错:', error.message)
+      }
+    }
+
     // 初始化管理器
     configManager = new ConfigManager(logger)
     authManager = new AuthManager(configManager, logger)
