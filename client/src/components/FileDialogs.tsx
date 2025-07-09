@@ -48,7 +48,7 @@ export const CreateDialog: React.FC<CreateDialogProps> = ({
       onOk={handleOk}
       onCancel={onCancel}
       confirmLoading={loading}
-      destroyOnClose
+      destroyOnHidden
     >
       <Form
         form={form}
@@ -118,7 +118,7 @@ export const RenameDialog: React.FC<RenameDialogProps> = ({
       onOk={handleOk}
       onCancel={onCancel}
       confirmLoading={loading}
-      destroyOnClose
+      destroyOnHidden
     >
       <Form
         form={form}
@@ -220,7 +220,7 @@ export const UploadDialog: React.FC<UploadDialogProps> = ({
       onOk={handleOk}
       onCancel={handleCancel}
       confirmLoading={loading}
-      destroyOnClose
+      destroyOnHidden
       width={600}
     >
       <div className="mt-4">

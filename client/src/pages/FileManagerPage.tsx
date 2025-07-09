@@ -781,7 +781,7 @@ const FileManagerPage: React.FC = () => {
         onCancel={() => setEditorModalVisible(false)}
         width="90%"
         style={{ top: 20 }}
-        bodyStyle={{ height: '80vh', padding: 0 }}
+        styles={{ body: { height: '80vh', padding: 0 } }}
         footer={[
           <Button key="close" onClick={() => setEditorModalVisible(false)}>
             关闭
