@@ -18,6 +18,13 @@ export interface AppConfig {
     host: string
     corsOrigin: string
   }
+  steamcmd: {
+    installMode: 'online' | 'manual'
+    installPath: string
+    isInstalled: boolean
+    version?: string
+    lastChecked?: string
+  }
 }
 
 export class ConfigManager {
@@ -46,6 +53,11 @@ export class ConfigManager {
         port: parseInt(process.env.PORT || '3001', 10),
         host: process.env.HOST || '0.0.0.0',
         corsOrigin: process.env.CLIENT_URL || 'http://localhost:3000'
+      },
+      steamcmd: {
+        installMode: 'online',
+        installPath: '',
+        isInstalled: false
       }
     }
   }
@@ -104,6 +116,10 @@ export class ConfigManager {
       server: {
         ...defaultConfig.server,
         ...savedConfig.server
+      },
+      steamcmd: {
+        ...defaultConfig.steamcmd,
+        ...savedConfig.steamcmd
       }
     }
   }
@@ -148,5 +164,18 @@ export class ConfigManager {
 
   getServerConfig() {
     return this.config.server
+  }
+
+  getSteamCMDConfig() {
+    return this.config.steamcmd
+  }
+
+  async updateSteamCMDConfig(updates: Partial<AppConfig['steamcmd']>): Promise<void> {
+    this.config.steamcmd = {
+      ...this.config.steamcmd,
+      ...updates
+    }
+    await this.saveConfig()
+    this.logger.info('SteamCMD配置已更新')
   }
 }

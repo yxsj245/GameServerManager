@@ -16,6 +16,7 @@ import { SystemManager } from './modules/system/SystemManager.js'
 import { ConfigManager } from './modules/config/ConfigManager.js'
 import { AuthManager } from './modules/auth/AuthManager.js'
 import { InstanceManager } from './modules/instance/InstanceManager.js'
+import { SteamCMDManager } from './modules/steamcmd/SteamCMDManager.js'
 import { setupTerminalRoutes } from './routes/terminal.js'
 import { setupGameRoutes } from './routes/games.js'
 import { setupSystemRoutes } from './routes/system.js'
@@ -23,6 +24,7 @@ import { setupAuthRoutes } from './routes/auth.js'
 import { setAuthManager } from './middleware/auth.js'
 import filesRouter from './routes/files.js'
 import { setupInstanceRoutes } from './routes/instances.js'
+import steamcmdRouter, { setSteamCMDManager } from './routes/steamcmd.js'
 
 // 获取当前文件目录
 const __filename = fileURLToPath(import.meta.url)
@@ -98,6 +100,7 @@ let terminalManager: TerminalManager
 let gameManager: GameManager
 let systemManager: SystemManager
 let instanceManager: InstanceManager
+let steamcmdManager: SteamCMDManager
 
 // 健康检查端点
 app.get('/api/health', (req, res) => {
@@ -167,6 +170,10 @@ function gracefulShutdown(signal: string) {
     if (instanceManager) {
       instanceManager.cleanup()
       logger.info('InstanceManager 已清理')
+    }
+    if (steamcmdManager) {
+      // SteamCMDManager 通常不需要特殊清理，但为了一致性保留
+      logger.info('SteamCMDManager 已清理')
     }
     logger.info('管理器清理完成。')
   } catch (cleanupErr) {
@@ -248,6 +255,7 @@ async function startServer() {
     gameManager = new GameManager(io, logger)
     systemManager = new SystemManager(io, logger)
     instanceManager = new InstanceManager(terminalManager, logger)
+    steamcmdManager = new SteamCMDManager(logger, configManager)
 
     // 初始化配置和认证
     await configManager.initialize()
@@ -263,6 +271,10 @@ async function startServer() {
     app.use('/api/system', setupSystemRoutes(systemManager))
     app.use('/api/files', filesRouter)
     app.use('/api/instances', setupInstanceRoutes(instanceManager))
+    
+    // 设置SteamCMD管理器和路由
+    setSteamCMDManager(steamcmdManager, logger)
+    app.use('/api/steamcmd', steamcmdRouter)
 
     // 前端路由处理（SPA支持）
     app.get('*', (req, res) => {

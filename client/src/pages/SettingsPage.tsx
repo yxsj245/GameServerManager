@@ -12,7 +12,12 @@ import {
   Eye,
   EyeOff,
   Check,
-  Edit2
+  Edit2,
+  Download,
+  FolderOpen,
+  CheckCircle,
+  XCircle,
+  Loader2
 } from 'lucide-react'
 
 const SettingsPage: React.FC = () => {
@@ -38,8 +43,20 @@ const SettingsPage: React.FC = () => {
   })
   const [usernameLoading, setUsernameLoading] = useState(false)
   
+  // SteamCMD设置状态
+  const [steamcmdSettings, setSteamcmdSettings] = useState({
+    installMode: 'online' as 'online' | 'manual',
+    installPath: '',
+    isInstalled: false,
+    version: '',
+    lastChecked: ''
+  })
+  const [steamcmdLoading, setSteamcmdLoading] = useState(false)
+  const [steamcmdStatus, setSteamcmdStatus] = useState('')
+  const [steamcmdProgress, setSteamcmdProgress] = useState(0)
+  const [pathCheckLoading, setPathCheckLoading] = useState(false)
+  const [pathExists, setPathExists] = useState<boolean | null>(null)
 
-  
   // 处理密码修改
   const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -170,6 +187,218 @@ const SettingsPage: React.FC = () => {
       isEditing: false
     })
   }
+
+  // SteamCMD相关处理函数
+  const fetchSteamCMDStatus = async () => {
+    try {
+      const response = await fetch('/api/steamcmd/status', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('gsm3_token')}`
+        }
+      })
+      const result = await response.json()
+      
+      if (result.success) {
+        setSteamcmdSettings(prev => ({
+          ...prev,
+          ...result.data
+        }))
+      }
+    } catch (error) {
+      console.error('获取SteamCMD状态失败:', error)
+    }
+  }
+
+  const handleOnlineInstall = async () => {
+    if (!steamcmdSettings.installPath.trim()) {
+      addNotification({
+        type: 'error',
+        title: '安装路径错误',
+        message: '请输入有效的安装路径'
+      })
+      return
+    }
+
+    setSteamcmdLoading(true)
+    setSteamcmdProgress(0)
+    setSteamcmdStatus('准备安装...')
+
+    try {
+      const response = await fetch('/api/steamcmd/install', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('gsm3_token')}`
+        },
+        body: JSON.stringify({
+          installPath: steamcmdSettings.installPath
+        })
+      })
+
+      if (!response.ok) {
+        throw new Error('安装请求失败')
+      }
+
+      const reader = response.body?.getReader()
+      if (!reader) {
+        throw new Error('无法读取响应流')
+      }
+
+      const decoder = new TextDecoder()
+      let buffer = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() || ''
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6))
+              
+              if (line.startsWith('event: progress')) {
+                setSteamcmdProgress(data.progress)
+              } else if (line.startsWith('event: status')) {
+                setSteamcmdStatus(data.status)
+              } else if (line.startsWith('event: complete')) {
+                addNotification({
+                  type: 'success',
+                  title: 'SteamCMD安装成功',
+                  message: data.message
+                })
+                await fetchSteamCMDStatus()
+              } else if (line.startsWith('event: error')) {
+                addNotification({
+                  type: 'error',
+                  title: 'SteamCMD安装失败',
+                  message: data.message
+                })
+              }
+            } catch (e) {
+              console.error('解析SSE数据失败:', e)
+            }
+          }
+        }
+      }
+    } catch (error) {
+      addNotification({
+        type: 'error',
+        title: '安装失败',
+        message: error instanceof Error ? error.message : '未知错误'
+      })
+    } finally {
+      setSteamcmdLoading(false)
+      setSteamcmdStatus('')
+      setSteamcmdProgress(0)
+    }
+  }
+
+  const handleManualPath = async () => {
+    if (!steamcmdSettings.installPath.trim()) {
+      addNotification({
+        type: 'error',
+        title: '路径错误',
+        message: '请输入有效的SteamCMD路径'
+      })
+      return
+    }
+
+    setSteamcmdLoading(true)
+
+    try {
+      const response = await fetch('/api/steamcmd/manual-path', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('gsm3_token')}`
+        },
+        body: JSON.stringify({
+          installPath: steamcmdSettings.installPath
+        })
+      })
+
+      const result = await response.json()
+
+      if (result.success) {
+        addNotification({
+          type: result.data.isInstalled ? 'success' : 'warning',
+          title: 'SteamCMD路径设置',
+          message: result.data.message
+        })
+        await fetchSteamCMDStatus()
+      } else {
+        addNotification({
+          type: 'error',
+          title: '设置失败',
+          message: result.message
+        })
+      }
+    } catch (error) {
+      addNotification({
+        type: 'error',
+        title: '设置失败',
+        message: '网络错误，请稍后重试'
+      })
+    } finally {
+      setSteamcmdLoading(false)
+    }
+  }
+
+  const checkPath = async () => {
+    if (!steamcmdSettings.installPath.trim()) {
+      setPathExists(null)
+      return
+    }
+
+    setPathCheckLoading(true)
+
+    try {
+      const response = await fetch('/api/steamcmd/check-path', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('gsm3_token')}`
+        },
+        body: JSON.stringify({
+          installPath: steamcmdSettings.installPath
+        })
+      })
+
+      const result = await response.json()
+
+      if (result.success) {
+        setPathExists(result.data.exists)
+      } else {
+        setPathExists(false)
+      }
+    } catch (error) {
+      setPathExists(false)
+    } finally {
+      setPathCheckLoading(false)
+    }
+  }
+
+  // 页面加载时获取SteamCMD状态
+  React.useEffect(() => {
+    fetchSteamCMDStatus()
+  }, [])
+
+  // 路径变化时检查
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      if (steamcmdSettings.installPath) {
+        checkPath()
+      } else {
+        setPathExists(null)
+      }
+    }, 500)
+
+    return () => clearTimeout(timer)
+  }, [steamcmdSettings.installPath])
   
   // 保存设置
   const saveSettings = () => {
@@ -243,7 +472,206 @@ const SettingsPage: React.FC = () => {
           </div>
         </div>
         
-
+        {/* SteamCMD设置 */}
+        <div className="card-game p-6">
+          <div className="flex items-center space-x-3 mb-6">
+            <Download className="w-5 h-5 text-green-500" />
+            <h2 className="text-lg font-semibold text-black dark:text-white">SteamCMD设置</h2>
+          </div>
+          
+          <div className="space-y-6">
+            {/* 当前状态 */}
+            <div className="p-4 bg-white/5 rounded-lg">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-medium text-gray-800 dark:text-gray-200">当前状态</h3>
+                <div className="flex items-center space-x-2">
+                  {steamcmdSettings.isInstalled ? (
+                    <CheckCircle className="w-4 h-4 text-green-500" />
+                  ) : (
+                    <XCircle className="w-4 h-4 text-red-500" />
+                  )}
+                  <span className={`text-sm ${
+                    steamcmdSettings.isInstalled ? 'text-green-500' : 'text-red-500'
+                  }`}>
+                    {steamcmdSettings.isInstalled ? '已安装' : '未安装'}
+                  </span>
+                </div>
+              </div>
+              
+              {steamcmdSettings.installPath && (
+                <p className="text-xs text-gray-600 dark:text-gray-400 mb-2">
+                  安装路径: {steamcmdSettings.installPath}
+                </p>
+              )}
+              
+              {steamcmdSettings.lastChecked && (
+                <p className="text-xs text-gray-600 dark:text-gray-400">
+                  最后检查: {new Date(steamcmdSettings.lastChecked).toLocaleString()}
+                </p>
+              )}
+            </div>
+            
+            {/* 安装模式选择 */}
+            <div>
+              <label className="block text-sm font-medium text-gray-800 dark:text-gray-200 mb-3">
+                安装模式
+              </label>
+              <div className="space-y-3">
+                <label className="flex items-center space-x-3 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="installMode"
+                    value="online"
+                    checked={steamcmdSettings.installMode === 'online'}
+                    onChange={(e) => setSteamcmdSettings(prev => ({
+                      ...prev,
+                      installMode: e.target.value as 'online' | 'manual'
+                    }))}
+                    className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
+                    disabled={steamcmdLoading}
+                  />
+                  <div>
+                    <span className="text-sm font-medium text-gray-800 dark:text-gray-200">
+                      在线安装
+                    </span>
+                    <p className="text-xs text-gray-600 dark:text-gray-400">
+                      自动下载并安装SteamCMD到指定目录
+                    </p>
+                  </div>
+                </label>
+                
+                <label className="flex items-center space-x-3 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="installMode"
+                    value="manual"
+                    checked={steamcmdSettings.installMode === 'manual'}
+                    onChange={(e) => setSteamcmdSettings(prev => ({
+                      ...prev,
+                      installMode: e.target.value as 'online' | 'manual'
+                    }))}
+                    className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
+                    disabled={steamcmdLoading}
+                  />
+                  <div>
+                    <span className="text-sm font-medium text-gray-800 dark:text-gray-200">
+                      手动设置
+                    </span>
+                    <p className="text-xs text-gray-600 dark:text-gray-400">
+                      指定已安装的SteamCMD路径
+                    </p>
+                  </div>
+                </label>
+              </div>
+            </div>
+            
+            {/* 路径输入 */}
+            <div>
+              <label className="block text-sm font-medium text-gray-800 dark:text-gray-200 mb-2">
+                {steamcmdSettings.installMode === 'online' ? '安装路径' : 'SteamCMD路径'}
+              </label>
+              <div className="relative">
+                <input
+                  type="text"
+                  value={steamcmdSettings.installPath}
+                  onChange={(e) => setSteamcmdSettings(prev => ({
+                    ...prev,
+                    installPath: e.target.value
+                  }))}
+                  className="w-full px-3 py-2 pr-10 bg-white/10 border border-white/20 rounded-lg text-black dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder={steamcmdSettings.installMode === 'online' 
+                    ? '例如: C:\\SteamCMD 或 /opt/steamcmd' 
+                    : '例如: C:\\SteamCMD 或 /opt/steamcmd'
+                  }
+                  disabled={steamcmdLoading}
+                />
+                
+                {/* 路径检查状态 */}
+                <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                  {pathCheckLoading ? (
+                    <Loader2 className="w-4 h-4 text-gray-400 animate-spin" />
+                  ) : pathExists === true ? (
+                    <CheckCircle className="w-4 h-4 text-green-500" />
+                  ) : pathExists === false ? (
+                    <XCircle className="w-4 h-4 text-red-500" />
+                  ) : null}
+                </div>
+              </div>
+              
+              {steamcmdSettings.installMode === 'manual' && pathExists === false && (
+                <p className="text-xs text-red-500 mt-1">
+                  在指定路径下未找到steamcmd.exe文件
+                </p>
+              )}
+              
+              {steamcmdSettings.installMode === 'manual' && pathExists === true && (
+                <p className="text-xs text-green-500 mt-1">
+                  已找到SteamCMD可执行文件
+                </p>
+              )}
+            </div>
+            
+            {/* 安装进度 */}
+            {steamcmdLoading && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-gray-800 dark:text-gray-200">
+                    {steamcmdStatus}
+                  </span>
+                  <span className="text-sm text-gray-600 dark:text-gray-400">
+                    {steamcmdProgress}%
+                  </span>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-2 dark:bg-gray-700">
+                  <div 
+                    className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                    style={{ width: `${steamcmdProgress}%` }}
+                  ></div>
+                </div>
+              </div>
+            )}
+            
+            {/* 操作按钮 */}
+            <div className="flex space-x-3">
+              {steamcmdSettings.installMode === 'online' ? (
+                <button
+                  onClick={handleOnlineInstall}
+                  disabled={steamcmdLoading || !steamcmdSettings.installPath.trim()}
+                  className="flex-1 btn-game py-2 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+                >
+                  {steamcmdLoading ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Download className="w-4 h-4" />
+                  )}
+                  <span>{steamcmdLoading ? '安装中...' : '开始安装'}</span>
+                </button>
+              ) : (
+                <button
+                  onClick={handleManualPath}
+                  disabled={steamcmdLoading || !steamcmdSettings.installPath.trim()}
+                  className="flex-1 btn-game py-2 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+                >
+                  {steamcmdLoading ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <FolderOpen className="w-4 h-4" />
+                  )}
+                  <span>{steamcmdLoading ? '设置中...' : '设置路径'}</span>
+                </button>
+              )}
+              
+              <button
+                onClick={fetchSteamCMDStatus}
+                disabled={steamcmdLoading}
+                className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                title="刷新状态"
+              >
+                <RotateCcw className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        </div>
         
         {/* 账户安全 */}
         <div className="card-game p-6">
