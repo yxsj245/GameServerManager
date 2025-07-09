@@ -97,14 +97,12 @@ const GameDeploymentPage: React.FC = () => {
     }
 
     try {
-      setInstalling(true)
-      
       // 构建SteamCMD安装命令
       const loginCommand = useAnonymous 
         ? 'login anonymous'
         : `login ${steamUsername.trim()} ${steamPassword.trim()}`
       
-      const installCommand = `app_update ${selectedGame.info.appid} -dir "${installPath.trim()}"`
+      const installCommand = `force_install_dir "${installPath.trim()}" +app_update ${selectedGame.info.appid}`
       
       const fullCommand = `steamcmd +${loginCommand} +${installCommand} +quit`
       
@@ -127,17 +125,9 @@ const GameDeploymentPage: React.FC = () => {
       if (response.success) {
         addNotification({
           type: 'success',
-          title: '开始安装',
-          message: `正在安装 ${selectedGame.info.game_nameCN}，即将跳转到终端页面`
+          title: '安装已启动',
+          message: `${selectedGame.info.game_nameCN} 安装已开始，请前往终端页面查看安装进度`
         })
-        
-        // 如果返回了终端会话ID，跳转到对应的终端会话
-        if (response.data?.terminalSessionId) {
-          navigate(`/terminal?sessionId=${response.data.terminalSessionId}&cwd=${encodeURIComponent(installPath.trim())}`)
-        } else {
-          // 兼容处理，跳转到终端页面
-          navigate(`/terminal?cwd=${encodeURIComponent(installPath.trim())}`)
-        }
       } else {
         throw new Error(response.message || '安装失败')
       }
@@ -148,8 +138,6 @@ const GameDeploymentPage: React.FC = () => {
         title: '安装失败',
         message: error.message || '无法开始游戏安装'
       })
-    } finally {
-      setInstalling(false)
     }
   }
 
@@ -259,11 +247,10 @@ const GameDeploymentPage: React.FC = () => {
                   {/* 操作按钮 */}
                   <button
                     onClick={() => handleInstallGame(gameKey, gameInfo)}
-                    disabled={installing}
-                    className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white py-2 px-4 rounded-lg transition-colors flex items-center justify-center space-x-2"
+                    className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg transition-colors flex items-center justify-center space-x-2"
                   >
                     <Download className="w-4 h-4" />
-                    <span>{installing ? '安装中...' : '安装游戏'}</span>
+                    <span>安装游戏</span>
                   </button>
                 </div>
               </div>
