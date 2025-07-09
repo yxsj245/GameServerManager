@@ -61,11 +61,11 @@ export class TerminalManager {
     // 根据操作系统选择PTY程序路径
     const platform = os.platform()
     if (platform === 'win32') {
-      // this.ptyPath = path.resolve(__dirname, '../../../PTY/pty_win32_x64.exe')
-      this.ptyPath = path.resolve(__dirname, '../../PTY/pty_win32_x64.exe')
+      this.ptyPath = path.resolve(__dirname, '../../../PTY/pty_win32_x64.exe')
+      // this.ptyPath = path.resolve(__dirname, '../../PTY/pty_win32_x64.exe')
     } else {
-      // this.ptyPath = path.resolve(__dirname, '../../../PTY/pty_linux_x64')
-      this.ptyPath = path.resolve(__dirname, '../../PTY/pty_linux_x64')
+      this.ptyPath = path.resolve(__dirname, '../../../PTY/pty_linux_x64')
+      // this.ptyPath = path.resolve(__dirname, '../../PTY/pty_linux_x64')
     }
     
     this.logger.info(`终端管理器初始化完成，PTY路径: ${this.ptyPath}`)
