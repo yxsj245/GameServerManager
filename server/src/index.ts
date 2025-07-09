@@ -17,10 +17,12 @@ import { ConfigManager } from './modules/config/ConfigManager.js'
 import { AuthManager } from './modules/auth/AuthManager.js'
 import { InstanceManager } from './modules/instance/InstanceManager.js'
 import { SteamCMDManager } from './modules/steamcmd/SteamCMDManager.js'
+import { SchedulerManager } from './modules/scheduler/SchedulerManager.js'
 import { setupTerminalRoutes } from './routes/terminal.js'
 import { setupGameRoutes } from './routes/games.js'
 import { setupSystemRoutes } from './routes/system.js'
 import { setupAuthRoutes } from './routes/auth.js'
+import { setupScheduledTaskRoutes } from './routes/scheduledTasks.js'
 import { setAuthManager } from './middleware/auth.js'
 import filesRouter from './routes/files.js'
 import { setupInstanceRoutes } from './routes/instances.js'
@@ -102,6 +104,7 @@ let gameManager: GameManager
 let systemManager: SystemManager
 let instanceManager: InstanceManager
 let steamcmdManager: SteamCMDManager
+let schedulerManager: SchedulerManager
 
 // 健康检查端点
 app.get('/api/health', (req, res) => {
@@ -175,6 +178,10 @@ function gracefulShutdown(signal: string) {
     if (steamcmdManager) {
       // SteamCMDManager 通常不需要特殊清理，但为了一致性保留
       logger.info('SteamCMDManager 已清理')
+    }
+    if (schedulerManager) {
+      schedulerManager.destroy()
+      logger.info('SchedulerManager 已清理')
     }
     logger.info('管理器清理完成。')
   } catch (cleanupErr) {
@@ -257,6 +264,17 @@ async function startServer() {
     systemManager = new SystemManager(io, logger)
     instanceManager = new InstanceManager(terminalManager, logger)
     steamcmdManager = new SteamCMDManager(logger, configManager)
+    
+    // 确保data目录存在
+    const dataDir = path.join(process.cwd(), 'data')
+    try {
+      await fs.access(dataDir)
+    } catch {
+      await fs.mkdir(dataDir, { recursive: true })
+      logger.info(`创建data目录: ${dataDir}`)
+    }
+    
+    schedulerManager = new SchedulerManager(dataDir, logger)
 
     // 初始化配置和认证
     await configManager.initialize()
@@ -264,6 +282,9 @@ async function startServer() {
     await terminalManager.initialize()
     await instanceManager.initialize()
     setAuthManager(authManager)
+    
+    // 设置schedulerManager与gameManager的关联
+    schedulerManager.setGameManager(gameManager)
 
     // 设置路由
     app.use('/api/auth', setupAuthRoutes(authManager))
@@ -272,6 +293,7 @@ async function startServer() {
     app.use('/api/system', setupSystemRoutes(systemManager))
     app.use('/api/files', filesRouter)
     app.use('/api/instances', setupInstanceRoutes(instanceManager))
+    app.use('/api/scheduled-tasks', setupScheduledTaskRoutes(schedulerManager))
     
     // 设置SteamCMD管理器和路由
     setSteamCMDManager(steamcmdManager, logger)

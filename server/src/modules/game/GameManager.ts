@@ -452,6 +452,170 @@ export class GameManager extends EventEmitter {
     }
   }
 
+  // 为定时任务提供的无socket版本方法
+  public async startGameById(gameId: string): Promise<void> {
+    const game = this.games.get(gameId)
+    if (!game) {
+      throw new Error('游戏不存在')
+    }
+    
+    if (game.status !== 'stopped' && game.status !== 'crashed') {
+      throw new Error('游戏已在运行或正在启动')
+    }
+    
+    this.logger.info(`定时任务启动游戏: ${game.config.name} (${gameId})`)
+    
+    // 更新状态
+    game.status = 'starting'
+    game.startTime = new Date()
+    game.logs = []
+    
+    this.io.emit('game-status-changed', {
+      gameId,
+      status: game.status,
+      startTime: game.startTime
+    })
+    
+    // 确保工作目录存在
+    await fs.mkdir(game.config.workingDirectory, { recursive: true })
+    
+    // 启动游戏进程
+    const gameProcess = spawn(game.config.executable, game.config.args, {
+      cwd: game.config.workingDirectory,
+      stdio: ['pipe', 'pipe', 'pipe'],
+      env: {
+        ...process.env,
+        JAVA_HOME: game.config.javaPath || process.env.JAVA_HOME
+      }
+    })
+    
+    game.process = gameProcess
+    
+    // 处理游戏输出
+    gameProcess.stdout?.on('data', (data: Buffer) => {
+      const message = data.toString()
+      this.addGameLog(game, 'info', message, 'stdout')
+      this.parseGameOutput(game, message)
+      
+      this.io.emit('game-output', {
+        gameId,
+        data: message
+      })
+    })
+    
+    // 处理游戏错误输出
+    gameProcess.stderr?.on('data', (data: Buffer) => {
+      const message = data.toString()
+      this.addGameLog(game, 'error', message, 'stderr')
+      
+      this.io.emit('game-output', {
+        gameId,
+        data: message
+      })
+    })
+    
+    // 处理进程退出
+    gameProcess.on('exit', (code, signal) => {
+      this.logger.info(`游戏进程退出: ${game.config.name}, 退出码: ${code}, 信号: ${signal}`)
+      
+      game.status = code === 0 ? 'stopped' : 'crashed'
+      game.stopTime = new Date()
+      game.process = undefined
+      game.players = []
+      
+      this.addGameLog(game, 'info', `游戏进程退出，退出码: ${code}`, 'system')
+      
+      this.io.emit('game-status-changed', {
+        gameId,
+        status: game.status,
+        stopTime: game.stopTime,
+        exitCode: code
+      })
+    })
+    
+    // 处理进程错误
+    gameProcess.on('error', (error) => {
+      this.logger.error(`游戏进程错误 ${game.config.name}:`, error)
+      
+      game.status = 'crashed'
+      game.stopTime = new Date()
+      game.process = undefined
+      
+      this.addGameLog(game, 'error', `进程错误: ${error.message}`, 'system')
+      
+      this.io.emit('game-status-changed', {
+        gameId,
+        status: game.status,
+        error: error.message
+      })
+    })
+    
+    // 等待一段时间确认启动成功
+    setTimeout(() => {
+      if (game.process && !game.process.killed) {
+        game.status = 'running'
+        this.io.emit('game-status-changed', {
+          gameId,
+          status: game.status
+        })
+        this.addGameLog(game, 'info', '游戏启动成功', 'system')
+      }
+    }, 3000)
+  }
+  
+  public async stopGameById(gameId: string): Promise<void> {
+    const game = this.games.get(gameId)
+    if (!game) {
+      throw new Error('游戏不存在')
+    }
+    
+    if (game.status !== 'running' && game.status !== 'starting') {
+      throw new Error('游戏未在运行')
+    }
+    
+    this.logger.info(`定时任务停止游戏: ${game.config.name} (${gameId})`)
+    
+    game.status = 'stopping'
+    
+    this.io.emit('game-status-changed', {
+      gameId,
+      status: game.status
+    })
+    
+    if (game.process && !game.process.killed) {
+      // 尝试优雅关闭
+      if (game.config.type === 'minecraft') {
+        game.process.stdin?.write('stop\n')
+      } else {
+        game.process.kill('SIGTERM')
+      }
+      
+      // 如果10秒后还没有退出，强制杀死进程
+      setTimeout(() => {
+        if (game.process && !game.process.killed) {
+          game.process.kill('SIGKILL')
+        }
+      }, 10000)
+    }
+  }
+  
+  public async restartGameById(gameId: string): Promise<void> {
+     await this.stopGameById(gameId)
+     
+     // 等待游戏完全停止后再启动
+     const game = this.games.get(gameId)
+     if (game) {
+       const checkStopped = () => {
+         if (game.status === 'stopped' || game.status === 'crashed') {
+           this.startGameById(gameId)
+         } else {
+           setTimeout(checkStopped, 1000)
+         }
+       }
+       setTimeout(checkStopped, 1000)
+     }
+   }
+
   /**
    * 发送命令到游戏
    */
@@ -480,6 +644,29 @@ export class GameManager extends EventEmitter {
         gameId,
         error: error instanceof Error ? error.message : '发送命令失败'
       })
+    }
+  }
+
+  public async sendCommandById(gameId: string, command: string): Promise<void> {
+    try {
+      const game = this.games.get(gameId)
+      if (!game) {
+        throw new Error('游戏不存在')
+      }
+      
+      if (game.status !== 'running' || !game.process) {
+        throw new Error('游戏未在运行')
+      }
+      
+      this.addGameLog(game, 'info', `> ${command}`, 'system')
+      
+      if (game.process.stdin && !game.process.stdin.destroyed) {
+        game.process.stdin.write(command + '\n')
+      }
+      
+    } catch (error) {
+      this.logger.error('发送游戏命令失败:', error)
+      throw error
     }
   }
 

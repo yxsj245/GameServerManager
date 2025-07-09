@@ -9,6 +9,7 @@ import HomePage from '@/pages/HomePage'
 import TerminalPage from '@/pages/TerminalPage'
 import InstanceManagerPage from '@/pages/InstanceManagerPage'
 import GameDeploymentPage from './pages/GameDeploymentPage'
+import ScheduledTasksPage from '@/pages/ScheduledTasksPage'
 import SettingsPage from '@/pages/SettingsPage'
 import FileManagerPage from '@/pages/FileManagerPage'
 import LoadingSpinner from '@/components/LoadingSpinner'
@@ -99,6 +100,7 @@ function App() {
                     <Route path="/terminal" element={<TerminalPage />} />
                     <Route path="/instances" element={<InstanceManagerPage />} />
                     <Route path="/game-deployment" element={<GameDeploymentPage />} />
+                    <Route path="/scheduled-tasks" element={<ScheduledTasksPage />} />
                     <Route path="/files" element={<FileManagerPage />} />
                     <Route path="/settings" element={<SettingsPage />} />
                     <Route path="*" element={<Navigate to="/" replace />} />

@@ -116,6 +116,15 @@ class ApiClient {
     return this.request<T>({ ...config, method: 'DELETE', url })
   }
 
+  // PATCH请求
+  async patch<T = any>(
+    url: string,
+    data?: any,
+    config?: AxiosRequestConfig
+  ): Promise<ApiResponse<T>> {
+    return this.request<T>({ ...config, method: 'PATCH', url, data })
+  }
+
   // 认证相关API
   async login(credentials: LoginRequest): Promise<LoginResponse> {
     try {
@@ -352,6 +361,27 @@ class ApiClient {
     steamcmdCommand: string
   }) {
     return this.post('/game-deployment/install', data)
+  }
+
+  // 定时任务API
+  async getScheduledTasks() {
+    return this.get('/scheduled-tasks')
+  }
+
+  async createScheduledTask(data: any) {
+    return this.post('/scheduled-tasks', data)
+  }
+
+  async updateScheduledTask(id: string, data: any) {
+    return this.put(`/scheduled-tasks/${id}`, data)
+  }
+
+  async deleteScheduledTask(id: string) {
+    return this.delete(`/scheduled-tasks/${id}`)
+  }
+
+  async toggleScheduledTask(id: string, enabled: boolean) {
+    return this.patch(`/scheduled-tasks/${id}/toggle`, { enabled })
   }
 }
 

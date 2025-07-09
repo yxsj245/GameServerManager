@@ -1,3 +1,4 @@
 将服务端所有需要保存的数据统一保存在server\data 目录下
 前端使用的token存储键是'gsm3_token'
 路由文件的导入语句需要添加.js扩展名。
+需要安装的库直接写进package.json文件中
