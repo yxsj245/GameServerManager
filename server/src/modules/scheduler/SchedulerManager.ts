@@ -6,6 +6,7 @@ import winston from 'winston'
 import cron from 'node-cron'
 import cronParser from 'cron-parser'
 import { GameManager } from '../game/GameManager.js'
+import { InstanceManager } from '../instance/InstanceManager.js'
 
 export interface ScheduledTask {
   id: string
@@ -32,6 +33,7 @@ export class SchedulerManager extends EventEmitter {
   private configPath: string
   private logger: winston.Logger
   private gameManager: GameManager | null = null
+  private instanceManager: InstanceManager | null = null
 
   constructor(dataDir: string, logger: winston.Logger) {
     super()
@@ -42,6 +44,10 @@ export class SchedulerManager extends EventEmitter {
 
   setGameManager(gameManager: GameManager) {
     this.gameManager = gameManager
+  }
+
+  setInstanceManager(instanceManager: InstanceManager) {
+    this.instanceManager = instanceManager
   }
 
   private async loadTasks(): Promise<void> {
@@ -109,10 +115,10 @@ export class SchedulerManager extends EventEmitter {
 
       // 创建新的定时任务
       task.job = cron.schedule(task.schedule, async () => {
+        this.logger.info(`[Scheduler] Cron callback triggered for task: ${task.name} (${taskId})`);
         await this.executeTask(taskId)
       }, {
-        scheduled: false,
-        timezone: 'Asia/Shanghai'
+        scheduled: false
       })
 
       // 设置下次执行时间
@@ -141,7 +147,7 @@ export class SchedulerManager extends EventEmitter {
       return
     }
 
-    this.logger.info(`执行定时任务: ${task.name}`)
+    this.logger.info(`执行定时任务: ${task.name} (实例: ${task.instanceName || task.instanceId || '未知'})`)
     
     try {
       if (task.type === 'power' && task.instanceId && task.action) {
@@ -163,9 +169,9 @@ export class SchedulerManager extends EventEmitter {
         success: true
       })
       
-      this.logger.info(`定时任务执行成功: ${task.name}`)
+      this.logger.info(`定时任务执行成功: ${task.name} (实例: ${task.instanceName || task.instanceId || '未知'})`)
     } catch (error) {
-      this.logger.error(`定时任务执行失败: ${task.name}`, error)
+      this.logger.error(`定时任务执行失败: ${task.name} (实例: ${task.instanceName || task.instanceId || '未知'})`, error)
       
       this.emit('taskExecuted', {
         taskId,
@@ -177,19 +183,27 @@ export class SchedulerManager extends EventEmitter {
   }
 
   private async executePowerAction(instanceId: string, action: 'start' | 'stop' | 'restart'): Promise<void> {
-    if (!this.gameManager) {
-      throw new Error('GameManager未设置')
+    if (!this.instanceManager) {
+      throw new Error('InstanceManager未设置')
     }
 
     switch (action) {
       case 'start':
-        await this.gameManager.startGameById(instanceId)
+        await this.instanceManager.startInstance(instanceId)
         break
       case 'stop':
-        await this.gameManager.stopGameById(instanceId)
+        await this.instanceManager.stopInstance(instanceId)
         break
       case 'restart':
-        await this.gameManager.restartGameById(instanceId)
+        await this.instanceManager.stopInstance(instanceId)
+        // 等待一段时间后重新启动
+        setTimeout(async () => {
+          try {
+            await this.instanceManager!.startInstance(instanceId)
+          } catch (error) {
+            this.logger.error(`重启实例失败: ${instanceId}`, error)
+          }
+        }, 2000)
         break
       default:
         throw new Error(`未知的电源操作: ${action}`)
@@ -197,12 +211,23 @@ export class SchedulerManager extends EventEmitter {
   }
 
   private async executeCommand(instanceId: string, command: string): Promise<void> {
-    if (!this.gameManager) {
-      throw new Error('GameManager未设置')
+    if (!this.instanceManager) {
+      throw new Error('InstanceManager未设置')
     }
 
-    // 向游戏实例发送命令
-    await this.gameManager.sendCommandById(instanceId, command)
+    // 获取实例信息
+    const instance = this.instanceManager.getInstance(instanceId)
+    if (!instance) {
+      throw new Error('实例不存在')
+    }
+
+    if (instance.status !== 'running' || !instance.terminalSessionId) {
+      throw new Error('实例未在运行或终端会话不存在')
+    }
+
+    // 这里需要通过TerminalManager发送命令到实例的终端会话
+    // 由于InstanceManager没有直接的sendCommand方法，我们暂时抛出错误
+    throw new Error('命令执行功能暂未实现，请使用电源操作类型的定时任务')
   }
 
   private getNextRunTime(schedule: string): string {
