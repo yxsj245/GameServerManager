@@ -431,16 +431,23 @@ const FileManagerPage: React.FC = () => {
     setRenameDialog({ visible: false, file: null })
   }
   
-  const handleUploadConfirm = async (files: FileList) => {
-    const success = await uploadFiles(files)
+  const handleUploadConfirm = async (files: FileList, onProgress?: (progress: { fileName: string; progress: number; status: 'uploading' | 'completed' | 'error' }) => void) => {
+    const success = await uploadFiles(files, onProgress)
     if (success) {
       addNotification({
         type: 'success',
         title: '上传成功',
         message: `成功上传 ${files.length} 个文件`
       })
+      setUploadDialog(false)
+    } else if (onProgress) {
+      // 如果上传失败，通过进度回调通知错误状态
+      onProgress({
+        fileName: files.length === 1 ? files[0].name : `${files.length} 个文件`,
+        progress: 0,
+        status: 'error'
+      })
     }
-    setUploadDialog(false)
   }
   
   const handleDeleteConfirm = async () => {

@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react'
-import { Modal, Input, Form, Upload, Button, message } from 'antd'
+import { Modal, Form, Input, Upload, message, Progress } from 'antd'
 import { InboxOutlined } from '@ant-design/icons'
 import type { UploadProps, UploadFile } from 'antd'
+import { FileUploadProgress } from '@/types/file'
 
 const { Dragger } = Upload
 
@@ -147,7 +148,7 @@ export const RenameDialog: React.FC<RenameDialogProps> = ({
 
 interface UploadDialogProps {
   visible: boolean
-  onConfirm: (files: FileList) => void
+  onConfirm: (files: FileList, onProgress?: (progress: FileUploadProgress) => void) => void
   onCancel: () => void
 }
 
@@ -157,6 +158,8 @@ export const UploadDialog: React.FC<UploadDialogProps> = ({
   onCancel
 }) => {
   const [fileList, setFileList] = useState<UploadFile[]>([])
+  const [uploadProgress, setUploadProgress] = useState<FileUploadProgress | null>(null)
+  const [isUploading, setIsUploading] = useState(false)
   const [loading, setLoading] = useState(false)
 
   const uploadProps: UploadProps = {
@@ -185,6 +188,7 @@ export const UploadDialog: React.FC<UploadDialogProps> = ({
     }
 
     setLoading(true)
+    setIsUploading(true)
     try {
       // 创建一个真正的FileList对象
       const dataTransfer = new DataTransfer()
@@ -195,10 +199,12 @@ export const UploadDialog: React.FC<UploadDialogProps> = ({
       })
       const files = dataTransfer.files
       
-      onConfirm(files)
+      onConfirm(files, setUploadProgress)
       setFileList([])
     } finally {
       setLoading(false)
+      setIsUploading(false)
+      setUploadProgress(null)
     }
   }
 
@@ -220,6 +226,7 @@ export const UploadDialog: React.FC<UploadDialogProps> = ({
       <div className="mt-4">
         <Dragger 
           {...uploadProps}
+          disabled={isUploading}
         >
           <p className="ant-upload-drag-icon">
             <InboxOutlined className="text-4xl text-blue-500" />
@@ -231,6 +238,19 @@ export const UploadDialog: React.FC<UploadDialogProps> = ({
             支持单个或批量上传文件
           </p>
         </Dragger>
+        
+        {uploadProgress && (
+          <div className="mt-4">
+            <div className="mb-2 text-sm text-gray-600">
+              正在上传: {uploadProgress.fileName}
+            </div>
+            <Progress 
+              percent={uploadProgress.progress} 
+              status={uploadProgress.progress === 100 ? 'success' : 'active'}
+              showInfo
+            />
+          </div>
+        )}
       </div>
     </Modal>
   )

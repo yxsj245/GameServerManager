@@ -212,15 +212,22 @@ export const useFileStore = create<FileStore>((set, get) => ({
   },
 
   // 上传文件
-  uploadFiles: async (files: FileList) => {
+  uploadFiles: async (files: FileList, onProgress?: (progress: { fileName: string; progress: number; status: 'uploading' | 'completed' | 'error' }) => void) => {
     const { currentPath } = get()
     
     try {
-      await fileApiClient.uploadFiles(currentPath, files)
+      await fileApiClient.uploadFiles(currentPath, files, onProgress)
       await get().loadFiles()
       return true
     } catch (error: any) {
       set({ error: error.message || '上传文件失败' })
+      if (onProgress) {
+        onProgress({
+          fileName: files.length === 1 ? files[0].name : `${files.length} 个文件`,
+          progress: 0,
+          status: 'error'
+        })
+      }
       return false
     }
   },

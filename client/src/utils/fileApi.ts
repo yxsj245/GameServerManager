@@ -115,7 +115,11 @@ export class FileApiClient {
   }
 
   // 上传文件
-  async uploadFiles(targetPath: string, files: FileList): Promise<FileOperationResult> {
+  async uploadFiles(
+    targetPath: string, 
+    files: FileList, 
+    onProgress?: (progress: { fileName: string; progress: number; status: 'uploading' | 'completed' | 'error' }) => void
+  ): Promise<FileOperationResult> {
     const formData = new FormData()
     formData.append('targetPath', targetPath)
     
@@ -126,6 +130,17 @@ export class FileApiClient {
     const response = await axios.post(`${API_BASE}/upload`, formData, {
       headers: {
         'Content-Type': 'multipart/form-data'
+      },
+      onUploadProgress: (progressEvent) => {
+        if (onProgress && progressEvent.total) {
+          const progress = Math.round((progressEvent.loaded * 100) / progressEvent.total)
+          // 对于多文件上传，这里简化处理，显示总体进度
+          onProgress({
+            fileName: files.length === 1 ? files[0].name : `${files.length} 个文件`,
+            progress,
+            status: progress === 100 ? 'completed' : 'uploading'
+          })
+        }
       }
     })
     return response.data
