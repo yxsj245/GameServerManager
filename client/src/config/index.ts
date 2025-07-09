@@ -1,39 +1,21 @@
 // 前端配置文件
 
-// 获取后端服务端口
-function getServerPort(): string {
-  // 优先从环境变量读取（Vite会自动注入VITE_开头的环境变量）
-  if (import.meta.env.VITE_SERVER_PORT) {
-    return import.meta.env.VITE_SERVER_PORT
-  }
-  
-  // 从URL参数读取
-  const urlParams = new URLSearchParams(window.location.search)
-  const portParam = urlParams.get('server_port')
-  if (portParam) {
-    return portParam
-  }
-  
-  // 默认端口
-  return '3001'
-}
-
 // 获取完整的服务器URL
 function getServerUrl(): string {
-  const protocol = window.location.protocol === 'https:' ? 'https:' : 'http:'
-  const hostname = window.location.hostname
-  const port = getServerPort()
-  return `${protocol}//${hostname}:${port}`
+  // 对于Vite开发服务器代理和生产环境，相对路径是最佳选择。
+  // serverUrl为空字符串将使socket.io连接到源，
+  // API调用也将使用相对路径。
+  return ''
 }
 
 // 获取API基础URL
 function getApiBaseUrl(): string {
-  return `${getServerUrl()}/api`
+  // 所有的API请求都以/api为前缀
+  return '/api'
 }
 
 // 导出配置
 export const config = {
-  serverPort: getServerPort(),
   serverUrl: getServerUrl(),
   apiBaseUrl: getApiBaseUrl(),
   
