@@ -321,6 +321,47 @@ export class InstanceManager extends EventEmitter {
     }
   }
 
+  // 重启实例
+  public async restartInstance(id: string): Promise<{ success: boolean; terminalSessionId?: string }> {
+    const instance = this.instances.get(id)
+    if (!instance) {
+      throw new Error('实例不存在')
+    }
+    
+    try {
+      this.logger.info(`重启实例: ${instance.name}`)
+      
+      // 如果实例正在运行，先停止它
+      if (instance.status === 'running') {
+        await this.stopInstance(id)
+        
+        // 等待实例完全停止
+        await new Promise(resolve => {
+          const checkStatus = () => {
+            if (instance.status === 'stopped' || instance.status === 'error') {
+              resolve(void 0)
+            } else {
+              setTimeout(checkStatus, 500)
+            }
+          }
+          checkStatus()
+        })
+        
+        // 额外等待2秒确保旧终端会话完全清理
+        await new Promise(resolve => setTimeout(resolve, 2000))
+      }
+      
+      // 重新启动实例
+      const result = await this.startInstance(id)
+      this.logger.info(`实例 ${instance.name} 重启完成`)
+      
+      return result
+    } catch (error) {
+      this.logger.error(`重启实例 ${instance.name} 失败:`, error)
+      throw error
+    }
+  }
+
   // 停止实例
   public async stopInstance(id: string): Promise<boolean> {
     const instance = this.instances.get(id)

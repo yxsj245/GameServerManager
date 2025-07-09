@@ -7,6 +7,7 @@ import cron from 'node-cron'
 import cronParser from 'cron-parser'
 import { GameManager } from '../game/GameManager.js'
 import { InstanceManager } from '../instance/InstanceManager.js'
+import { TerminalManager } from '../terminal/TerminalManager.js'
 
 export interface ScheduledTask {
   id: string
@@ -34,6 +35,7 @@ export class SchedulerManager extends EventEmitter {
   private logger: winston.Logger
   private gameManager: GameManager | null = null
   private instanceManager: InstanceManager | null = null
+  private terminalManager: TerminalManager | null = null
 
   constructor(dataDir: string, logger: winston.Logger) {
     super()
@@ -48,6 +50,10 @@ export class SchedulerManager extends EventEmitter {
 
   setInstanceManager(instanceManager: InstanceManager) {
     this.instanceManager = instanceManager
+  }
+
+  setTerminalManager(terminalManager: TerminalManager) {
+    this.terminalManager = terminalManager
   }
 
   private async loadTasks(): Promise<void> {
@@ -195,15 +201,7 @@ export class SchedulerManager extends EventEmitter {
         await this.instanceManager.stopInstance(instanceId)
         break
       case 'restart':
-        await this.instanceManager.stopInstance(instanceId)
-        // 等待一段时间后重新启动
-        setTimeout(async () => {
-          try {
-            await this.instanceManager!.startInstance(instanceId)
-          } catch (error) {
-            this.logger.error(`重启实例失败: ${instanceId}`, error)
-          }
-        }, 2000)
+        await this.instanceManager.restartInstance(instanceId)
         break
       default:
         throw new Error(`未知的电源操作: ${action}`)
@@ -213,6 +211,10 @@ export class SchedulerManager extends EventEmitter {
   private async executeCommand(instanceId: string, command: string): Promise<void> {
     if (!this.instanceManager) {
       throw new Error('InstanceManager未设置')
+    }
+
+    if (!this.terminalManager) {
+      throw new Error('TerminalManager未设置')
     }
 
     // 获取实例信息
@@ -225,9 +227,35 @@ export class SchedulerManager extends EventEmitter {
       throw new Error('实例未在运行或终端会话不存在')
     }
 
-    // 这里需要通过TerminalManager发送命令到实例的终端会话
-    // 由于InstanceManager没有直接的sendCommand方法，我们暂时抛出错误
-    throw new Error('命令执行功能暂未实现，请使用电源操作类型的定时任务')
+    // 通过TerminalManager发送命令到实例的终端会话
+    try {
+      // 创建一个模拟的socket对象，因为handleInput需要socket参数
+      const mockSocket = {
+        emit: () => {},
+        id: 'scheduler-mock'
+      } as any
+
+      // 发送命令到终端会话，确保命令以换行符结尾，并添加额外的回车确保执行
+      const commandWithNewline = command.endsWith('\n') ? command : command + '\n'
+      
+      this.terminalManager.handleInput(mockSocket, {
+        sessionId: instance.terminalSessionId,
+        data: commandWithNewline
+      })
+      
+      // 发送额外的回车符确保命令执行
+      setTimeout(() => {
+        this.terminalManager.handleInput(mockSocket, {
+          sessionId: instance.terminalSessionId,
+          data: '\r'
+        })
+      }, 100) // 延迟100ms确保命令先发送完成
+
+      this.logger.info(`已向实例 ${instanceId} 的终端会话发送命令: ${command}`)
+    } catch (error) {
+      this.logger.error(`向终端会话发送命令失败: ${instanceId}`, error)
+      throw new Error(`发送命令失败: ${error instanceof Error ? error.message : String(error)}`)
+    }
   }
 
   private getNextRunTime(schedule: string): string {

@@ -283,9 +283,10 @@ async function startServer() {
     await instanceManager.initialize()
     setAuthManager(authManager)
     
-    // 设置schedulerManager与gameManager和instanceManager的关联
+    // 设置schedulerManager与gameManager、instanceManager和terminalManager的关联
     schedulerManager.setGameManager(gameManager)
     schedulerManager.setInstanceManager(instanceManager)
+    schedulerManager.setTerminalManager(terminalManager)
 
     // 设置路由
     app.use('/api/auth', setupAuthRoutes(authManager))
