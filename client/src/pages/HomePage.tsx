@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '@/stores/authStore'
 import { SystemStats, SystemInfo, ProcessInfo } from '@/types'
 import socketClient from '@/utils/socket'
@@ -10,11 +11,13 @@ import {
   Network,
   Server,
   Activity,
-  Terminal
+  Terminal,
+  ArrowRight
 } from 'lucide-react'
 
 const HomePage: React.FC = () => {
   const { user } = useAuthStore()
+  const navigate = useNavigate()
   const [systemStats, setSystemStats] = useState<SystemStats | null>(null)
   const [systemInfo, setSystemInfo] = useState<SystemInfo | null>(null)
   const [processList, setProcessList] = useState<ProcessInfo[]>([])
@@ -248,36 +251,28 @@ const HomePage: React.FC = () => {
         
         {processList.length > 0 ? (
           <div className="space-y-3">
-            <div className="grid grid-cols-4 gap-4 text-sm font-medium text-gray-600 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700 pb-2">
+            <div className="grid grid-cols-3 gap-4 text-sm font-medium text-gray-600 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700 pb-2">
               <span>终端名称</span>
               <span>PID</span>
-              <span>CPU (%)</span>
-              <span>内存 (MB)</span>
+              <span>操作</span>
             </div>
             
             <div className="max-h-64 overflow-y-auto space-y-2">
               {processList.map((process, index) => (
-                <div key={`${process.id}-${index}`} className="grid grid-cols-4 gap-4 text-sm py-2 hover:bg-gray-50 dark:hover:bg-gray-800 rounded">
+                <div key={`${process.id}-${index}`} className="grid grid-cols-3 gap-4 text-sm py-2 hover:bg-gray-50 dark:hover:bg-gray-800 rounded">
                   <span className="text-black dark:text-white font-medium truncate" title={process.name}>
                     {process.name}
                   </span>
                   <span className="text-blue-600 dark:text-blue-400 font-mono">
                     {process.pid}
                   </span>
-                  <span className={`font-mono ${
-                    process.cpu > 50 ? 'text-red-500' : 
-                    process.cpu > 20 ? 'text-yellow-500' : 
-                    'text-green-500'
-                  }`}>
-                    {process.cpu.toFixed(1)}
-                  </span>
-                  <span className={`font-mono ${
-                    process.memory > 100 ? 'text-red-500' : 
-                    process.memory > 50 ? 'text-yellow-500' : 
-                    'text-green-500'
-                  }`}>
-                    {process.memory.toFixed(1)}
-                  </span>
+                  <button
+                    onClick={() => navigate(`/terminal?sessionId=${process.id}`)}
+                    className="flex items-center space-x-1 text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors"
+                  >
+                    <span>前往终端</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
                 </div>
               ))}
             </div>

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useRef, useState, useCallback } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
@@ -43,12 +43,17 @@ const TerminalPage: React.FC = () => {
   const [sessionsLoaded, setSessionsLoaded] = useState(false)
   
   const terminalContainerRef = useRef<HTMLDivElement>(null)
+  // 使用useRef来保存最新的sessions状态，避免重复注册事件监听器
+  const sessionsRef = useRef<TerminalSession[]>([])
+  const urlParamProcessed = useRef(false)
   const { addNotification } = useNotificationStore()
   
   // 创建新的终端会话
-  const createTerminalSession = (cwd?: string) => {
+  const createTerminalSession = useCallback((cwd?: string) => {
     const sessionId = `terminal-${Date.now()}`
-    const sessionName = cwd && typeof cwd === 'string' ? `终端 - ${cwd.split(/[/\\]/).pop()}` : `终端 ${sessions.length + 1}`
+    const sessionName = cwd && typeof cwd === 'string' 
+      ? `终端 - ${cwd.split(/[/\\]/).pop()}` 
+      : `终端 ${sessionsRef.current.length + 1}`
     
     const terminal = new Terminal({
       theme: {
@@ -146,7 +151,7 @@ const TerminalPage: React.FC = () => {
       title: '终端创建成功',
       message: `已创建新的终端会话: ${sessionName}`
     })
-  }
+  }, [addNotification])
   
   // 关闭终端会话
   const closeTerminalSession = (sessionId: string) => {
@@ -184,13 +189,13 @@ const TerminalPage: React.FC = () => {
   }
   
   // 切换终端会话
-  const switchTerminalSession = (sessionId: string) => {
+  const switchTerminalSession = useCallback((sessionId: string) => {
     setSessions(prev => prev.map(s => ({
       ...s,
       active: s.id === sessionId
     })))
     setActiveSessionId(sessionId)
-  }
+  }, [])
   
   // 重命名终端会话
   const startRenaming = (sessionId: string, currentName: string) => {
@@ -292,18 +297,6 @@ const TerminalPage: React.FC = () => {
     }
   }
   
-  // 检查URL参数中的cwd，如果存在则创建终端
-  useEffect(() => {
-    const cwd = searchParams.get('cwd')
-    if (cwd && sessionsLoaded) {
-      createTerminalSession(cwd)
-      // 清除URL参数，避免重复创建
-      const newSearchParams = new URLSearchParams(searchParams)
-      newSearchParams.delete('cwd')
-      setSearchParams(newSearchParams, { replace: true })
-    }
-  }, [searchParams, setSearchParams, sessionsLoaded])
-
   // 页面加载时获取现有终端会话
   useEffect(() => {
     const loadExistingSessions = async () => {
@@ -324,96 +317,101 @@ const TerminalPage: React.FC = () => {
           const sessionData = [...activeSessions, ...uniqueSavedSessions]
           
           if (sessionData.length > 0) {
+            
+            // 在设置初始会话之前，检查URL参数
+            const params = new URLSearchParams(window.location.search)
+            const sessionIdFromUrl = params.get('sessionId')
+            const initialActiveId = sessionIdFromUrl && sessionData.some(s => s.id === sessionIdFromUrl)
+              ? sessionIdFromUrl
+              : sessionData[0].id
           
-          const newSessions: TerminalSession[] = sessionData.map((session: any, index: number) => {
-            const terminal = new Terminal({
-              theme: {
-                background: '#1a1a1a',
-                foreground: '#ffffff',
-                cursor: '#ffffff',
-                selectionBackground: '#ffffff30',
-                black: '#000000',
-                red: '#ff6b6b',
-                green: '#51cf66',
-                yellow: '#ffd43b',
-                blue: '#74c0fc',
-                magenta: '#f06292',
-                cyan: '#4dd0e1',
-                white: '#ffffff',
-                brightBlack: '#666666',
-                brightRed: '#ff8a80',
-                brightGreen: '#69f0ae',
-                brightYellow: '#ffff8d',
-                brightBlue: '#82b1ff',
-                brightMagenta: '#ff80ab',
-                brightCyan: '#84ffff',
-                brightWhite: '#ffffff'
-              },
-              fontFamily: 'JetBrains Mono, Fira Code, Consolas, Monaco, monospace',
-              fontSize: 14,
-              lineHeight: 1.2,
-              cursorBlink: true,
-              cursorStyle: 'block',
-              scrollback: 1000,
-              tabStopWidth: 4,
-              allowTransparency: true
-            })
+            const newSessions: TerminalSession[] = sessionData.map((session: any, index: number) => {
+              const terminal = new Terminal({
+                theme: {
+                  background: '#1a1a1a',
+                  foreground: '#ffffff',
+                  cursor: '#ffffff',
+                  selectionBackground: '#ffffff30',
+                  black: '#000000',
+                  red: '#ff6b6b',
+                  green: '#51cf66',
+                  yellow: '#ffd43b',
+                  blue: '#74c0fc',
+                  magenta: '#f06292',
+                  cyan: '#4dd0e1',
+                  white: '#ffffff',
+                  brightBlack: '#666666',
+                  brightRed: '#ff8a80',
+                  brightGreen: '#69f0ae',
+                  brightYellow: '#ffff8d',
+                  brightBlue: '#82b1ff',
+                  brightMagenta: '#ff80ab',
+                  brightCyan: '#84ffff',
+                  brightWhite: '#ffffff'
+                },
+                fontFamily: 'JetBrains Mono, Fira Code, Consolas, Monaco, monospace',
+                fontSize: 14,
+                lineHeight: 1.2,
+                cursorBlink: true,
+                cursorStyle: 'block',
+                scrollback: 1000,
+                tabStopWidth: 4,
+                allowTransparency: true
+              })
 
-            const fitAddon = new FitAddon()
-            const webLinksAddon = new WebLinksAddon()
-            terminal.loadAddon(fitAddon)
-            terminal.loadAddon(webLinksAddon)
+              const fitAddon = new FitAddon()
+              const webLinksAddon = new WebLinksAddon()
+              terminal.loadAddon(fitAddon)
+              terminal.loadAddon(webLinksAddon)
 
-            terminal.onData((data) => {
-              socketClient.sendTerminalInput(session.id, data)
-            })
+              terminal.onData((data) => {
+                socketClient.sendTerminalInput(session.id, data)
+              })
 
-            terminal.onResize(({ cols, rows }) => {
-              if (socketClient.isConnected()) {
-                socketClient.resizeTerminal(session.id, cols, rows)
+              terminal.onResize(({ cols, rows }) => {
+                if (socketClient.isConnected()) {
+                  socketClient.resizeTerminal(session.id, cols, rows)
+                }
+              })
+
+              return {
+                id: session.id,
+                name: session.name || `终端 ${index + 1}`,
+                terminal,
+                fitAddon,
+                active: session.id === initialActiveId
               }
             })
-
-            return {
-              id: session.id,
-              name: session.name || `终端 ${index + 1}`,
-              terminal,
-              fitAddon,
-              active: index === 0
-            }
-          })
           
-          setSessions(newSessions)
-          if (newSessions.length > 0) {
-            setActiveSessionId(newSessions[0].id)
-          }
+            setSessions(newSessions)
+            setActiveSessionId(initialActiveId)
           
-          addNotification({
-            type: 'info',
-            title: '发现现有会话',
-            message: `找到 ${sessionData.length} 个现有终端会话，正在恢复...`
-          })
+            addNotification({
+              type: 'info',
+              title: '发现现有会话',
+              message: `找到 ${sessionData.length} 个现有终端会话，正在恢复...`
+            })
           
-          // 延迟重连
-          setTimeout(() => {
-            const attemptReconnect = () => {
-              if (socketClient.isConnected()) {
-                newSessions.forEach(session => {
-                  socketClient.emit('reconnect-session', { sessionId: session.id })
-                })
-              } else {
-                const onConnect = () => {
+            // 延迟重连
+            setTimeout(() => {
+              const attemptReconnect = () => {
+                if (socketClient.isConnected()) {
                   newSessions.forEach(session => {
                     socketClient.emit('reconnect-session', { sessionId: session.id })
                   })
-                  socketClient.off('connect', onConnect)
+                } else {
+                  const onConnect = () => {
+                    newSessions.forEach(session => {
+                      socketClient.emit('reconnect-session', { sessionId: session.id })
+                    })
+                    socketClient.off('connect', onConnect)
+                  }
+                  socketClient.on('connect', onConnect as () => void)
                 }
-                socketClient.on('connect', onConnect as () => void)
               }
-            }
-            
-            attemptReconnect()
-          }, 1000)
+              
+              attemptReconnect()
+            }, 1000)
           }
         }
       } catch (error) {
@@ -429,10 +427,8 @@ const TerminalPage: React.FC = () => {
     }
     
     loadExistingSessions()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
-  
-  // 使用useRef来保存最新的sessions状态，避免重复注册事件监听器
-  const sessionsRef = useRef<TerminalSession[]>([])
   
   useEffect(() => {
     sessionsRef.current = sessions
@@ -492,7 +488,25 @@ const TerminalPage: React.FC = () => {
   }, [addNotification]) // 只依赖addNotification，不依赖sessions
   
   useEffect(() => {
-    // 当活动会话改变时，挂载终端到DOM
+    // 此effect现在只处理cwd的情况，sessionId在加载时处理
+    if (!sessionsLoaded || urlParamProcessed.current) {
+      return
+    }
+
+    const cwd = searchParams.get('cwd')
+
+    if (!cwd) {
+      return
+    }
+
+    createTerminalSession(cwd)
+    urlParamProcessed.current = true
+    navigate('/terminal', { replace: true })
+    
+  }, [sessionsLoaded, navigate, createTerminalSession, searchParams])
+
+  // 当活动会话改变时，挂载终端到DOM
+  useEffect(() => {
     const activeSession = sessions.find(s => s.id === activeSessionId)
     if (activeSession && terminalContainerRef.current) {
       const container = terminalContainerRef.current
