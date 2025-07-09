@@ -113,9 +113,25 @@ const TerminalPage: React.FC = () => {
       const updated = prev.map(s => ({ ...s, active: false }))
       return [...updated, newSession]
     })
-    
+
     setActiveSessionId(sessionId)
-    
+
+    // 延迟挂载终端到DOM，确保状态更新完成
+    setTimeout(() => {
+      if (terminalContainerRef.current && !newSession.terminal.element) {
+        try {
+          newSession.terminal.open(terminalContainerRef.current)
+          newSession.terminal.focus()
+          // 调整终端大小
+          setTimeout(() => {
+            newSession.fitAddon.fit()
+          }, 50)
+        } catch (error) {
+          console.error('挂载新终端失败:', error)
+        }
+      }
+    }, 100)
+
     // 请求创建PTY
     socketClient.createTerminal({
       sessionId: sessionId,
@@ -124,7 +140,7 @@ const TerminalPage: React.FC = () => {
       rows: 24,
       cwd: cwd
     })
-    
+
     addNotification({
       type: 'success',
       title: '终端创建成功',
@@ -286,7 +302,7 @@ const TerminalPage: React.FC = () => {
       newSearchParams.delete('cwd')
       setSearchParams(newSearchParams, { replace: true })
     }
-  }, [searchParams, sessions.length, setSearchParams, sessionsLoaded])
+  }, [searchParams, setSearchParams, sessionsLoaded])
 
   // 页面加载时获取现有终端会话
   useEffect(() => {
@@ -477,18 +493,25 @@ const TerminalPage: React.FC = () => {
       }
 
       try {
+        // 检查终端是否已经挂载到DOM
         if (!activeSession.terminal.element) {
+          // 如果终端还没有挂载，则挂载到容器
           activeSession.terminal.open(container)
         } else {
+          // 如果终端已经挂载，则将其移动到当前容器
           container.appendChild(activeSession.terminal.element)
         }
 
         activeSession.terminal.focus()
 
-        // 延迟调整大小
+        // 延迟调整大小，确保DOM更新完成
         setTimeout(() => {
-          activeSession.fitAddon.fit()
-        }, 50)
+          try {
+            activeSession.fitAddon.fit()
+          } catch (error) {
+            console.error('调整终端大小失败:', error)
+          }
+        }, 100)
       } catch (error) {
         console.error('挂载终端失败:', error)
       }

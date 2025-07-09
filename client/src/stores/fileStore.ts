@@ -35,7 +35,7 @@ interface FileStore {
   createDirectory: (name: string) => Promise<boolean>
   deleteSelectedFiles: () => Promise<boolean>
   renameFile: (oldPath: string, newName: string) => Promise<boolean>
-  uploadFiles: (files: FileList) => Promise<boolean>
+  uploadFiles: (files: FileList, onProgress?: (progress: { fileName: string; progress: number; status: 'uploading' | 'completed' | 'error' }) => void) => Promise<boolean>
   
   // 剪贴板操作
   copyFiles: (filePaths: string[]) => void
