@@ -60,6 +60,28 @@ router.get('/sessions', (req: Request, res: Response) => {
   }
 })
 
+// 获取活跃终端进程信息
+router.get('/active-processes', async (req: Request, res: Response) => {
+  try {
+    if (!terminalManager) {
+      return res.status(500).json({ error: '终端管理器未初始化' })
+    }
+    
+    const activeProcesses = await terminalManager.getActiveTerminalProcesses()
+    
+    res.json({
+      success: true,
+      data: activeProcesses
+    })
+  } catch (error) {
+    logger.error('获取活跃终端进程失败:', error)
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : '获取活跃终端进程失败'
+    })
+  }
+})
+
 // 更新终端会话名称
 router.put('/sessions/:sessionId/name', async (req: Request, res: Response) => {
   try {

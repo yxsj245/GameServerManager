@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { useAuthStore } from '@/stores/authStore'
-import { SystemStats, SystemInfo } from '@/types'
+import { SystemStats, SystemInfo, ProcessInfo } from '@/types'
 import socketClient from '@/utils/socket'
 import apiClient from '@/utils/api'
 import {
@@ -9,13 +9,15 @@ import {
   MemoryStick,
   Network,
   Server,
-  Activity
+  Activity,
+  Terminal
 } from 'lucide-react'
 
 const HomePage: React.FC = () => {
   const { user } = useAuthStore()
   const [systemStats, setSystemStats] = useState<SystemStats | null>(null)
   const [systemInfo, setSystemInfo] = useState<SystemInfo | null>(null)
+  const [processList, setProcessList] = useState<ProcessInfo[]>([])
   const [connected, setConnected] = useState(socketClient.isConnected())
   
   useEffect(() => {
@@ -31,7 +33,23 @@ const HomePage: React.FC = () => {
       }
     }
     
+    // 获取活跃终端进程列表
+    const fetchTerminalProcesses = async () => {
+      try {
+        const response = await apiClient.getActiveTerminalProcesses()
+        if (response.success) {
+          setProcessList(response.data)
+        }
+      } catch (error) {
+        console.error('获取终端进程列表失败:', error)
+      }
+    }
+    
     fetchSystemInfo()
+    fetchTerminalProcesses()
+    
+    // 设置定时刷新终端进程列表
+    const processInterval = setInterval(fetchTerminalProcesses, 5000) // 每5秒刷新一次
     
     // 设置初始连接状态
     setConnected(socketClient.isConnected())
@@ -53,6 +71,7 @@ const HomePage: React.FC = () => {
       socketClient.off('connection-status')
       socketClient.off('system-stats')
       socketClient.emit('unsubscribe-system-stats')
+      clearInterval(processInterval)
     }
   }, [])
   
@@ -219,6 +238,57 @@ const HomePage: React.FC = () => {
         </div>
       )}
       
+      {/* 终端占用模块 */}
+      <div className="card-game p-6">
+        <div className="flex items-center space-x-3 mb-4">
+          <Terminal className="w-6 h-6 text-orange-500" />
+          <h3 className="text-lg font-semibold text-black dark:text-white">终端占用</h3>
+          <span className="text-sm text-gray-600 dark:text-gray-400">({processList.length} 个进程)</span>
+        </div>
+        
+        {processList.length > 0 ? (
+          <div className="space-y-3">
+            <div className="grid grid-cols-4 gap-4 text-sm font-medium text-gray-600 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700 pb-2">
+              <span>终端名称</span>
+              <span>PID</span>
+              <span>CPU (%)</span>
+              <span>内存 (MB)</span>
+            </div>
+            
+            <div className="max-h-64 overflow-y-auto space-y-2">
+              {processList.map((process, index) => (
+                <div key={`${process.id}-${index}`} className="grid grid-cols-4 gap-4 text-sm py-2 hover:bg-gray-50 dark:hover:bg-gray-800 rounded">
+                  <span className="text-black dark:text-white font-medium truncate" title={process.name}>
+                    {process.name}
+                  </span>
+                  <span className="text-blue-600 dark:text-blue-400 font-mono">
+                    {process.pid}
+                  </span>
+                  <span className={`font-mono ${
+                    process.cpu > 50 ? 'text-red-500' : 
+                    process.cpu > 20 ? 'text-yellow-500' : 
+                    'text-green-500'
+                  }`}>
+                    {process.cpu.toFixed(1)}
+                  </span>
+                  <span className={`font-mono ${
+                    process.memory > 100 ? 'text-red-500' : 
+                    process.memory > 50 ? 'text-yellow-500' : 
+                    'text-green-500'
+                  }`}>
+                    {process.memory.toFixed(1)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+            <Terminal className="w-12 h-12 mx-auto mb-3 opacity-50" />
+            <p>暂无终端进程运行</p>
+          </div>
+        )}
+      </div>
 
     </div>
   )

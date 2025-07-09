@@ -88,6 +88,16 @@ export interface SystemInfo {
   nodeVersion: string
 }
 
+export interface ProcessInfo {
+  pid: number
+  name: string
+  cpu: number
+  memory: number
+  status: string
+  startTime: string
+  command: string
+}
+
 // 游戏相关类型
 export interface GameServer {
   id: string

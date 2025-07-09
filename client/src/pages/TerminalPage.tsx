@@ -310,12 +310,18 @@ const TerminalPage: React.FC = () => {
       try {
         const response = await apiClient.getTerminalSessions()
         if (response.success && response.data) {
-          // 合并活跃会话和保存的会话
+          // 获取活跃会话和保存的会话
           const activeSessions = response.data.activeSessions || []
           const savedSessions = response.data.savedSessions || []
           
-          // 优先使用活跃会话，如果没有则使用保存的会话
-          const sessionData = activeSessions.length > 0 ? activeSessions : savedSessions
+          // 创建活跃会话ID的Set，用于去重
+          const activeSessionIds = new Set(activeSessions.map((s: any) => s.id))
+          
+          // 过滤掉已经在活跃会话中的保存会话，避免重复
+          const uniqueSavedSessions = savedSessions.filter((s: any) => !activeSessionIds.has(s.id))
+          
+          // 合并去重后的会话列表，优先使用活跃会话
+          const sessionData = [...activeSessions, ...uniqueSavedSessions]
           
           if (sessionData.length > 0) {
           
@@ -434,9 +440,13 @@ const TerminalPage: React.FC = () => {
   
   useEffect(() => {
     // 监听终端输出
-    const handleTerminalOutput = ({ sessionId, data }: { sessionId: string; data: string }) => {
+    const handleTerminalOutput = ({ sessionId, data, isHistorical }: { sessionId: string; data: string; isHistorical?: boolean }) => {
       const session = sessionsRef.current.find(s => s.id === sessionId)
       if (session) {
+        // 如果是历史输出，先清空终端再写入，避免重复显示
+        if (isHistorical) {
+          session.terminal.clear()
+        }
         session.terminal.write(data)
       }
     }

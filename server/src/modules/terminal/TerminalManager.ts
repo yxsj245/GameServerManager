@@ -5,7 +5,11 @@ import winston from 'winston'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import os from 'os'
+import { promisify } from 'util'
+import { exec } from 'child_process'
 import { TerminalSessionManager, PersistedTerminalSession } from './TerminalSessionManager.js'
+
+const execAsync = promisify(exec)
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -553,6 +557,78 @@ export class TerminalManager {
    */
   public getSavedSessions(): PersistedTerminalSession[] {
     return this.sessionManager.getSavedSessions()
+  }
+
+  /**
+   * 获取活跃终端进程信息
+   */
+  public async getActiveTerminalProcesses(): Promise<Array<{ id: string; name: string; pid: number; cpu: number; memory: number; status: string; createdAt: string; command: string }>> {
+    const activeProcesses: Array<{ id: string; name: string; pid: number; cpu: number; memory: number; status: string; createdAt: string; command: string }> = []
+    
+    for (const [sessionId, session] of this.sessions.entries()) {
+      if (!session.disconnected && session.process && !session.process.killed) {
+        const pid = session.process.pid || 0
+        let cpu = 0
+        let memory = 0
+        
+        // 获取进程的CPU和内存使用情况
+        if (pid > 0) {
+          try {
+            const processStats = await this.getProcessStats(pid)
+            cpu = processStats.cpu
+            memory = processStats.memory
+          } catch (error) {
+            this.logger.warn(`获取进程 ${pid} 统计信息失败:`, error)
+          }
+        }
+        
+        activeProcesses.push({
+          id: session.id,
+          name: session.name,
+          pid,
+          cpu,
+          memory,
+          status: 'running',
+          createdAt: session.createdAt.toISOString(),
+          command: 'terminal session'
+        })
+      }
+    }
+    
+    return activeProcesses
+  }
+
+  /**
+   * 获取进程统计信息
+   */
+  private async getProcessStats(pid: number): Promise<{ cpu: number; memory: number }> {
+    try {
+      const platform = os.platform()
+      
+      if (platform === 'win32') {
+        // Windows: 使用 wmic 命令获取进程信息
+        const { stdout } = await execAsync(`wmic process where "ProcessId=${pid}" get PageFileUsage,WorkingSetSize /format:csv`)
+        const lines = stdout.trim().split('\n')
+        if (lines.length > 1) {
+          const data = lines[1].split(',')
+          const memory = parseInt(data[1]) || 0 // WorkingSetSize in bytes
+          return { cpu: 0, memory: memory / 1024 / 1024 } // Convert to MB
+        }
+      } else {
+        // Linux/Unix: 使用 ps 命令获取进程信息
+        const { stdout } = await execAsync(`ps -p ${pid} -o %cpu,%mem --no-headers`)
+        const parts = stdout.trim().split(/\s+/)
+        if (parts.length >= 2) {
+          const cpu = parseFloat(parts[0]) || 0
+          const memory = parseFloat(parts[1]) || 0
+          return { cpu, memory }
+        }
+      }
+    } catch (error) {
+      this.logger.warn(`获取进程 ${pid} 统计信息失败:`, error)
+    }
+    
+    return { cpu: 0, memory: 0 }
   }
 
   /**

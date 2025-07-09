@@ -223,6 +223,14 @@ class ApiClient {
     return this.get('/system/info')
   }
 
+  async getProcessList() {
+    return this.get('/system/processes')
+  }
+
+  async getActiveTerminalProcesses() {
+    return this.get('/terminal/active-processes')
+  }
+
   // 终端相关API
   async getTerminalSessions() {
     return this.get('/terminal/sessions')
