@@ -279,11 +279,12 @@ export class InstanceManager extends EventEmitter {
       })
       
       // 通过终端管理器创建PTY会话
+      // 使用更大的默认终端大小，前端会根据实际容器大小进行调整
       this.terminalManager.createPty(virtualSocket, {
         sessionId: terminalSessionId,
         name: `实例: ${instance.name} (${instance.id})`,
-        cols: 80,
-        rows: 24,
+        cols: 100,
+        rows: 30,
         workingDirectory: instance.workingDirectory
       })
       

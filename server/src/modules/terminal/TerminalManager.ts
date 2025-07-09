@@ -304,9 +304,28 @@ export class TerminalManager {
       // 更新最后活动时间
       session.lastActivity = new Date()
       
-      // 发送调整大小命令到PTY进程
-      // 注意：这里需要根据PTY程序的具体实现来调整
-      // 目前的PTY程序可能不支持动态调整大小，这里只是示例
+      // 注意：由于PTY进程的限制，我们无法直接获取当前终端大小
+      // 这里直接进行大小调整操作，让PTY进程处理实际的大小变化
+      
+      // 由于当前PTY程序在启动时设置固定大小，动态调整大小功能有限
+      // 我们只发送SIGWINCH信号通知进程窗口大小变化，不发送可见的命令到终端
+      
+      // 发送SIGWINCH信号通知子进程窗口大小变化
+      try {
+        if (session.process.pid && !session.process.killed) {
+          process.kill(session.process.pid, 'SIGWINCH')
+          this.logger.info(`已发送SIGWINCH信号调整终端大小: ${sessionId}, ${cols}x${rows}`)
+        }
+      } catch (signalError) {
+        this.logger.debug(`发送SIGWINCH信号失败: ${signalError}`)
+      }
+      
+      // 通知前端大小调整完成
+      session.socket.emit('terminal-resized', {
+        sessionId,
+        cols,
+        rows
+      })
       
     } catch (error) {
       this.logger.error(`调整终端大小失败:`, error)

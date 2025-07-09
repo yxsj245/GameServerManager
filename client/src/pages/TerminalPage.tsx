@@ -48,6 +48,23 @@ const TerminalPage: React.FC = () => {
   const urlParamProcessed = useRef(false)
   const { addNotification } = useNotificationStore()
   
+  // 计算合适的终端大小
+  const calculateTerminalSize = useCallback(() => {
+    if (terminalContainerRef.current) {
+      const container = terminalContainerRef.current
+      const containerWidth = container.clientWidth || 800
+      const containerHeight = container.clientHeight || 600
+      
+      // 基于容器大小计算合适的列数和行数
+      // 假设每个字符宽度约为8px，高度约为16px
+      const cols = Math.floor(containerWidth / 8) || 100
+      const rows = Math.floor(containerHeight / 16) || 30
+      
+      return { cols: Math.max(cols, 80), rows: Math.max(rows, 24) }
+    }
+    return { cols: 100, rows: 30 } // 默认更大的尺寸
+  }, [])
+  
   // 创建新的终端会话
   const createTerminalSession = useCallback((cwd?: string) => {
     const sessionId = `terminal-${Date.now()}`
@@ -140,12 +157,14 @@ const TerminalPage: React.FC = () => {
       }
     }, 100)
 
+    const { cols, rows } = calculateTerminalSize()
+    
     // 请求创建PTY
     socketClient.createTerminal({
       sessionId: sessionId,
       name: sessionName,
-      cols: 80,
-      rows: 24,
+      cols: cols,
+      rows: rows,
       cwd: cwd
     })
 
@@ -291,13 +310,26 @@ const TerminalPage: React.FC = () => {
         })
       }
       
-      // 延迟调整终端大小
-      setTimeout(() => {
-        const activeSession = sessions.find(s => s.id === activeSessionId)
-        if (activeSession) {
-          activeSession.fitAddon.fit()
-        }
-      }, 200)
+      // 调整终端大小
+        setTimeout(() => {
+          const activeSession = sessions.find(s => s.id === activeSessionId)
+          if (activeSession) {
+            try {
+              activeSession.fitAddon.fit()
+              
+              // 获取调整后的实际大小
+              const { cols, rows } = activeSession.terminal
+              
+              // 通知服务端新的大小
+              if (cols && rows && socketClient.isConnected()) {
+                console.log(`全屏状态变化，终端大小调整为: ${cols}x${rows}`)
+                socketClient.resizeTerminal(activeSession.id, cols, rows)
+              }
+            } catch (error) {
+              console.error('全屏状态变化时调整终端失败:', error)
+            }
+          }
+        }, 200)
     } catch (error) {
       console.error('全屏切换失败:', error)
       addNotification({
@@ -336,8 +368,12 @@ const TerminalPage: React.FC = () => {
               ? sessionIdFromUrl
               : sessionData[0].id
           
+            const { cols, rows } = calculateTerminalSize()
+            
             const newSessions: TerminalSession[] = sessionData.map((session: any, index: number) => {
               const terminal = new Terminal({
+                cols: cols,
+                rows: rows,
                 theme: {
                   background: '#1a1a1a',
                   foreground: '#ffffff',
@@ -409,11 +445,15 @@ const TerminalPage: React.FC = () => {
                 if (socketClient.isConnected()) {
                   newSessions.forEach(session => {
                     socketClient.emit('reconnect-session', { sessionId: session.id })
+                    // 通知后端调整PTY大小以匹配前端终端
+                    socketClient.resizeTerminal(session.id, cols, rows)
                   })
                 } else {
                   const onConnect = () => {
                     newSessions.forEach(session => {
                       socketClient.emit('reconnect-session', { sessionId: session.id })
+                      // 通知后端调整PTY大小以匹配前端终端
+                      socketClient.resizeTerminal(session.id, cols, rows)
                     })
                     socketClient.off('connect', onConnect)
                   }
@@ -483,11 +523,28 @@ const TerminalPage: React.FC = () => {
       })
     }
     
+    // 监听终端大小调整完成
+    const handleTerminalResized = ({ sessionId, cols, rows }: { sessionId: string; cols: number; rows: number }) => {
+      console.log(`终端大小调整完成: ${sessionId}, ${cols}x${rows}`)
+      const session = sessionsRef.current.find(s => s.id === sessionId)
+      if (session) {
+        // 确保前端终端的大小与服务端同步
+        setTimeout(() => {
+          try {
+            session.fitAddon.fit()
+          } catch (error) {
+            console.error('同步终端大小失败:', error)
+          }
+        }, 100)
+      }
+    }
+    
     socketClient.on('terminal-output', handleTerminalOutput)
     socketClient.on('terminal-created', handleTerminalCreated)
     socketClient.on('terminal-closed', handleTerminalClosed)
     socketClient.on('session-reconnected', handleSessionReconnected)
     socketClient.on('session-reconnect-failed', handleSessionReconnectFailed)
+    socketClient.on('terminal-resized', handleTerminalResized)
     
     return () => {
       socketClient.off('terminal-output', handleTerminalOutput)
@@ -495,6 +552,7 @@ const TerminalPage: React.FC = () => {
       socketClient.off('terminal-closed', handleTerminalClosed)
       socketClient.off('session-reconnected', handleSessionReconnected)
       socketClient.off('session-reconnect-failed', handleSessionReconnectFailed)
+      socketClient.off('terminal-resized', handleTerminalResized)
     }
   }, [addNotification]) // 只依赖addNotification，不依赖sessions
   
@@ -515,6 +573,16 @@ const TerminalPage: React.FC = () => {
       if (targetSession) {
         // 如果找到对应的会话，切换到该会话
         switchTerminalSession(targetSession.id)
+        
+        // 延迟调整终端大小，确保切换完成
+        setTimeout(() => {
+          const { cols, rows } = calculateTerminalSize()
+          if (socketClient.isConnected()) {
+            console.log(`切换到实例终端，调整大小为: ${cols}x${rows}`)
+            socketClient.resizeTerminal(targetSession.id, cols, rows)
+          }
+        }, 300)
+        
         addNotification({
           type: 'success',
           title: '已连接到实例终端',
@@ -526,6 +594,16 @@ const TerminalPage: React.FC = () => {
           const delayedSession = sessionsRef.current.find(s => s.id === sessionId)
           if (delayedSession) {
             switchTerminalSession(delayedSession.id)
+            
+            // 延迟调整终端大小，确保切换完成
+            setTimeout(() => {
+              const { cols, rows } = calculateTerminalSize()
+              if (socketClient.isConnected()) {
+                console.log(`延迟切换到实例终端，调整大小为: ${cols}x${rows}`)
+                socketClient.resizeTerminal(delayedSession.id, cols, rows)
+              }
+            }, 300)
+            
             addNotification({
               type: 'success',
               title: '已连接到实例终端',
@@ -623,7 +701,18 @@ const TerminalPage: React.FC = () => {
         // 延迟调整大小，确保DOM更新完成
         setTimeout(() => {
           try {
+            // 先调整大小
             activeSession.fitAddon.fit()
+            
+            // 获取调整后的实际大小
+            const { cols, rows } = activeSession.terminal
+            
+            // 通知服务端当前的终端大小，确保前后端同步
+            if (cols && rows && socketClient.isConnected()) {
+              console.log(`终端大小已调整为: ${cols}x${rows}`)
+              socketClient.resizeTerminal(activeSession.id, cols, rows)
+            }
+            
             // 在调整大小后再次确保焦点
             activeSession.terminal.focus()
           } catch (error) {
@@ -649,7 +738,21 @@ const TerminalPage: React.FC = () => {
       const activeSession = sessions.find(s => s.id === activeSessionId)
       if (activeSession) {
         setTimeout(() => {
-          activeSession.fitAddon.fit()
+          try {
+            // 调整终端大小以适应容器
+            activeSession.fitAddon.fit()
+            
+            // 获取调整后的实际大小
+            const { cols, rows } = activeSession.terminal
+            
+            // 通知服务端新的大小
+            if (cols && rows && socketClient.isConnected()) {
+              console.log(`窗口大小变化，终端大小调整为: ${cols}x${rows}`)
+              socketClient.resizeTerminal(activeSession.id, cols, rows)
+            }
+          } catch (error) {
+            console.error('窗口大小变化时调整终端失败:', error)
+          }
         }, 100)
       }
     }
@@ -670,7 +773,20 @@ const TerminalPage: React.FC = () => {
         setTimeout(() => {
           const activeSession = sessions.find(s => s.id === activeSessionId)
           if (activeSession) {
-            activeSession.fitAddon.fit()
+            try {
+              activeSession.fitAddon.fit()
+              
+              // 获取调整后的实际大小
+              const { cols, rows } = activeSession.terminal
+              
+              // 通知服务端新的大小
+              if (cols && rows && socketClient.isConnected()) {
+                console.log(`全屏模式切换，终端大小调整为: ${cols}x${rows}`)
+                socketClient.resizeTerminal(activeSession.id, cols, rows)
+              }
+            } catch (error) {
+              console.error('全屏模式切换时调整终端失败:', error)
+            }
           }
         }, 200)
       }
