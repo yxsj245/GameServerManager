@@ -334,6 +334,25 @@ class ApiClient {
   async getInstanceStatus(id: string) {
     return this.get(`/instances/${id}/status`)
   }
+
+  // 游戏部署API
+  async getInstallableGames() {
+    return this.get('/game-deployment/games')
+  }
+
+  async installGame(data: {
+    gameKey: string
+    gameName: string
+    appId: string
+    installPath: string
+    instanceName: string
+    useAnonymous: boolean
+    steamUsername?: string
+    steamPassword?: string
+    steamcmdCommand: string
+  }) {
+    return this.post('/game-deployment/install', data)
+  }
 }
 
 // 创建单例实例

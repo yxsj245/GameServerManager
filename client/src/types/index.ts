@@ -241,5 +241,27 @@ export interface InstanceState {
   error: string | null
 }
 
+// 游戏部署相关类型
+export interface InstallableGame {
+  id: string
+  name: string
+  appid: string
+  hint: string
+  image: string
+  url: string
+}
+
+export interface GameInstallRequest {
+  gameId: string
+  installPath: string
+}
+
+export interface GameInstallProgress {
+  type: 'progress' | 'success' | 'error'
+  message: string
+  progress?: number
+  instanceId?: string
+}
+
 // 文件管理相关类型
 export * from './file'

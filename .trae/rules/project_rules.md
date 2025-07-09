@@ -1,1 +1,2 @@
 将服务端所有需要保存的数据统一保存在server\data 目录下
+前端使用的token存储键是'gsm3_token'

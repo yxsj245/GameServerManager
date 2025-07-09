@@ -14,7 +14,8 @@ import {
   User,
   Gamepad2,
   FolderOpen,
-  Server
+  Server,
+  Download
 } from 'lucide-react'
 
 interface LayoutProps {
@@ -31,6 +32,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     { name: '首页', href: '/', icon: Home },
     { name: '终端', href: '/terminal', icon: Terminal },
     { name: '实例管理', href: '/instances', icon: Server },
+    { name: '游戏部署', href: '/game-deployment', icon: Download },
     { name: '文件管理', href: '/files', icon: FolderOpen },
     { name: '设置', href: '/settings', icon: Settings },
   ]
