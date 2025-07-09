@@ -7,6 +7,7 @@ import Layout from '@/components/Layout'
 import LoginPage from '@/pages/LoginPage'
 import HomePage from '@/pages/HomePage'
 import TerminalPage from '@/pages/TerminalPage'
+import InstanceManagerPage from '@/pages/InstanceManagerPage'
 import SettingsPage from '@/pages/SettingsPage'
 import FileManagerPage from '@/pages/FileManagerPage'
 import LoadingSpinner from '@/components/LoadingSpinner'
@@ -95,6 +96,7 @@ function App() {
                   <Routes>
                     <Route path="/" element={<HomePage />} />
                     <Route path="/terminal" element={<TerminalPage />} />
+                    <Route path="/instances" element={<InstanceManagerPage />} />
                     <Route path="/files" element={<FileManagerPage />} />
                     <Route path="/settings" element={<SettingsPage />} />
                     <Route path="*" element={<Navigate to="/" replace />} />

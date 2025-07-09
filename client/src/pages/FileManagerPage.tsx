@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { 
   Button, 
   Input, 
@@ -88,6 +88,7 @@ const FileManagerPage: React.FC = () => {
   
   const { addNotification } = useNotificationStore()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   
   // 对话框状态
   const [createDialog, setCreateDialog] = useState<{
@@ -123,8 +124,16 @@ const FileManagerPage: React.FC = () => {
   
   // 初始化
   useEffect(() => {
-    loadFiles()
-  }, [])
+    // 检查 URL 参数中的路径
+    const pathFromUrl = searchParams.get('path')
+    if (pathFromUrl) {
+      // 如果 URL 中有路径参数，设置为当前路径并加载
+      setCurrentPath(pathFromUrl)
+    } else {
+      // 否则加载默认路径
+      loadFiles()
+    }
+  }, [searchParams, setCurrentPath, loadFiles])
   
   // 键盘快捷键
   useEffect(() => {

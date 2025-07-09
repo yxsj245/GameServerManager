@@ -499,34 +499,69 @@ const TerminalPage: React.FC = () => {
   }, [addNotification]) // 只依赖addNotification，不依赖sessions
   
   useEffect(() => {
-    // 此effect现在只处理cwd的情况，sessionId在加载时处理
+    // 处理URL参数：cwd和instance
     if (!sessionsLoaded || urlParamProcessed.current) {
       return
     }
 
     const cwd = searchParams.get('cwd')
+    const instanceId = searchParams.get('instance')
 
-    if (!cwd) {
-      return
-    }
-
-    // 延迟创建新终端，确保现有会话加载完成
-    setTimeout(() => {
-      createTerminalSession(cwd)
+    if (instanceId) {
+      // 如果有instance参数，查找对应的终端会话
+      const instanceSession = sessionsRef.current.find(s => 
+        s.name.includes(instanceId) || s.id.includes(instanceId)
+      )
       
-      // 确保新创建的终端获得焦点，延迟时间更长
+      if (instanceSession) {
+        // 如果找到对应的会话，切换到该会话
+        switchTerminalSession(instanceSession.id)
+        addNotification({
+          type: 'success',
+          title: '已连接到实例终端',
+          message: `已切换到实例 ${instanceId} 的终端会话`
+        })
+      } else {
+        // 如果没有找到对应的会话，等待一段时间后再次查找
+        setTimeout(() => {
+          const delayedSession = sessionsRef.current.find(s => 
+            s.name.includes(instanceId) || s.id.includes(instanceId)
+          )
+          if (delayedSession) {
+            switchTerminalSession(delayedSession.id)
+            addNotification({
+              type: 'success',
+              title: '已连接到实例终端',
+              message: `已切换到实例 ${instanceId} 的终端会话`
+            })
+          } else {
+            addNotification({
+              type: 'info',
+              title: '未找到实例终端',
+              message: `实例 ${instanceId} 的终端会话可能还在启动中`
+            })
+          }
+        }, 2000)
+      }
+    } else if (cwd) {
+      // 延迟创建新终端，确保现有会话加载完成
       setTimeout(() => {
-        const activeSession = sessionsRef.current.find(s => s.active)
-        if (activeSession && activeSession.terminal.element) {
-          activeSession.terminal.focus()
-        }
-      }, 500)
-    }, 100)
+        createTerminalSession(cwd)
+        
+        // 确保新创建的终端获得焦点，延迟时间更长
+        setTimeout(() => {
+          const activeSession = sessionsRef.current.find(s => s.active)
+          if (activeSession && activeSession.terminal.element) {
+            activeSession.terminal.focus()
+          }
+        }, 500)
+      }, 100)
+    }
     
     urlParamProcessed.current = true
     navigate('/terminal', { replace: true })
     
-  }, [sessionsLoaded, navigate, createTerminalSession, searchParams])
+  }, [sessionsLoaded, navigate, createTerminalSession, searchParams, switchTerminalSession, addNotification])
 
   // 当活动会话改变时，挂载终端到DOM
   useEffect(() => {

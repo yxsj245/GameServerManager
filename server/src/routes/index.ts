@@ -3,6 +3,7 @@ import terminalRoutes from './terminal.js'
 import gameRoutes from './games.js'
 import systemRoutes from './system.js'
 import fileRoutes from './files.js'
+import instanceRoutes from './instances.js'
 
 const router = Router()
 
@@ -31,5 +32,6 @@ router.use('/terminal', terminalRoutes)
 router.use('/games', gameRoutes)
 router.use('/system', systemRoutes)
 router.use('/files', fileRoutes)
+router.use('/instances', instanceRoutes)
 
 export default router

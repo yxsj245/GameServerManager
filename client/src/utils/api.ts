@@ -1,5 +1,5 @@
 import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios'
-import { LoginRequest, LoginResponse, ApiResponse, User } from '@/types'
+import { LoginRequest, LoginResponse, ApiResponse, User, Instance, CreateInstanceRequest } from '@/types'
 import config from '@/config'
 
 class ApiClient {
@@ -304,6 +304,35 @@ class ApiClient {
 
   async createFolder(path: string, name: string) {
     return this.post('/files/folder', { path, name })
+  }
+
+  // 实例管理API
+  async getInstances() {
+    return this.get<Instance[]>('/instances')
+  }
+
+  async createInstance(data: CreateInstanceRequest) {
+    return this.post<Instance>('/instances', data)
+  }
+
+  async updateInstance(id: string, data: CreateInstanceRequest) {
+    return this.put<Instance>(`/instances/${id}`, data)
+  }
+
+  async deleteInstance(id: string) {
+    return this.delete(`/instances/${id}`)
+  }
+
+  async startInstance(id: string) {
+    return this.post(`/instances/${id}/start`)
+  }
+
+  async stopInstance(id: string) {
+    return this.post(`/instances/${id}/stop`)
+  }
+
+  async getInstanceStatus(id: string) {
+    return this.get(`/instances/${id}/status`)
   }
 }
 

@@ -91,7 +91,7 @@ const isValidPath = (filePath: string): boolean => {
 // 获取目录内容
 router.get('/list', async (req: Request, res: Response) => {
   try {
-    const { path: dirPath = '/home' } = req.query
+    const { path: dirPath = '/' } = req.query
     
     if (!isValidPath(dirPath as string)) {
       return res.status(400).json({

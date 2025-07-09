@@ -1,23 +1,14 @@
-再写一个文件管理功能 使用了 Ant Design (antd) 作为基础UI组件库 使用Monaco Editor （VS Code的编辑器内核）：
-其中Monaco Editor 应当在面板中集成
-```json
-"@monaco-editor/react": "^4.6.0",
-"monaco-editor": "^0.45.0"
-```
-```ts
-import loader from '@monaco-editor/loader';
-import * as monaco from 'monaco-editor';
+在“终端”导航项下面加一个“实例管理” 要求具备以下功能
+# 创建实例
+创建实例表单要有
+- 实例名称
+- 实例描述
+- 实例运行目录
+- 实例启动命令
+- 是否自启动
+- 预设关闭命令（ctr+c stop exit）
 
-// 配置@monaco-editor/react使用本地的monaco-editor包而不是CDN
-loader.config({ monaco });
-
-export default loader;
-```
-- 导入本地安装的 monaco-editor 包
-- 使用 loader.config({ monaco }) 告诉 @monaco-editor/react 使用本地的monaco实例而不是从CDN加载
-
-要支持文件的新建、删除、重命名、上传、下载、查看文件内容、切换目录等基础功能 并且支持右键文件的功能
-
-文件管理要支持多选批量操作 做成九宫格形式优先展示文件夹之后再展示文件 要支持路径的输入和识别 默认路径应当设置在程序运行路径下
-
-所有需要用户输入交互操作 专门做一个对话框或表单 要求具备动画
+# 实例的管理
+创建完毕后，当用户点击运行时，跳转终端并执行启动命令，然后记录终端pid实现状态管理，当用户选择停止时，在终端执行预设关闭命令。
+# 文件跳转
+同样在这个实例卡片中加一个文件，当用户点击文件时能够自动跳转到文件页面并准确打开此文件目录

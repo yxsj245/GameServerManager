@@ -210,5 +210,36 @@ export interface SettingsState {
   error: string | null
 }
 
+// 实例管理相关类型
+export interface Instance {
+  id: string
+  name: string
+  description: string
+  workingDirectory: string
+  startCommand: string
+  autoStart: boolean
+  stopCommand: 'ctrl+c' | 'stop' | 'exit'
+  status: 'running' | 'stopped' | 'starting' | 'stopping' | 'error'
+  pid?: number
+  createdAt: string
+  lastStarted?: string
+  lastStopped?: string
+}
+
+export interface CreateInstanceRequest {
+  name: string
+  description: string
+  workingDirectory: string
+  startCommand: string
+  autoStart: boolean
+  stopCommand: 'ctrl+c' | 'stop' | 'exit'
+}
+
+export interface InstanceState {
+  instances: Instance[]
+  loading: boolean
+  error: string | null
+}
+
 // 文件管理相关类型
 export * from './file'
