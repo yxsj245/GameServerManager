@@ -302,7 +302,7 @@ router.delete('/delete', async (req: Request, res: Response) => {
 
       const stats = await fs.stat(filePath)
       if (stats.isDirectory()) {
-        await fs.rmdir(filePath, { recursive: true })
+        await fs.rm(filePath, { recursive: true, force: true })
       } else {
         await fs.unlink(filePath)
       }

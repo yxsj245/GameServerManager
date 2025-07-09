@@ -19,6 +19,7 @@ import {
 import { Instance, CreateInstanceRequest } from '@/types'
 import { useNotificationStore } from '@/stores/notificationStore'
 import apiClient from '@/utils/api'
+import { ConfirmDeleteDialog } from '@/components/ConfirmDeleteDialog'
 
 const InstanceManagerPage: React.FC = () => {
   const navigate = useNavigate()
@@ -27,6 +28,8 @@ const InstanceManagerPage: React.FC = () => {
   const [loading, setLoading] = useState(true)
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [editingInstance, setEditingInstance] = useState<Instance | null>(null)
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false)
+  const [instanceToDelete, setInstanceToDelete] = useState<Instance | null>(null)
   const [formData, setFormData] = useState<CreateInstanceRequest>({
     name: '',
     description: '',
@@ -74,12 +77,21 @@ const InstanceManagerPage: React.FC = () => {
         resetForm()
         fetchInstances()
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('创建实例失败:', error)
+      
+      // 获取具体的错误消息
+      let errorMessage = '无法创建实例'
+      if (error.message) {
+        errorMessage = error.message
+      } else if (error.error) {
+        errorMessage = error.error
+      }
+      
       addNotification({
         type: 'error',
         title: '创建失败',
-        message: '无法创建实例'
+        message: errorMessage
       })
     }
   }
@@ -100,12 +112,21 @@ const InstanceManagerPage: React.FC = () => {
         resetForm()
         fetchInstances()
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('更新实例失败:', error)
+      
+      // 获取具体的错误消息
+      let errorMessage = '无法更新实例'
+      if (error.message) {
+        errorMessage = error.message
+      } else if (error.error) {
+        errorMessage = error.error
+      }
+      
       addNotification({
         type: 'error',
         title: '更新失败',
-        message: '无法更新实例'
+        message: errorMessage
       })
     }
   }
@@ -131,12 +152,21 @@ const InstanceManagerPage: React.FC = () => {
         
         fetchInstances()
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('启动实例失败:', error)
+      
+      // 获取具体的错误消息
+      let errorMessage = '无法启动实例'
+      if (error.message) {
+        errorMessage = error.message
+      } else if (error.error) {
+        errorMessage = error.error
+      }
+      
       addNotification({
         type: 'error',
         title: '启动失败',
-        message: '无法启动实例'
+        message: errorMessage
       })
     }
   }
@@ -153,38 +183,106 @@ const InstanceManagerPage: React.FC = () => {
         })
         fetchInstances()
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('停止实例失败:', error)
+      
+      // 获取具体的错误消息
+      let errorMessage = '无法停止实例'
+      if (error.message) {
+        errorMessage = error.message
+      } else if (error.error) {
+        errorMessage = error.error
+      }
+      
       addNotification({
         type: 'error',
         title: '停止失败',
-        message: '无法停止实例'
+        message: errorMessage
       })
     }
   }
 
   // 删除实例
-  const handleDeleteInstance = async (instance: Instance) => {
-    if (!confirm(`确定要删除实例 "${instance.name}" 吗？`)) return
+  const handleDeleteInstance = (instance: Instance) => {
+    setInstanceToDelete(instance)
+    setShowDeleteDialog(true)
+  }
+
+  // 确认删除实例
+  const handleConfirmDelete = async (deleteDirectory: boolean) => {
+    if (!instanceToDelete) return
+    
+    setShowDeleteDialog(false)
     
     try {
-      const response = await apiClient.deleteInstance(instance.id)
+      const response = await apiClient.deleteInstance(instanceToDelete.id)
       if (response.success) {
-        addNotification({
-          type: 'success',
-          title: '删除成功',
-          message: `实例 "${instance.name}" 已删除`
-        })
+        // 如果用户选择删除目录，发送删除目录的请求
+        if (deleteDirectory) {
+          try {
+            // 调用删除目录的API
+            const deleteResponse = await fetch('/api/files/delete', {
+              method: 'DELETE',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                paths: [instanceToDelete.workingDirectory]
+              })
+            })
+            
+            if (!deleteResponse.ok) {
+              const errorData = await deleteResponse.json()
+              throw new Error(errorData.message || '删除目录失败')
+            }
+            
+            addNotification({
+              type: 'success',
+              title: '删除成功',
+              message: `实例 "${instanceToDelete.name}" 已删除，工作目录也已删除`
+            })
+          } catch (dirError: any) {
+            addNotification({
+              type: 'warning',
+              title: '目录删除失败',
+              message: `实例已删除，但无法删除工作目录: ${dirError.message || '未知错误'}`
+            })
+          }
+        } else {
+          addNotification({
+            type: 'success',
+            title: '删除成功',
+            message: `实例 "${instanceToDelete.name}" 已删除`
+          })
+        }
+        
         fetchInstances()
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('删除实例失败:', error)
+      
+      // 获取具体的错误消息
+      let errorMessage = '无法删除实例'
+      if (error.message) {
+        errorMessage = error.message
+      } else if (error.error) {
+        errorMessage = error.error
+      }
+      
       addNotification({
         type: 'error',
         title: '删除失败',
-        message: '无法删除实例'
+        message: errorMessage
       })
+    } finally {
+      setInstanceToDelete(null)
     }
+  }
+
+  // 取消删除
+  const handleCancelDelete = () => {
+    setShowDeleteDialog(false)
+    setInstanceToDelete(null)
   }
 
   // 打开文件目录
@@ -387,14 +485,25 @@ const InstanceManagerPage: React.FC = () => {
                 <div className="flex items-center space-x-1">
                   <button
                     onClick={() => handleEditInstance(instance)}
-                    className="p-1.5 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                    disabled={instance.status === 'running'}
+                    className={`p-1.5 rounded transition-colors ${
+                      instance.status === 'running'
+                        ? 'text-gray-400 cursor-not-allowed'
+                        : 'text-gray-600 hover:text-blue-600 hover:bg-blue-50'
+                    }`}
+                    title={instance.status === 'running' ? '实例运行时无法编辑' : '编辑实例'}
                   >
                     <Edit className="w-4 h-4" />
                   </button>
                   <button
                     onClick={() => handleDeleteInstance(instance)}
-                    className="p-1.5 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
                     disabled={instance.status === 'running'}
+                    className={`p-1.5 rounded transition-colors ${
+                      instance.status === 'running'
+                        ? 'text-gray-400 cursor-not-allowed'
+                        : 'text-gray-600 hover:text-red-600 hover:bg-red-50'
+                    }`}
+                    title={instance.status === 'running' ? '实例运行时无法删除' : '删除实例'}
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
@@ -517,6 +626,15 @@ const InstanceManagerPage: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* 删除确认对话框 */}
+      <ConfirmDeleteDialog
+        isOpen={showDeleteDialog}
+        instanceName={instanceToDelete?.name || ''}
+        workingDirectory={instanceToDelete?.workingDirectory || ''}
+        onConfirm={handleConfirmDelete}
+        onCancel={handleCancelDelete}
+      />
     </div>
   )
 }
