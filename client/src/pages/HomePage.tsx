@@ -110,7 +110,8 @@ const HomePage: React.FC = () => {
               欢迎回来，{user?.username}！
             </h2>
             <p className="text-gray-700 dark:text-gray-300">
-              GSM3 游戏服务器管理面板 - 让游戏服务器管理变得简单
+              GSManager3 游戏服务器管理面板 - 让游戏服务器管理变得简单
+
             </p>
           </div>
           <div className="flex items-center space-x-2">

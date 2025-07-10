@@ -66,7 +66,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             <div className="flex items-center space-x-3">
               <Gamepad2 className="w-8 h-8 text-blue-500" />
               <span className="text-xl font-bold font-game neon-text">
-                GSM3
+                GSManager3
               </span>
             </div>
             <button

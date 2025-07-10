@@ -60,7 +60,7 @@ const LoginPage: React.FC = () => {
             </div>
           </div>
           <h1 className="text-4xl font-bold font-game neon-text mb-2">
-            GSM3
+            GSManager3
           </h1>
           <p className="text-gray-700 dark:text-gray-300 font-display">
             游戏服务器管理面板
@@ -153,7 +153,7 @@ const LoginPage: React.FC = () => {
           {/* 底部信息 */}
           <div className="mt-6 text-center">
             <p className="text-sm text-gray-600 dark:text-gray-400">
-              GSM3 游戏服务器管理面板 v1.0.0
+              GSManager3 游戏服务器管理面板 v1.0.0
             </p>
           </div>
         </div>
