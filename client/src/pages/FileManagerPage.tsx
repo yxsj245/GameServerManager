@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
+import { motion, AnimatePresence } from 'framer-motion'
 import { 
   Button, 
   Input, 
@@ -696,22 +697,34 @@ const FileManagerPage: React.FC = () => {
         
         <div className="flex items-center space-x-2">
           {/* 视图切换 */}
-          <Space>
-            <Tooltip title="网格视图">
-               <Button 
-                 icon={<AppstoreOutlined />}
-                 type={viewMode === 'grid' ? 'primary' : 'default'}
-                 onClick={() => handleViewModeChange('grid')}
-               />
+           <Space>
+             <Tooltip title="网格视图">
+               <motion.div
+                 whileHover={{ scale: 1.05 }}
+                 whileTap={{ scale: 0.95 }}
+                 transition={{ duration: 0.2 }}
+               >
+                 <Button 
+                   icon={<AppstoreOutlined />}
+                   type={viewMode === 'grid' ? 'primary' : 'default'}
+                   onClick={() => handleViewModeChange('grid')}
+                 />
+               </motion.div>
              </Tooltip>
              <Tooltip title="列表视图">
-               <Button 
-                 icon={<UnorderedListOutlined />}
-                 type={viewMode === 'list' ? 'primary' : 'default'}
-                 onClick={() => handleViewModeChange('list')}
-               />
+               <motion.div
+                 whileHover={{ scale: 1.05 }}
+                 whileTap={{ scale: 0.95 }}
+                 transition={{ duration: 0.2 }}
+               >
+                 <Button 
+                   icon={<UnorderedListOutlined />}
+                   type={viewMode === 'list' ? 'primary' : 'default'}
+                   onClick={() => handleViewModeChange('list')}
+                 />
+               </motion.div>
              </Tooltip>
-          </Space>
+           </Space>
           
           {/* 搜索 */}
           <Input
@@ -844,64 +857,102 @@ const FileManagerPage: React.FC = () => {
             description="此文件夹为空"
             image={Empty.PRESENTED_IMAGE_SIMPLE}
           />
-        ) : viewMode === 'grid' ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-4">
-            {filteredFiles.map((file) => (
-              <FileContextMenu
-                key={file.path}
-                file={file}
-                selectedFiles={selectedFiles}
-                clipboard={clipboard}
-                onOpen={handleContextMenuOpen}
-                onRename={handleContextMenuRename}
-                onDelete={handleContextMenuDelete}
-                onDownload={handleContextMenuDownload}
-                onCopy={handleContextMenuCopy}
-                onCut={handleContextMenuCut}
-                onPaste={handlePaste}
-                onView={handleContextMenuView}
-                onCompress={handleContextMenuCompress}
-                onExtract={handleContextMenuExtract}
-                onOpenTerminal={handleContextMenuOpenTerminal}
-              >
-                <FileGridItem
-                  file={file}
-                  isSelected={selectedFiles.has(file.path)}
-                  onClick={handleFileClick}
-                  onDoubleClick={handleFileDoubleClick}
-                />
-              </FileContextMenu>
-            ))}
-          </div>
         ) : (
-          <div className="space-y-2">
-            {filteredFiles.map((file) => (
-              <FileContextMenu
-                key={file.path}
-                file={file}
-                selectedFiles={selectedFiles}
-                clipboard={clipboard}
-                onOpen={handleContextMenuOpen}
-                onRename={handleContextMenuRename}
-                onDelete={handleContextMenuDelete}
-                onDownload={handleContextMenuDownload}
-                onCopy={handleContextMenuCopy}
-                onCut={handleContextMenuCut}
-                onPaste={handlePaste}
-                onView={handleContextMenuView}
-                onCompress={handleContextMenuCompress}
-                onExtract={handleContextMenuExtract}
-                onOpenTerminal={handleContextMenuOpenTerminal}
+          <AnimatePresence mode="wait">
+            {viewMode === 'grid' ? (
+              <motion.div
+                key="grid-view"
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                transition={{ duration: 0.3, ease: "easeInOut" }}
+                className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-4"
               >
-                <FileListItem
-                  file={file}
-                  isSelected={selectedFiles.has(file.path)}
-                  onClick={handleFileClick}
-                  onDoubleClick={handleFileDoubleClick}
-                />
-              </FileContextMenu>
-            ))}
-          </div>
+                {filteredFiles.map((file, index) => (
+                  <motion.div
+                    key={file.path}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ 
+                      duration: 0.3, 
+                      delay: index * 0.02,
+                      ease: "easeOut"
+                    }}
+                  >
+                    <FileContextMenu
+                      file={file}
+                      selectedFiles={selectedFiles}
+                      clipboard={clipboard}
+                      onOpen={handleContextMenuOpen}
+                      onRename={handleContextMenuRename}
+                      onDelete={handleContextMenuDelete}
+                      onDownload={handleContextMenuDownload}
+                      onCopy={handleContextMenuCopy}
+                      onCut={handleContextMenuCut}
+                      onPaste={handlePaste}
+                      onView={handleContextMenuView}
+                      onCompress={handleContextMenuCompress}
+                      onExtract={handleContextMenuExtract}
+                      onOpenTerminal={handleContextMenuOpenTerminal}
+                    >
+                      <FileGridItem
+                        file={file}
+                        isSelected={selectedFiles.has(file.path)}
+                        onClick={handleFileClick}
+                        onDoubleClick={handleFileDoubleClick}
+                      />
+                    </FileContextMenu>
+                  </motion.div>
+                ))}
+              </motion.div>
+            ) : (
+              <motion.div
+                key="list-view"
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                transition={{ duration: 0.3, ease: "easeInOut" }}
+                className="space-y-2"
+              >
+                {filteredFiles.map((file, index) => (
+                  <motion.div
+                    key={file.path}
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ 
+                      duration: 0.3, 
+                      delay: index * 0.02,
+                      ease: "easeOut"
+                    }}
+                  >
+                    <FileContextMenu
+                      file={file}
+                      selectedFiles={selectedFiles}
+                      clipboard={clipboard}
+                      onOpen={handleContextMenuOpen}
+                      onRename={handleContextMenuRename}
+                      onDelete={handleContextMenuDelete}
+                      onDownload={handleContextMenuDownload}
+                      onCopy={handleContextMenuCopy}
+                      onCut={handleContextMenuCut}
+                      onPaste={handlePaste}
+                      onView={handleContextMenuView}
+                      onCompress={handleContextMenuCompress}
+                      onExtract={handleContextMenuExtract}
+                      onOpenTerminal={handleContextMenuOpenTerminal}
+                    >
+                      <FileListItem
+                        file={file}
+                        isSelected={selectedFiles.has(file.path)}
+                        onClick={handleFileClick}
+                        onDoubleClick={handleFileDoubleClick}
+                      />
+                    </FileContextMenu>
+                  </motion.div>
+                ))}
+              </motion.div>
+            )}
+          </AnimatePresence>
         )}
       </div>
       

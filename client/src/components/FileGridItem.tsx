@@ -1,4 +1,5 @@
 import React from 'react'
+import { motion } from 'framer-motion'
 import { FileItem } from '@/types/file'
 import {
   FolderOutlined,
@@ -103,8 +104,8 @@ export const FileGridItem: React.FC<FileGridItemProps> = ({
   }
 
   return (
-    <div
-        className={`
+    <motion.div
+      className={`
          relative group cursor-pointer p-4 rounded-lg border-2
           hover:shadow-lg hover:border-blue-300
         ${isSelected 
@@ -115,6 +116,14 @@ export const FileGridItem: React.FC<FileGridItemProps> = ({
       `}
       onClick={handleClick}
       onDoubleClick={handleDoubleClick}
+      whileHover={{ 
+        scale: 1.02,
+        transition: { duration: 0.2, ease: "easeOut" }
+      }}
+      whileTap={{ 
+        scale: 0.98,
+        transition: { duration: 0.1 }
+      }}
     >
       {/* 选中状态指示器 */}
       {isSelected && (
@@ -150,6 +159,6 @@ export const FileGridItem: React.FC<FileGridItemProps> = ({
 
       {/* 悬停效果 */}
 
-    </div>
+    </motion.div>
   )
 }

@@ -1,4 +1,5 @@
 import React from 'react'
+import { motion } from 'framer-motion'
 import { FileItem } from '@/types/file'
 import {
   FolderOutlined,
@@ -103,7 +104,7 @@ export const FileListItem: React.FC<FileListItemProps> = ({
   }
 
   return (
-    <div
+    <motion.div
       className={`
         relative group cursor-pointer p-3 rounded-lg border
         hover:shadow-md hover:border-blue-300 transition-all duration-200
@@ -114,6 +115,15 @@ export const FileListItem: React.FC<FileListItemProps> = ({
       `}
       onClick={handleClick}
       onDoubleClick={handleDoubleClick}
+      whileHover={{ 
+        scale: 1.01,
+        x: 4,
+        transition: { duration: 0.2, ease: "easeOut" }
+      }}
+      whileTap={{ 
+        scale: 0.99,
+        transition: { duration: 0.1 }
+      }}
     >
       <div className="flex items-center space-x-3">
         {/* 选中状态指示器 */}
@@ -151,6 +161,6 @@ export const FileListItem: React.FC<FileListItemProps> = ({
           </div>
         </div>
       </div>
-    </div>
+    </motion.div>
   )
 }
