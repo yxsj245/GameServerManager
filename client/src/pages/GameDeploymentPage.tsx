@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Download,
@@ -10,11 +10,14 @@ import {
   Loader,
   Pickaxe,
   CheckCircle,
-  AlertCircle
+  AlertCircle,
+  Plus
 } from 'lucide-react'
 import { useNotificationStore } from '@/stores/notificationStore'
 import apiClient from '@/utils/api'
 import { MinecraftServerCategory, MinecraftDownloadOptions, MinecraftDownloadProgress } from '@/types'
+import { io, Socket } from 'socket.io-client'
+import config from '@/config'
 
 interface GameInfo {
   game_nameCN: string
@@ -39,7 +42,6 @@ const GameDeploymentPage: React.FC = () => {
   const [showInstallModal, setShowInstallModal] = useState(false)
   const [selectedGame, setSelectedGame] = useState<{ key: string; info: GameInfo } | null>(null)
   const [installPath, setInstallPath] = useState('')
-  const [instanceName, setInstanceName] = useState('')
   const [installing, setInstalling] = useState(false)
   const [useAnonymous, setUseAnonymous] = useState(true)
   const [steamUsername, setSteamUsername] = useState('')
@@ -58,6 +60,16 @@ const GameDeploymentPage: React.FC = () => {
   const [minecraftDownloading, setMinecraftDownloading] = useState(false)
   const [downloadProgress, setDownloadProgress] = useState<MinecraftDownloadProgress | null>(null)
   const [javaValidated, setJavaValidated] = useState<boolean | null>(null)
+  const [downloadLogs, setDownloadLogs] = useState<string[]>([])
+  const [downloadComplete, setDownloadComplete] = useState(false)
+  const [downloadResult, setDownloadResult] = useState<any>(null)
+  const [showCreateInstanceModal, setShowCreateInstanceModal] = useState(false)
+  const [instanceName, setInstanceName] = useState('')
+  const [instanceDescription, setInstanceDescription] = useState('')
+  const [creatingInstance, setCreatingInstance] = useState(false)
+  
+  const socketRef = useRef<Socket | null>(null)
+  const currentDownloadId = useRef<string | null>(null)
 
   // 获取游戏列表
   const fetchGames = async () => {
@@ -145,6 +157,84 @@ const GameDeploymentPage: React.FC = () => {
     }
   }
 
+  // 初始化WebSocket连接
+  const initializeSocket = () => {
+    if (socketRef.current) {
+      return
+    }
+
+    const token = localStorage.getItem('gsm3_token')
+    socketRef.current = io(config.serverUrl, {
+      auth: {
+        token
+      }
+    })
+
+    // 添加连接事件监听
+    socketRef.current.on('connect', () => {
+      console.log('WebSocket连接成功，Socket ID:', socketRef.current?.id)
+    })
+
+    socketRef.current.on('disconnect', () => {
+      console.log('WebSocket连接断开')
+    })
+
+    socketRef.current.on('connect_error', (error) => {
+      console.error('WebSocket连接错误:', error)
+    })
+
+    // 监听Minecraft下载进度
+    socketRef.current.on('minecraft-download-progress', (data) => {
+      if (data.downloadId === currentDownloadId.current) {
+        const progress = data.progress
+        setDownloadProgress({
+          percentage: typeof progress === 'object' ? progress.percentage : progress,
+          loaded: progress.loaded || 0,
+          total: progress.total || 100
+        })
+      }
+    })
+
+    // 监听Minecraft下载日志
+    socketRef.current.on('minecraft-download-log', (data) => {
+      if (data.downloadId === currentDownloadId.current) {
+        // 确保只添加字符串到日志中
+        const message = typeof data.message === 'string' ? data.message : JSON.stringify(data.message)
+        setDownloadLogs(prev => [...prev, message])
+      }
+    })
+
+    // 监听Minecraft下载完成
+    socketRef.current.on('minecraft-download-complete', (data) => {
+      console.log('收到下载完成事件:', data)
+      if (data.downloadId === currentDownloadId.current) {
+        setMinecraftDownloading(false)
+        setDownloadComplete(true)
+        setDownloadResult(data.data)
+        
+        addNotification({
+          type: 'success',
+          title: '下载完成',
+          message: data.message || `${selectedServer} ${selectedVersion} 下载完成！`
+        })
+      }
+    })
+
+    // 监听Minecraft下载错误
+    socketRef.current.on('minecraft-download-error', (data) => {
+      console.log('收到下载错误事件:', data)
+      if (data.downloadId === currentDownloadId.current) {
+        setMinecraftDownloading(false)
+        
+        addNotification({
+          type: 'error',
+          title: '下载失败',
+          message: data.error || '下载过程中发生错误'
+        })
+      }
+    })
+  }
+
   // 下载Minecraft服务端
   const downloadMinecraftServer = async () => {
     if (!selectedServer || !selectedVersion || !minecraftInstallPath.trim()) {
@@ -157,25 +247,108 @@ const GameDeploymentPage: React.FC = () => {
     }
 
     try {
+      // 重置状态
       setMinecraftDownloading(true)
       setDownloadProgress(null)
+      setDownloadLogs([])
+      setDownloadComplete(false)
+      setDownloadResult(null)
       
-      const downloadOptions: MinecraftDownloadOptions = {
+      // 初始化WebSocket连接并等待连接建立
+      initializeSocket()
+      
+      // 等待WebSocket连接建立
+      const waitForConnection = () => {
+        return new Promise<string>((resolve, reject) => {
+          if (socketRef.current?.connected && socketRef.current?.id) {
+            resolve(socketRef.current.id)
+            return
+          }
+          
+          const timeout = setTimeout(() => {
+            reject(new Error('WebSocket连接超时'))
+          }, 10000) // 10秒超时
+          
+          const checkConnection = () => {
+            if (socketRef.current?.connected && socketRef.current?.id) {
+              clearTimeout(timeout)
+              resolve(socketRef.current.id)
+            } else {
+              setTimeout(checkConnection, 100)
+            }
+          }
+          
+          checkConnection()
+        })
+      }
+      
+      const socketId = await waitForConnection()
+      console.log('WebSocket连接已建立，Socket ID:', socketId)
+      
+      const downloadOptions: MinecraftDownloadOptions & { socketId?: string } = {
         server: selectedServer,
         version: selectedVersion,
         targetDirectory: minecraftInstallPath.trim(),
         skipJavaCheck,
-        skipServerRun
+        skipServerRun,
+        socketId
       }
       
       const response = await apiClient.downloadMinecraftServer(downloadOptions)
       
       if (response.success) {
+        currentDownloadId.current = response.data?.downloadId
+        console.log('下载开始，Download ID:', currentDownloadId.current, 'Socket ID:', socketId)
+        
+        addNotification({
+          type: 'info',
+          title: '开始下载',
+          message: `开始下载 ${selectedServer} ${selectedVersion}`
+        })
+      } else {
+        throw new Error(response.message || '启动下载失败')
+      }
+    } catch (error: any) {
+      console.error('启动Minecraft服务端下载失败:', error)
+      setMinecraftDownloading(false)
+      addNotification({
+        type: 'error',
+        title: '下载失败',
+        message: error.message || '无法启动Minecraft服务端下载'
+      })
+    }
+  }
+
+  // 创建Minecraft实例
+  const createMinecraftInstance = async () => {
+    if (!instanceName.trim() || !downloadResult) {
+      addNotification({
+        type: 'error',
+        title: '参数错误',
+        message: '请填写实例名称'
+      })
+      return
+    }
+
+    try {
+      setCreatingInstance(true)
+      
+      const response = await apiClient.createMinecraftInstance({
+        name: instanceName.trim(),
+        description: instanceDescription.trim() || `Minecraft ${selectedServer} ${selectedVersion}`,
+        workingDirectory: downloadResult.targetDirectory,
+        version: selectedVersion,
+        serverType: selectedServer
+      })
+      
+      if (response.success) {
         addNotification({
           type: 'success',
-          title: '下载完成',
-          message: `${selectedServer} ${selectedVersion} 下载完成！`
+          title: '实例创建成功',
+          message: `Minecraft实例 "${instanceName}" 创建成功！`
         })
+        
+        setShowCreateInstanceModal(false)
         
         // 重置表单
         setSelectedCategory('')
@@ -183,19 +356,25 @@ const GameDeploymentPage: React.FC = () => {
         setSelectedVersion('')
         setMinecraftInstallPath('')
         setAvailableVersions([])
+        setDownloadComplete(false)
+        setDownloadResult(null)
+        setInstanceName('')
+        setInstanceDescription('')
+        
+        // 跳转到实例管理页面
+        navigate('/instances')
       } else {
-        throw new Error(response.message || '下载失败')
+        throw new Error(response.error || '创建实例失败')
       }
     } catch (error: any) {
-      console.error('Minecraft服务端下载失败:', error)
+      console.error('创建Minecraft实例失败:', error)
       addNotification({
         type: 'error',
-        title: '下载失败',
-        message: error.message || '无法下载Minecraft服务端'
+        title: '创建失败',
+        message: error.message || '无法创建Minecraft实例'
       })
     } finally {
-      setMinecraftDownloading(false)
-      setDownloadProgress(null)
+      setCreatingInstance(false)
     }
   }
 
@@ -214,6 +393,16 @@ const GameDeploymentPage: React.FC = () => {
       validateJava()
     }
   }, [activeTab])
+
+  // 清理WebSocket连接
+  useEffect(() => {
+    return () => {
+      if (socketRef.current) {
+        socketRef.current.disconnect()
+        socketRef.current = null
+      }
+    }
+  }, [])
 
   // 打开安装对话框
   const handleInstallGame = (gameKey: string, gameInfo: GameInfo) => {
@@ -617,21 +806,69 @@ const GameDeploymentPage: React.FC = () => {
                   </button>
 
                   {/* 下载进度 */}
-                  {downloadProgress && (
-                    <div className="mt-4">
-                      <div className="flex justify-between text-sm text-gray-600 dark:text-gray-400 mb-1">
-                        <span>下载进度</span>
-                        <span>{downloadProgress.percentage}%</span>
+                  {(downloadProgress || minecraftDownloading) && (
+                    <div className="mt-4 space-y-3">
+                      {downloadProgress && (
+                        <div>
+                          <div className="flex justify-between text-sm text-gray-600 dark:text-gray-400 mb-1">
+                            <span>下载进度</span>
+                            <span>{downloadProgress.percentage}%</span>
+                          </div>
+                          <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                            <div
+                              className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                              style={{ width: `${downloadProgress.percentage}%` }}
+                            ></div>
+                          </div>
+                          {downloadProgress.loaded && downloadProgress.total && (
+                            <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                              {Math.round(downloadProgress.loaded / 1024 / 1024)}MB / {Math.round(downloadProgress.total / 1024 / 1024)}MB
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      
+                      {/* 下载日志 */}
+                      {downloadLogs.length > 0 && (
+                        <div>
+                          <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            下载日志
+                          </h4>
+                          <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-3 max-h-32 overflow-y-auto">
+                            {downloadLogs.slice(-10).map((log, index) => (
+                              <div key={index} className="text-xs text-gray-600 dark:text-gray-400 font-mono">
+                                {typeof log === 'string' ? log : JSON.stringify(log)}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  
+                  {/* 下载完成后的操作 */}
+                  {downloadComplete && downloadResult && (
+                    <div className="mt-4 p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+                      <div className="flex items-center space-x-2 mb-3">
+                        <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400" />
+                        <h4 className="text-sm font-medium text-green-800 dark:text-green-200">
+                          下载完成！
+                        </h4>
                       </div>
-                      <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                        <div
-                          className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                          style={{ width: `${downloadProgress.percentage}%` }}
-                        ></div>
-                      </div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                        {Math.round(downloadProgress.loaded / 1024 / 1024)}MB / {Math.round(downloadProgress.total / 1024 / 1024)}MB
-                      </div>
+                      <p className="text-sm text-green-700 dark:text-green-300 mb-3">
+                        {selectedServer} {selectedVersion} 已成功下载到 {downloadResult.targetDirectory}
+                      </p>
+                      <button
+                        onClick={() => {
+                          setInstanceName(`${selectedServer}-${selectedVersion}`)
+                          setInstanceDescription(`Minecraft ${selectedServer} ${selectedVersion} 服务器`)
+                          setShowCreateInstanceModal(true)
+                        }}
+                        className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg transition-colors flex items-center justify-center space-x-2"
+                      >
+                        <Plus className="w-4 h-4" />
+                        <span>创建实例</span>
+                      </button>
                     </div>
                   )}
                 </div>
@@ -781,7 +1018,93 @@ const GameDeploymentPage: React.FC = () => {
         </div>
       )}
 
-
+      {/* 创建Minecraft实例对话框 */}
+      {showCreateInstanceModal && downloadResult && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md mx-4">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                创建Minecraft实例
+              </h3>
+              <button
+                onClick={() => setShowCreateInstanceModal(false)}
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="p-6 space-y-4">
+              {/* 服务器信息 */}
+              <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-3">
+                <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  服务器信息
+                </h4>
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  类型: {selectedServer} | 版本: {selectedVersion}
+                </p>
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  路径: {downloadResult.targetDirectory}
+                </p>
+              </div>
+              
+              {/* 实例名称 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  实例名称 *
+                </label>
+                <input
+                  type="text"
+                  value={instanceName}
+                  onChange={(e) => setInstanceName(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  placeholder="输入实例名称"
+                />
+              </div>
+              
+              {/* 实例描述 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  实例描述
+                </label>
+                <textarea
+                  value={instanceDescription}
+                  onChange={(e) => setInstanceDescription(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  placeholder="输入实例描述（可选）"
+                  rows={3}
+                />
+              </div>
+            </div>
+            
+            <div className="flex space-x-3 p-6 border-t border-gray-200 dark:border-gray-700">
+              <button
+                onClick={() => setShowCreateInstanceModal(false)}
+                className="flex-1 px-4 py-2 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-600 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-500 transition-colors"
+              >
+                取消
+              </button>
+              <button
+                onClick={createMinecraftInstance}
+                disabled={!instanceName.trim() || creatingInstance}
+                className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded-lg transition-colors flex items-center justify-center space-x-2"
+              >
+                {creatingInstance ? (
+                  <>
+                    <Loader className="w-4 h-4 animate-spin" />
+                    <span>创建中...</span>
+                  </>
+                ) : (
+                  <>
+                    <Plus className="w-4 h-4" />
+                    <span>创建实例</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

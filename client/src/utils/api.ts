@@ -408,8 +408,24 @@ class ApiClient {
     targetDirectory: string
     skipJavaCheck?: boolean
     skipServerRun?: boolean
+    socketId?: string
   }) {
     return this.post('/minecraft/download', data)
+  }
+
+  async createMinecraftInstance(data: {
+    name: string
+    description?: string
+    workingDirectory: string
+    serverType: string
+    version: string
+    javaPath?: string
+    javaArgs?: string
+    serverArgs?: string
+    maxMemory?: number
+    minMemory?: number
+  }) {
+    return this.post('/minecraft/create-instance', data)
   }
 
   async validateJavaEnvironment() {

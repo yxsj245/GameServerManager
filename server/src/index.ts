@@ -307,6 +307,8 @@ async function startServer() {
     app.use('/api/game-deployment', gameDeploymentRouter)
     
     // 设置Minecraft路由
+    const { setMinecraftDependencies } = await import('./routes/minecraft.js')
+    setMinecraftDependencies(io, instanceManager)
     app.use('/api/minecraft', minecraftRouter)
 
     // 前端路由处理（SPA支持）
@@ -323,9 +325,35 @@ async function startServer() {
       }
     })
 
+    // Socket.IO 认证中间件
+    io.use((socket, next) => {
+      const token = socket.handshake.auth.token
+      
+      if (!token) {
+        logger.warn(`Socket连接被拒绝: ${socket.id} - 缺少token`)
+        return next(new Error('Authentication error: No token provided'))
+      }
+      
+      const decoded = authManager.verifyToken(token)
+      if (!decoded) {
+        logger.warn(`Socket连接被拒绝: ${socket.id} - 无效token`)
+        return next(new Error('Authentication error: Invalid token'))
+      }
+      
+      // 将用户信息附加到socket
+      socket.data.user = {
+        userId: decoded.userId,
+        username: decoded.username,
+        role: decoded.role
+      }
+      
+      logger.info(`Socket认证成功: ${socket.id} - 用户: ${decoded.username}`)
+      next()
+    })
+
     // Socket.IO 连接处理
     io.on('connection', (socket) => {
-      logger.info(`客户端连接: ${socket.id}`)
+      logger.info(`客户端连接: ${socket.id} - 用户: ${socket.data.user?.username}`)
       
       // 终端相关事件
       socket.on('create-pty', (data) => {

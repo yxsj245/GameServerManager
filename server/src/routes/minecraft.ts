@@ -3,8 +3,18 @@ import { MinecraftServerDownloader, getServerCategories, getAvailableVersions, g
 import { authenticateToken } from '../middleware/auth.js'
 import logger from '../utils/logger.js'
 import path from 'path'
+import { Server as SocketIOServer } from 'socket.io'
+import { InstanceManager } from '../modules/instance/InstanceManager.js'
 
 const router = Router()
+let io: SocketIOServer
+let instanceManager: InstanceManager
+
+// 设置Socket.IO和InstanceManager
+export function setMinecraftDependencies(socketIO: SocketIOServer, instManager: InstanceManager) {
+  io = socketIO
+  instanceManager = instManager
+}
 
 // 应用认证中间件
 router.use(authenticateToken)
@@ -110,7 +120,7 @@ router.get('/validate-java', async (req: Request, res: Response) => {
 // 下载Minecraft服务端
 router.post('/download', async (req: Request, res: Response) => {
   try {
-    const { server, version, targetDirectory, skipJavaCheck = false, skipServerRun = false } = req.body
+    const { server, version, targetDirectory, skipJavaCheck = false, skipServerRun = false, socketId } = req.body
     
     if (!server || !version || !targetDirectory) {
       return res.status(400).json({
@@ -124,47 +134,161 @@ router.post('/download', async (req: Request, res: Response) => {
       ? targetDirectory 
       : path.resolve(process.cwd(), 'server', 'data', 'minecraft-servers', targetDirectory)
     
-    logger.info(`开始下载Minecraft服务端: ${server} ${version} 到 ${absoluteTargetDir}`)
+    const downloadId = `minecraft-download-${Date.now()}`
     
-    // 创建下载器实例
-    const downloader = new MinecraftServerDownloader(
-      // 进度回调
-      (progress) => {
-        logger.info(`下载进度: ${progress.percentage}% (${progress.loaded}/${progress.total})`)
-        // 这里可以通过WebSocket发送进度更新
-      },
-      // 日志回调
-      (message, type = 'info') => {
-        logger.info(`[${type.toUpperCase()}] ${message}`)
-      }
-    )
-    
-    // 执行下载
-    await downloader.downloadServer({
-      server,
-      version,
-      targetDirectory: absoluteTargetDir,
-      skipJavaCheck,
-      skipServerRun
-    })
-    
-    logger.info(`Minecraft服务端下载完成: ${server} ${version}`)
-    
+    // 立即返回下载ID
     res.json({
       success: true,
       data: {
-        server,
-        version,
-        targetDirectory: absoluteTargetDir
+        downloadId
       },
-      message: `${server} ${version} 下载完成！`
+      message: '开始下载Minecraft服务端'
     })
     
+    logger.info(`开始下载Minecraft服务端: ${server} ${version} 到 ${absoluteTargetDir}`)
+    
+    // 异步执行下载
+    ;(async () => {
+      try {
+        // 创建下载器实例
+        const downloader = new MinecraftServerDownloader(
+          // 进度回调
+          (progress) => {
+            if (io && socketId) {
+              io.to(socketId).emit('minecraft-download-progress', {
+                downloadId,
+                progress,
+                message: `下载进度: ${progress.percentage}% (${progress.loaded}/${progress.total})`
+              })
+            }
+            logger.info(`下载进度: ${progress.percentage}% (${progress.loaded}/${progress.total})`)
+          },
+          // 日志回调
+          (message, type = 'info') => {
+            if (io && socketId) {
+              io.to(socketId).emit('minecraft-download-log', {
+                downloadId,
+                message: `[${type.toUpperCase()}] ${message}`
+              })
+            }
+            logger.info(`[${type.toUpperCase()}] ${message}`)
+          }
+        )
+        
+        // 执行下载
+        await downloader.downloadServer({
+          server,
+          version,
+          targetDirectory: absoluteTargetDir,
+          skipJavaCheck,
+          skipServerRun
+        })
+        
+        logger.info(`Minecraft服务端下载完成: ${server} ${version}`)
+        
+        // 下载完成，发送完成事件
+        if (io && socketId) {
+          io.to(socketId).emit('minecraft-download-complete', {
+            downloadId,
+            success: true,
+            data: {
+              server,
+              version,
+              targetDirectory: absoluteTargetDir
+            },
+            message: `${server} ${version} 下载完成！可以创建实例了`
+          })
+        }
+        
+      } catch (error: any) {
+        logger.error('Minecraft服务端下载失败:', error)
+        
+        // 发送错误事件
+        if (io && socketId) {
+          io.to(socketId).emit('minecraft-download-error', {
+            downloadId,
+            success: false,
+            error: error.message || 'Minecraft服务端下载失败'
+          })
+        }
+      }
+    })()
+    
   } catch (error: any) {
-    logger.error('Minecraft服务端下载失败:', error)
+    logger.error('启动Minecraft服务端下载失败:', error)
     res.status(500).json({
       success: false,
-      message: error.message || 'Minecraft服务端下载失败'
+      message: error.message || '启动Minecraft服务端下载失败'
+    })
+  }
+})
+
+// 创建Minecraft实例
+router.post('/create-instance', async (req: Request, res: Response) => {
+  try {
+    const { name, description, workingDirectory, version, serverType } = req.body
+    
+    if (!name || !workingDirectory) {
+      return res.status(400).json({
+        success: false,
+        error: '缺少必要参数: name, workingDirectory'
+      })
+    }
+
+    if (!instanceManager) {
+      return res.status(500).json({
+        success: false,
+        error: 'InstanceManager未初始化'
+      })
+    }
+
+    // 根据服务端类型确定启动命令
+    let startCommand = 'java -Xmx2G -Xms1G -jar server.jar nogui'
+    
+    // 根据不同的服务端类型调整启动命令
+    if (serverType) {
+      switch (serverType.toLowerCase()) {
+        case 'paper':
+        case 'spigot':
+        case 'bukkit':
+          startCommand = 'java -Xmx2G -Xms1G -jar server.jar nogui'
+          break
+        case 'forge':
+          startCommand = 'java -Xmx2G -Xms1G -jar forge-*.jar nogui'
+          break
+        case 'fabric':
+          startCommand = 'java -Xmx2G -Xms1G -jar fabric-server-launch.jar nogui'
+          break
+        case 'vanilla':
+        default:
+          startCommand = 'java -Xmx2G -Xms1G -jar server.jar nogui'
+          break
+      }
+    }
+
+    const instanceData = {
+      name,
+      description: description || `Minecraft ${serverType || 'Server'} ${version || ''}`,
+      workingDirectory,
+      startCommand,
+      autoStart: false,
+      stopCommand: 'stop' as const
+    }
+
+    const instance = await instanceManager.createInstance(instanceData)
+    
+    logger.info(`创建Minecraft实例成功: ${instance.name} (${instance.id})`)
+    
+    res.json({
+      success: true,
+      data: instance,
+      message: `Minecraft实例 "${instance.name}" 创建成功！`
+    })
+  } catch (error: any) {
+    logger.error('创建Minecraft实例失败:', error)
+    res.status(500).json({
+      success: false,
+      error: error.message || '创建Minecraft实例失败'
     })
   }
 })

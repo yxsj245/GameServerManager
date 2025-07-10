@@ -1,5 +1,6 @@
 import axios from 'axios';
-import * as fs from 'fs-extra';
+import * as fs from 'fs';
+import * as fse from 'fs-extra';
 import * as path from 'path';
 import { spawn, ChildProcess } from 'child_process';
 
@@ -211,7 +212,7 @@ export class FileManager {
    * 创建临时目录
    */
   static async createTempDirectory(): Promise<string> {
-    await fs.ensureDir(this.tempDir);
+    await fse.ensureDir(this.tempDir);
     return this.tempDir;
   }
 
@@ -227,7 +228,7 @@ export class FileManager {
    */
   static async fileExists(filePath: string): Promise<boolean> {
     try {
-      await fs.access(filePath);
+      await fs.promises.access(filePath);
       return true;
     } catch {
       return false;
@@ -324,10 +325,10 @@ export class FileManager {
    */
   static async moveFilesToTarget(targetDir: string, onLog?: LogCallback): Promise<void> {
     // 确保目标目录存在
-    await fs.ensureDir(targetDir);
+    await fse.ensureDir(targetDir);
     
     // 获取临时目录中的所有文件
-    const files = await fs.readdir(this.tempDir);
+    const files = await fs.promises.readdir(this.tempDir);
     
     if (onLog) {
       onLog(`正在移动 ${files.length} 个文件到目标目录...`, 'info');
@@ -338,14 +339,14 @@ export class FileManager {
       const targetPath = path.join(targetDir, file);
       
       // 检查是否是文件
-      const stat = await fs.stat(sourcePath);
+      const stat = await fs.promises.stat(sourcePath);
       if (stat.isFile()) {
-        await fs.move(sourcePath, targetPath, { overwrite: true });
+        await fse.move(sourcePath, targetPath, { overwrite: true });
         if (onLog) {
           onLog(`已移动: ${file}`, 'info');
         }
       } else if (stat.isDirectory()) {
-        await fs.copy(sourcePath, targetPath, { overwrite: true });
+        await fse.copy(sourcePath, targetPath, { overwrite: true });
         if (onLog) {
           onLog(`已复制目录: ${file}`, 'info');
         }
@@ -359,7 +360,7 @@ export class FileManager {
   static async cleanupTempDirectory(onLog?: LogCallback): Promise<void> {
     try {
       if (await this.fileExists(this.tempDir)) {
-        await fs.remove(this.tempDir);
+        await fse.remove(this.tempDir);
         if (onLog) {
           onLog('临时目录已清理。', 'info');
         }

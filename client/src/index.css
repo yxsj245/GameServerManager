@@ -274,3 +274,230 @@
   font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   font-weight: 500;
 }
+
+/* 全局下拉框美化样式 */
+/* 原生 select 元素样式 */
+select {
+  appearance: none !important;
+  background-color: white !important;
+  border: 2px solid #d1d5db !important;
+  border-radius: 12px !important;
+  padding: 12px 40px 12px 16px !important;
+  color: #111827 !important;
+  font-size: 14px !important;
+  font-weight: 500 !important;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06) !important;
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M6 8l4 4 4-4'/%3e%3c/svg%3e") !important;
+  background-position: right 12px center !important;
+  background-repeat: no-repeat !important;
+  background-size: 16px 16px !important;
+  cursor: pointer !important;
+}
+
+.dark select {
+  background-color: #374151 !important;
+  border-color: #4b5563 !important;
+  color: #f9fafb !important;
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%9ca3af' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M6 8l4 4 4-4'/%3e%3c/svg%3e") !important;
+}
+
+select:hover {
+  border-color: #9ca3af !important;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06) !important;
+  transform: translateY(-1px) !important;
+}
+
+.dark select:hover {
+  border-color: #6b7280 !important;
+}
+
+select:focus {
+  outline: none !important;
+  border-color: #3b82f6 !important;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1), 0 4px 6px -1px rgba(0, 0, 0, 0.1) !important;
+  transform: translateY(-1px) !important;
+}
+
+.dark select:focus {
+  border-color: #60a5fa !important;
+  box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.2), 0 4px 6px -1px rgba(0, 0, 0, 0.3) !important;
+}
+
+select:disabled {
+  background-color: #f3f4f6 !important;
+  border-color: #d1d5db !important;
+  color: #9ca3af !important;
+  cursor: not-allowed !important;
+  opacity: 0.6 !important;
+  transform: none !important;
+}
+
+.dark select:disabled {
+  background-color: #1f2937 !important;
+  border-color: #374151 !important;
+  color: #6b7280 !important;
+}
+
+/* select option 样式 */
+select option {
+  background-color: white !important;
+  color: #111827 !important;
+  padding: 8px 12px !important;
+}
+
+.dark select option {
+  background-color: #374151 !important;
+  color: #f9fafb !important;
+}
+
+/* Ant Design Select 组件美化 */
+.ant-select {
+  @apply transition-all duration-200 ease-in-out;
+}
+
+.ant-select .ant-select-selector {
+  @apply border-gray-300 dark:border-gray-600 rounded-lg;
+  @apply bg-white dark:bg-gray-700;
+  @apply shadow-sm hover:shadow-md;
+  @apply transition-all duration-200 ease-in-out;
+  padding: 8px 12px !important;
+  min-height: 42px !important;
+}
+
+.ant-select:hover .ant-select-selector {
+  @apply border-gray-400 dark:border-gray-500;
+  @apply shadow-md;
+}
+
+.ant-select-focused .ant-select-selector {
+  @apply border-blue-500 dark:border-blue-400;
+  @apply ring-2 ring-blue-500 ring-opacity-20;
+  @apply shadow-lg;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1), 0 4px 6px -1px rgba(0, 0, 0, 0.1) !important;
+}
+
+.dark .ant-select-focused .ant-select-selector {
+  box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.2), 0 4px 6px -1px rgba(0, 0, 0, 0.3) !important;
+}
+
+.ant-select-selection-placeholder {
+  @apply text-gray-400 dark:text-gray-500;
+}
+
+.ant-select-selection-item {
+  @apply text-gray-900 dark:text-white;
+}
+
+.ant-select-arrow {
+  @apply text-gray-400 dark:text-gray-500;
+  @apply transition-transform duration-200;
+}
+
+.ant-select-open .ant-select-arrow {
+  @apply transform rotate-180;
+}
+
+/* 下拉菜单样式 */
+.ant-select-dropdown {
+  @apply bg-white dark:bg-gray-800;
+  @apply border border-gray-200 dark:border-gray-600;
+  @apply rounded-lg shadow-xl;
+  @apply backdrop-blur-sm;
+  background: rgba(255, 255, 255, 0.95) !important;
+  backdrop-filter: blur(8px);
+}
+
+.dark .ant-select-dropdown {
+  background: rgba(31, 41, 55, 0.95) !important;
+}
+
+.ant-select-item {
+  @apply text-gray-900 dark:text-white;
+  @apply transition-all duration-150;
+  padding: 8px 12px !important;
+  border-radius: 6px !important;
+  margin: 2px 4px !important;
+}
+
+.ant-select-item:hover {
+  @apply bg-blue-50 dark:bg-blue-900/30;
+  @apply text-blue-600 dark:text-blue-400;
+}
+
+.ant-select-item-option-selected {
+  @apply bg-blue-100 dark:bg-blue-900/50;
+  @apply text-blue-600 dark:text-blue-400;
+  @apply font-medium;
+}
+
+.ant-select-item-option-active {
+  @apply bg-gray-100 dark:bg-gray-700;
+}
+
+/* 多选模式样式 */
+.ant-select-multiple .ant-select-selection-item {
+  @apply bg-blue-100 dark:bg-blue-900/30;
+  @apply border border-blue-200 dark:border-blue-700;
+  @apply text-blue-700 dark:text-blue-300;
+  @apply rounded-md;
+  @apply transition-all duration-150;
+}
+
+.ant-select-multiple .ant-select-selection-item:hover {
+  @apply bg-blue-200 dark:bg-blue-900/50;
+}
+
+.ant-select-multiple .ant-select-selection-item-remove {
+  @apply text-blue-500 dark:text-blue-400;
+  @apply hover:text-blue-700 dark:hover:text-blue-300;
+}
+
+/* 禁用状态 */
+.ant-select-disabled .ant-select-selector {
+  @apply bg-gray-100 dark:bg-gray-800;
+  @apply text-gray-400 dark:text-gray-500;
+  @apply cursor-not-allowed;
+  @apply opacity-60;
+}
+
+/* 加载状态 */
+.ant-select-loading .ant-select-arrow {
+  @apply animate-spin;
+}
+
+/* 清除按钮 */
+.ant-select-clear {
+  @apply text-gray-400 dark:text-gray-500;
+  @apply hover:text-gray-600 dark:hover:text-gray-300;
+  @apply transition-colors duration-150;
+}
+
+/* 搜索框样式 */
+.ant-select-dropdown .ant-select-item-option-content {
+  @apply font-medium;
+}
+
+.ant-select-dropdown .ant-empty {
+  @apply text-gray-500 dark:text-gray-400;
+}
+
+/* 分组样式 */
+.ant-select-item-group {
+  @apply text-gray-500 dark:text-gray-400;
+  @apply font-medium text-xs uppercase tracking-wide;
+  @apply px-3 py-2;
+  @apply border-b border-gray-200 dark:border-gray-700;
+}
+
+/* 响应式优化 */
+@media (max-width: 640px) {
+  .ant-select .ant-select-selector {
+    min-height: 38px !important;
+    padding: 6px 10px !important;
+  }
+  
+  .ant-select-item {
+    padding: 6px 10px !important;
+  }
+}

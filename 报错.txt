@@ -1,0 +1,150 @@
+Socket连接成功: egbScpBY7-vE4WwUAAAJ
+GameDeploymentPage.tsx:175 WebSocket连接成功，Socket ID: LICngwOOyQZjipUSAAAL
+GameDeploymentPage.tsx:287 WebSocket连接已建立，Socket ID: LICngwOOyQZjipUSAAAL
+GameDeploymentPage.tsx:200 收到下载日志事件: {downloadId: 'minecraft-download-1752120968488', message: '[INFO] 检查Java环境...'}
+GameDeploymentPage.tsx:302 下载开始，Download ID: minecraft-download-1752120968488 Socket ID: LICngwOOyQZjipUSAAAL
+GameDeploymentPage.tsx:200 收到下载日志事件: {downloadId: 'minecraft-download-1752120968488', message: '[SUCCESS] Java环境检查通过。'}
+GameDeploymentPage.tsx:200 收到下载日志事件: {downloadId: 'minecraft-download-1752120968488', message: '[INFO] 创建临时工作目录...'}
+GameDeploymentPage.tsx:200 收到下载日志事件: {downloadId: 'minecraft-download-1752120968488', message: '[SUCCESS] 临时目录创建成功: D:\\Cursor项目\\GSM3\\server\\temp-minecraft-server'}
+GameDeploymentPage.tsx:200 收到下载日志事件: {downloadId: 'minecraft-download-1752120968488', message: '[INFO] 正在获取下载地址...'}
+GameDeploymentPage.tsx:200 收到下载日志事件: {downloadId: 'minecraft-download-1752120968488', message: '[SUCCESS] 下载地址获取成功。'}
+GameDeploymentPage.tsx:200 收到下载日志事件: {downloadId: 'minecraft-download-1752120968488', message: '[INFO] 正在下载服务端核心到: D:\\Cursor项目\\GSM3\\server\\temp-minecraft-server\\vanilla-1.21.7.jar'}
+GameDeploymentPage.tsx:188 收到下载进度事件: {downloadId: 'minecraft-download-1752120968488', progress: {…}, message: '下载进度: 0% (15638/57556704)'}
+react-dom.development.js:13123  Uncaught Error: Objects are not valid as a React child (found: object with keys {loaded, total, percentage}). If you meant to render a collection of children, use an array instead.
+    at throwOnInvalidObjectType (react-dom.development.js:13123:9)
+    at createChild (react-dom.development.js:13375:7)
+    at reconcileChildrenArray (react-dom.development.js:13640:25)
+    at reconcileChildFibers2 (react-dom.development.js:14057:16)
+    at reconcileChildren (react-dom.development.js:19186:28)
+    at updateHostComponent (react-dom.development.js:19953:3)
+    at beginWork (react-dom.development.js:21657:14)
+    at HTMLUnknownElement.callCallback2 (react-dom.development.js:4164:14)
+    at Object.invokeGuardedCallbackDev (react-dom.development.js:4213:16)
+    at invokeGuardedCallback (react-dom.development.js:4277:31)
+throwOnInvalidObjectType @ react-dom.development.js:13123
+createChild @ react-dom.development.js:13375
+reconcileChildrenArray @ react-dom.development.js:13640
+reconcileChildFibers2 @ react-dom.development.js:14057
+reconcileChildren @ react-dom.development.js:19186
+updateHostComponent @ react-dom.development.js:19953
+beginWork @ react-dom.development.js:21657
+callCallback2 @ react-dom.development.js:4164
+invokeGuardedCallbackDev @ react-dom.development.js:4213
+invokeGuardedCallback @ react-dom.development.js:4277
+beginWork$1 @ react-dom.development.js:27490
+performUnitOfWork @ react-dom.development.js:26596
+workLoopSync @ react-dom.development.js:26505
+renderRootSync @ react-dom.development.js:26473
+performConcurrentWorkOnRoot @ react-dom.development.js:25777
+workLoop @ scheduler.development.js:266
+flushWork @ scheduler.development.js:239
+performWorkUntilDeadline @ scheduler.development.js:533
+react-dom.development.js:13123  Uncaught Error: Objects are not valid as a React child (found: object with keys {loaded, total, percentage}). If you meant to render a collection of children, use an array instead.
+    at throwOnInvalidObjectType (react-dom.development.js:13123:9)
+    at createChild (react-dom.development.js:13375:7)
+    at reconcileChildrenArray (react-dom.development.js:13640:25)
+    at reconcileChildFibers2 (react-dom.development.js:14057:16)
+    at reconcileChildren (react-dom.development.js:19186:28)
+    at updateHostComponent (react-dom.development.js:19953:3)
+    at beginWork (react-dom.development.js:21657:14)
+    at HTMLUnknownElement.callCallback2 (react-dom.development.js:4164:14)
+    at Object.invokeGuardedCallbackDev (react-dom.development.js:4213:16)
+    at invokeGuardedCallback (react-dom.development.js:4277:31)
+throwOnInvalidObjectType @ react-dom.development.js:13123
+createChild @ react-dom.development.js:13375
+reconcileChildrenArray @ react-dom.development.js:13640
+reconcileChildFibers2 @ react-dom.development.js:14057
+reconcileChildren @ react-dom.development.js:19186
+updateHostComponent @ react-dom.development.js:19953
+beginWork @ react-dom.development.js:21657
+callCallback2 @ react-dom.development.js:4164
+invokeGuardedCallbackDev @ react-dom.development.js:4213
+invokeGuardedCallback @ react-dom.development.js:4277
+beginWork$1 @ react-dom.development.js:27490
+performUnitOfWork @ react-dom.development.js:26596
+workLoopSync @ react-dom.development.js:26505
+renderRootSync @ react-dom.development.js:26473
+recoverFromConcurrentError @ react-dom.development.js:25889
+performConcurrentWorkOnRoot @ react-dom.development.js:25789
+workLoop @ scheduler.development.js:266
+flushWork @ scheduler.development.js:239
+performWorkUntilDeadline @ scheduler.development.js:533
+[新] 使用 Edge 中的 Copilot 来解释控制台错误: 单击
+         
+         以说明错误。
+        了解更多信息
+        不再显示
+react-dom.development.js:18704  The above error occurred in the <span> component:
+
+    at span
+    at div
+    at div
+    at div
+    at div
+    at div
+    at div
+    at div
+    at div
+    at GameDeploymentPage (http://localhost:5173/src/pages/GameDeploymentPage.tsx?t=1752120952036:37:31)
+    at RenderedRoute (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=81945fac:4088:5)
+    at Routes (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=81945fac:4558:5)
+    at main
+    at div
+    at div
+    at Layout (http://localhost:5173/src/components/Layout.tsx?t=1752120348264:38:19)
+    at ProtectedRoute (http://localhost:5173/src/App.tsx?t=1752120705151:34:27)
+    at RenderedRoute (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=81945fac:4088:5)
+    at Routes (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=81945fac:4558:5)
+    at div
+    at MotionWrapper (http://localhost:5173/node_modules/.vite/deps/antd.js?v=81945fac:6541:32)
+    at ProviderChildren (http://localhost:5173/node_modules/.vite/deps/antd.js?v=81945fac:6649:5)
+    at ConfigProvider (http://localhost:5173/node_modules/.vite/deps/antd.js?v=81945fac:6938:27)
+    at App (http://localhost:5173/src/App.tsx?t=1752120705151:90:39)
+    at Router (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=81945fac:4501:15)
+    at BrowserRouter (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=81945fac:5247:5)
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://reactjs.org/link/error-boundaries to learn more about error boundaries.
+logCapturedError @ react-dom.development.js:18704
+update.callback @ react-dom.development.js:18737
+callCallback @ react-dom.development.js:15036
+commitUpdateQueue @ react-dom.development.js:15057
+commitLayoutEffectOnFiber @ react-dom.development.js:23430
+commitLayoutMountEffects_complete @ react-dom.development.js:24727
+commitLayoutEffects_begin @ react-dom.development.js:24713
+commitLayoutEffects @ react-dom.development.js:24651
+commitRootImpl @ react-dom.development.js:26862
+commitRoot @ react-dom.development.js:26721
+finishConcurrentRender @ react-dom.development.js:25931
+performConcurrentWorkOnRoot @ react-dom.development.js:25848
+workLoop @ scheduler.development.js:266
+flushWork @ scheduler.development.js:239
+performWorkUntilDeadline @ scheduler.development.js:533
+react-dom.development.js:13123  Uncaught Error: Objects are not valid as a React child (found: object with keys {loaded, total, percentage}). If you meant to render a collection of children, use an array instead.
+    at throwOnInvalidObjectType (react-dom.development.js:13123:9)
+    at createChild (react-dom.development.js:13375:7)
+    at reconcileChildrenArray (react-dom.development.js:13640:25)
+    at reconcileChildFibers2 (react-dom.development.js:14057:16)
+    at reconcileChildren (react-dom.development.js:19186:28)
+    at updateHostComponent (react-dom.development.js:19953:3)
+    at beginWork (react-dom.development.js:21657:14)
+    at beginWork$1 (react-dom.development.js:27465:14)
+    at performUnitOfWork (react-dom.development.js:26596:12)
+    at workLoopSync (react-dom.development.js:26505:5)
+throwOnInvalidObjectType @ react-dom.development.js:13123
+createChild @ react-dom.development.js:13375
+reconcileChildrenArray @ react-dom.development.js:13640
+reconcileChildFibers2 @ react-dom.development.js:14057
+reconcileChildren @ react-dom.development.js:19186
+updateHostComponent @ react-dom.development.js:19953
+beginWork @ react-dom.development.js:21657
+beginWork$1 @ react-dom.development.js:27465
+performUnitOfWork @ react-dom.development.js:26596
+workLoopSync @ react-dom.development.js:26505
+renderRootSync @ react-dom.development.js:26473
+recoverFromConcurrentError @ react-dom.development.js:25889
+performConcurrentWorkOnRoot @ react-dom.development.js:25789
+workLoop @ scheduler.development.js:266
+flushWork @ scheduler.development.js:239
+performWorkUntilDeadline @ scheduler.development.js:533
+GameDeploymentPage.tsx:179 WebSocket连接断开
