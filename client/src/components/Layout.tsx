@@ -16,7 +16,8 @@ import {
   FolderOpen,
   Server,
   Download,
-  Clock
+  Clock,
+  Info
 } from 'lucide-react'
 
 interface LayoutProps {
@@ -37,6 +38,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     { name: '定时任务', href: '/scheduled-tasks', icon: Clock },
     { name: '文件管理', href: '/files', icon: FolderOpen },
     { name: '设置', href: '/settings', icon: Settings },
+    { name: '关于项目', href: '/about', icon: Info },
   ]
   
   const handleLogout = async () => {

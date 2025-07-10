@@ -12,6 +12,7 @@ import GameDeploymentPage from './pages/GameDeploymentPage'
 import ScheduledTasksPage from '@/pages/ScheduledTasksPage'
 import SettingsPage from '@/pages/SettingsPage'
 import FileManagerPage from '@/pages/FileManagerPage'
+import AboutProjectPage from '@/pages/AboutProjectPage'
 import LoadingSpinner from '@/components/LoadingSpinner'
 import NotificationContainer from '@/components/NotificationContainer'
 
@@ -103,6 +104,7 @@ function App() {
                     <Route path="/scheduled-tasks" element={<ScheduledTasksPage />} />
                     <Route path="/files" element={<FileManagerPage />} />
                     <Route path="/settings" element={<SettingsPage />} />
+                    <Route path="/about" element={<AboutProjectPage />} />
                     <Route path="*" element={<Navigate to="/" replace />} />
                   </Routes>
                 </Layout>
