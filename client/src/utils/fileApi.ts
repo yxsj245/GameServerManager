@@ -45,6 +45,16 @@ export class FileApiClient {
     return response.data.data
   }
 
+  // 获取图片预览URL
+  getImagePreviewUrl(path: string): string {
+    // 将Windows路径转换为Unix风格，然后对路径进行编码
+    // 但不要对整个路径进行encodeURIComponent，因为这会编码斜杠
+    const normalizedPath = path.replace(/\\/g, '/')
+    const encodedPath = normalizedPath.split('/').map(segment => encodeURIComponent(segment)).join('/')
+    // 确保返回完整的URL路径
+    return `${window.location.origin}${API_BASE}/preview?path=${encodedPath}`
+  }
+
   // 保存文件内容
   async saveFile(path: string, content: string, encoding: string = 'utf-8'): Promise<FileOperationResult> {
     const response = await this.client.post(`${API_BASE}/save`, {

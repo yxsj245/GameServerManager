@@ -51,9 +51,10 @@ import {
 } from '@/components/FileDialogs'
 import { CompressDialog } from '@/components/CompressDialog'
 import { MonacoEditor } from '@/components/MonacoEditor'
+import { ImagePreview } from '@/components/ImagePreview'
 import { FileItem } from '@/types/file'
 import { fileApiClient } from '@/utils/fileApi'
-import { isTextFile } from '@/utils/format'
+import { isTextFile, isImageFile } from '@/utils/format'
 import { normalizePath, getDirectoryPath, getBasename } from '@/utils/pathUtils'
 
 const { TabPane } = Tabs
@@ -135,6 +136,11 @@ const FileManagerPage: React.FC = () => {
   
   // 编辑器模态框
   const [editorModalVisible, setEditorModalVisible] = useState(false)
+  
+  // 图片预览模态框
+  const [imagePreviewVisible, setImagePreviewVisible] = useState(false)
+  const [previewImagePath, setPreviewImagePath] = useState('')
+  const [previewImageName, setPreviewImageName] = useState('')
   
   // 任务状态抽屉
   const [taskDrawerVisible, setTaskDrawerVisible] = useState(false)
@@ -323,6 +329,10 @@ const FileManagerPage: React.FC = () => {
     } else if (isTextFile(file.name)) {
       openFile(file.path)
       setEditorModalVisible(true)
+    } else if (isImageFile(file.name)) {
+      setPreviewImagePath(file.path)
+      setPreviewImageName(file.name)
+      setImagePreviewVisible(true)
     } else {
       // 非文本文件，提示下载
       message.info('该文件类型不支持在线编辑，请下载查看')
@@ -401,6 +411,10 @@ const FileManagerPage: React.FC = () => {
     if (isTextFile(file.name)) {
       openFile(file.path)
       setEditorModalVisible(true)
+    } else if (isImageFile(file.name)) {
+      setPreviewImagePath(file.path)
+      setPreviewImageName(file.name)
+      setImagePreviewVisible(true)
     } else {
       message.info('该文件类型不支持预览')
     }
@@ -936,6 +950,14 @@ const FileManagerPage: React.FC = () => {
           </Tabs>
         )}
       </Modal>
+      
+      {/* 图片预览模态框 */}
+      <ImagePreview
+        isOpen={imagePreviewVisible}
+        onClose={() => setImagePreviewVisible(false)}
+        imagePath={previewImagePath}
+        fileName={previewImageName}
+      />
       
       {/* 任务状态抽屉 */}
       <Drawer

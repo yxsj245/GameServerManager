@@ -77,7 +77,10 @@ const isValidPath = (filePath: string): boolean => {
     return false
   }
   
-  const normalizedPath = path.normalize(filePath)
+  // 先解码URL编码的路径
+  const decodedPath = decodeURIComponent(filePath)
+  
+  const normalizedPath = path.normalize(decodedPath)
   
   // 检查是否包含危险的路径遍历
   if (normalizedPath.includes('..')) {
@@ -136,10 +139,16 @@ router.get('/list', authenticateToken, async (req: Request, res: Response) => {
       data: files
     })
   } catch (error: any) {
-    res.status(500).json({
-      status: 'error',
-      message: error.message
-    })
+    console.error('Preview request - Error occurred:', error)
+    console.error('Preview request - Error stack:', error.stack)
+    
+    // 确保响应还没有发送
+    if (!res.headersSent) {
+      res.status(500).json({
+        status: 'error',
+        message: error.message || '文件预览失败'
+      })
+    }
   }
 })
 
@@ -174,6 +183,111 @@ router.get('/read', authenticateToken, async (req: Request, res: Response) => {
         modified: stats.mtime.toISOString()
       }
     })
+  } catch (error: any) {
+    res.status(500).json({
+      status: 'error',
+      message: error.message
+    })
+  }
+})
+
+// 预览图片文件
+router.get('/preview', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const { path: filePath } = req.query
+    
+    console.log('Preview request - Original path:', filePath)
+    
+    if (!filePath) {
+      return res.status(400).json({
+        status: 'error',
+        message: '缺少文件路径'
+      })
+    }
+    
+    const decodedFilePath = decodeURIComponent(filePath as string)
+    console.log('Preview request - Decoded path:', decodedFilePath)
+    
+    // 处理相对路径，转换为基于工作目录的绝对路径
+    let absoluteFilePath: string
+    if (path.isAbsolute(decodedFilePath)) {
+      absoluteFilePath = decodedFilePath
+    } else {
+      // 相对路径，基于工作目录解析
+      absoluteFilePath = path.resolve(process.cwd(), decodedFilePath)
+    }
+    
+    console.log('Preview request - Absolute path:', absoluteFilePath)
+    
+    // 基本安全检查：确保路径不包含危险的遍历
+    const normalizedPath = path.normalize(absoluteFilePath)
+    if (normalizedPath.includes('..')) {
+      console.log('Preview request - Path contains dangerous traversal')
+      return res.status(400).json({
+        status: 'error',
+        message: '无效的路径'
+      })
+    }
+
+    console.log('Preview request - Checking file stats for:', absoluteFilePath)
+    
+    // 检查文件是否存在
+    try {
+      await fs.access(absoluteFilePath)
+    } catch (accessError) {
+      return res.status(404).json({
+        status: 'error',
+        message: '文件不存在或无法访问'
+      })
+    }
+    
+    const stats = await fs.stat(absoluteFilePath)
+    
+    if (!stats.isFile()) {
+      return res.status(400).json({
+        status: 'error',
+        message: '指定路径不是文件'
+      })
+    }
+
+    // 获取文件扩展名并设置对应的Content-Type
+    const ext = path.extname(absoluteFilePath).toLowerCase()
+    const mimeTypes: { [key: string]: string } = {
+      '.jpg': 'image/jpeg',
+      '.jpeg': 'image/jpeg',
+      '.png': 'image/png',
+      '.gif': 'image/gif',
+      '.bmp': 'image/bmp',
+      '.webp': 'image/webp',
+      '.svg': 'image/svg+xml',
+      '.ico': 'image/x-icon'
+    }
+
+    const contentType = mimeTypes[ext] || 'application/octet-stream'
+    
+    console.log('Preview request - Reading file:', absoluteFilePath)
+    console.log('Preview request - Content type:', contentType)
+    console.log('Preview request - File extension:', ext)
+    
+    // 读取文件为Buffer
+    const fileBuffer = await fs.readFile(absoluteFilePath)
+    
+    console.log('Preview request - File buffer length:', fileBuffer.length)
+    console.log('Preview request - Buffer first 10 bytes:', fileBuffer.slice(0, 10))
+    
+    // 设置响应头
+    res.setHeader('Content-Type', contentType)
+    res.setHeader('Content-Length', fileBuffer.length)
+    res.setHeader('Cache-Control', 'public, max-age=3600') // 缓存1小时
+    
+    console.log('Preview request - Sending response with headers:', {
+      'Content-Type': contentType,
+      'Content-Length': fileBuffer.length
+    })
+    
+    // 发送文件数据
+    res.send(fileBuffer)
+    console.log('Preview request - Response sent successfully')
   } catch (error: any) {
     res.status(500).json({
       status: 'error',

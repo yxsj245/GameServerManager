@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
-import { ConfigProvider, theme } from 'antd'
+import { ConfigProvider, theme, App as AntdApp } from 'antd'
 import { useAuthStore } from '@/stores/authStore'
 import { useThemeStore } from '@/stores/themeStore'
 import Layout from '@/components/Layout'
@@ -97,44 +97,46 @@ function App() {
         },
       }}
     >
-      <div className="min-h-screen bg-game-gradient">
-        <Routes>
-          {/* 公共路由 */}
-          <Route
-            path="/login"
-            element={
-              <PublicRoute>
-                <LoginPage />
-              </PublicRoute>
-            }
-          />
+      <AntdApp>
+        <div className="min-h-screen bg-game-gradient">
+          <Routes>
+            {/* 公共路由 */}
+            <Route
+              path="/login"
+              element={
+                <PublicRoute>
+                  <LoginPage />
+                </PublicRoute>
+              }
+            />
+            
+            {/* 受保护的路由 */}
+            <Route
+              path="/*"
+              element={
+                <ProtectedRoute>
+                  <Layout>
+                    <Routes>
+                      <Route path="/" element={<PageTransition><HomePage /></PageTransition>} />
+                      <Route path="/terminal" element={<PageTransition><TerminalPage /></PageTransition>} />
+                      <Route path="/instances" element={<PageTransition><InstanceManagerPage /></PageTransition>} />
+                      <Route path="/game-deployment" element={<PageTransition><GameDeploymentPage /></PageTransition>} />
+                      <Route path="/scheduled-tasks" element={<PageTransition><ScheduledTasksPage /></PageTransition>} />
+                      <Route path="/files" element={<PageTransition><FileManagerPage /></PageTransition>} />
+                      <Route path="/settings" element={<PageTransition><SettingsPage /></PageTransition>} />
+                      <Route path="/about" element={<PageTransition><AboutProjectPage /></PageTransition>} />
+                      <Route path="*" element={<Navigate to="/" replace />} />
+                    </Routes>
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
+          </Routes>
           
-          {/* 受保护的路由 */}
-          <Route
-            path="/*"
-            element={
-              <ProtectedRoute>
-                <Layout>
-                  <Routes>
-                    <Route path="/" element={<PageTransition><HomePage /></PageTransition>} />
-                    <Route path="/terminal" element={<PageTransition><TerminalPage /></PageTransition>} />
-                    <Route path="/instances" element={<PageTransition><InstanceManagerPage /></PageTransition>} />
-                    <Route path="/game-deployment" element={<PageTransition><GameDeploymentPage /></PageTransition>} />
-                    <Route path="/scheduled-tasks" element={<PageTransition><ScheduledTasksPage /></PageTransition>} />
-                    <Route path="/files" element={<PageTransition><FileManagerPage /></PageTransition>} />
-                    <Route path="/settings" element={<PageTransition><SettingsPage /></PageTransition>} />
-                    <Route path="/about" element={<PageTransition><AboutProjectPage /></PageTransition>} />
-                    <Route path="*" element={<Navigate to="/" replace />} />
-                  </Routes>
-                </Layout>
-              </ProtectedRoute>
-            }
-          />
-        </Routes>
-        
-        {/* 全局通知容器 */}
-        <NotificationContainer />
-      </div>
+          {/* 全局通知容器 */}
+          <NotificationContainer />
+        </div>
+      </AntdApp>
     </ConfigProvider>
   )
 }
