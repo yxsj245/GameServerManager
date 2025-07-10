@@ -106,7 +106,7 @@ export const FileListItem: React.FC<FileListItemProps> = ({
   return (
     <motion.div
       className={`
-        relative group cursor-pointer p-3 rounded-lg border
+        relative group cursor-pointer p-3 rounded-lg border select-none
         hover:shadow-md hover:border-blue-300 transition-all duration-200
         ${isSelected 
           ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 shadow-md' 

@@ -106,7 +106,7 @@ export const FileGridItem: React.FC<FileGridItemProps> = ({
   return (
     <motion.div
       className={`
-         relative group cursor-pointer p-4 rounded-lg border-2
+         relative group cursor-pointer p-4 rounded-lg border-2 select-none
           hover:shadow-lg hover:border-blue-300
         ${isSelected 
           ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 shadow-md' 
