@@ -42,6 +42,91 @@ export class InstanceManager extends EventEmitter {
     this.terminalManager = terminalManager
     this.configPath = configPath
   }
+  
+  // 获取系统负载信息
+  private async getSystemLoad(): Promise<{ cpuUsage: number; memoryUsage: number }> {
+    const os = await import('os')
+    
+    // 获取内存使用率
+    const totalMemory = os.totalmem()
+    const freeMemory = os.freemem()
+    const usedMemory = totalMemory - freeMemory
+    const memoryUsage = (usedMemory / totalMemory) * 100
+    
+    // 获取CPU使用率
+    const cpuUsage = await this.getCpuUsage()
+    
+    return {
+      cpuUsage,
+      memoryUsage
+    }
+  }
+  
+  // 获取CPU使用率
+  private async getCpuUsage(): Promise<number> {
+    const os = await import('os')
+    
+    return new Promise((resolve) => {
+      const cpus = os.cpus()
+      const startMeasure = cpus.map(cpu => {
+        const total = Object.values(cpu.times).reduce((acc, time) => acc + time, 0)
+        const idle = cpu.times.idle
+        return { total, idle }
+      })
+      
+      setTimeout(() => {
+        const endMeasure = os.cpus().map(cpu => {
+          const total = Object.values(cpu.times).reduce((acc, time) => acc + time, 0)
+          const idle = cpu.times.idle
+          return { total, idle }
+        })
+        
+        let totalUsage = 0
+        for (let i = 0; i < startMeasure.length; i++) {
+          const totalDiff = endMeasure[i].total - startMeasure[i].total
+          const idleDiff = endMeasure[i].idle - startMeasure[i].idle
+          const usage = 100 - (100 * idleDiff / totalDiff)
+          totalUsage += usage
+        }
+        
+        const avgUsage = totalUsage / cpus.length
+        resolve(Math.round(avgUsage * 100) / 100)
+      }, 100)
+    })
+  }
+  
+  // 等待系统负载降低
+  private async waitForLoadDecrease(): Promise<void> {
+    const maxWaitTime = 300000 // 最大等待5分钟
+    const checkInterval = 5000 // 每5秒检查一次
+    const startTime = Date.now()
+    
+    while (Date.now() - startTime < maxWaitTime) {
+      const systemLoad = await this.getSystemLoad()
+      
+      // 如果内存使用率超过90%，直接退出
+      if (systemLoad.memoryUsage > 90) {
+        this.logger.warn(`内存使用率过高 (${systemLoad.memoryUsage.toFixed(1)}%)，停止等待`)
+        throw new Error('内存使用率过高，终止启动')
+      }
+      
+      // 如果CPU使用率降到85%以下，继续启动
+      if (systemLoad.cpuUsage <= 85) {
+        this.logger.info(`CPU使用率已降低到 ${systemLoad.cpuUsage.toFixed(1)}%，继续启动`)
+        return
+      }
+      
+      this.logger.info(`等待CPU负载降低，当前: CPU ${systemLoad.cpuUsage.toFixed(1)}%, 内存 ${systemLoad.memoryUsage.toFixed(1)}%`)
+      await this.delay(checkInterval)
+    }
+    
+    this.logger.warn('等待超时，继续启动剩余实例')
+  }
+  
+  // 延迟函数
+  private async delay(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms))
+  }
 
   // 初始化实例管理器
   public async initialize(): Promise<void> {
@@ -115,14 +200,50 @@ export class InstanceManager extends EventEmitter {
     }
   }
 
-  // 启动自动启动的实例
+  // 启动自动启动的实例（错峰启动）
   private async startAutoStartInstances(): Promise<void> {
-    for (const instance of this.instances.values()) {
-      if (instance.autoStart) {
-        this.logger.info(`自动启动实例: ${instance.name}`)
+    const autoStartInstances = Array.from(this.instances.values()).filter(instance => instance.autoStart)
+    
+    if (autoStartInstances.length === 0) {
+      return
+    }
+    
+    this.logger.info(`开始错峰启动 ${autoStartInstances.length} 个自动启动实例`)
+    
+    for (let i = 0; i < autoStartInstances.length; i++) {
+      const instance = autoStartInstances[i]
+      
+      try {
+        // 检查系统负载
+        const systemLoad = await this.getSystemLoad()
+        
+        // 如果内存使用率超过90%，直接终止启动
+        if (systemLoad.memoryUsage > 90) {
+          this.logger.warn(`内存使用率过高 (${systemLoad.memoryUsage.toFixed(1)}%)，终止剩余实例启动`)
+          break
+        }
+        
+        // 如果CPU使用率超过90%，等待负载降低
+        if (systemLoad.cpuUsage > 90) {
+          this.logger.warn(`CPU使用率过高 (${systemLoad.cpuUsage.toFixed(1)}%)，等待负载降低后继续启动`)
+          await this.waitForLoadDecrease()
+        }
+        
+        this.logger.info(`错峰启动实例 (${i + 1}/${autoStartInstances.length}): ${instance.name}`)
         await this.startInstance(instance.id)
+        
+        // 启动间隔，避免同时启动造成负载峰值
+        if (i < autoStartInstances.length - 1) {
+          await this.delay(2000) // 2秒间隔
+        }
+        
+      } catch (error) {
+        this.logger.error(`启动实例 ${instance.name} 失败:`, error)
+        // 继续启动下一个实例
       }
     }
+    
+    this.logger.info('错峰启动完成')
   }
 
   // 获取所有实例
