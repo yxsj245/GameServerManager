@@ -11,9 +11,7 @@ import {
   Calendar,
   Settings
 } from 'lucide-react'
-import { ApiClient } from '@/utils/api'
-
-const apiClient = new ApiClient()
+import apiClient from '@/utils/api'
 
 interface ScheduledTask {
   id: string
