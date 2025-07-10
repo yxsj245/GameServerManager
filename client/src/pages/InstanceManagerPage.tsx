@@ -14,22 +14,48 @@ import {
   AlertCircle,
   CheckCircle,
   Loader,
-  Server
+  Server,
+  ShoppingCart,
+  Download
 } from 'lucide-react'
 import { Instance, CreateInstanceRequest } from '@/types'
 import { useNotificationStore } from '@/stores/notificationStore'
 import apiClient from '@/utils/api'
 import { ConfirmDeleteDialog } from '@/components/ConfirmDeleteDialog'
 
+// 实例市场相关类型
+interface MarketInstance {
+  name: string
+  command: string
+  stopcommand: string
+}
+
+interface MarketResponse {
+  instances: MarketInstance[]
+}
+
+interface InstallInstanceRequest {
+  name: string
+  command: string
+  stopCommand: string
+  workingDirectory: string
+}
+
 const InstanceManagerPage: React.FC = () => {
   const navigate = useNavigate()
   const { addNotification } = useNotificationStore()
+  const [activeTab, setActiveTab] = useState<'instances' | 'market'>('instances')
   const [instances, setInstances] = useState<Instance[]>([])
+  const [marketInstances, setMarketInstances] = useState<MarketInstance[]>([])
   const [loading, setLoading] = useState(true)
+  const [marketLoading, setMarketLoading] = useState(false)
   const [showCreateModal, setShowCreateModal] = useState(false)
+  const [showInstallModal, setShowInstallModal] = useState(false)
+  const [selectedMarketInstance, setSelectedMarketInstance] = useState<MarketInstance | null>(null)
   const [editingInstance, setEditingInstance] = useState<Instance | null>(null)
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [instanceToDelete, setInstanceToDelete] = useState<Instance | null>(null)
+  const [installFormData, setInstallFormData] = useState({ workingDirectory: '' })
   const [formData, setFormData] = useState<CreateInstanceRequest>({
     name: '',
     description: '',
@@ -59,9 +85,35 @@ const InstanceManagerPage: React.FC = () => {
     }
   }
 
+  // 获取实例市场列表
+  const fetchMarketInstances = async () => {
+    try {
+      setMarketLoading(true)
+      const response = await apiClient.getMarketInstances()
+      if (response.success) {
+        setMarketInstances(response.data?.instances || [])
+      }
+    } catch (error) {
+      console.error('获取实例市场列表失败:', error)
+      addNotification({
+        type: 'error',
+        title: '获取失败',
+        message: '无法获取实例市场列表'
+      })
+    } finally {
+      setMarketLoading(false)
+    }
+  }
+
   useEffect(() => {
     fetchInstances()
   }, [])
+
+  useEffect(() => {
+    if (activeTab === 'market' && marketInstances.length === 0) {
+      fetchMarketInstances()
+    }
+  }, [activeTab])
 
   // 创建实例
   const handleCreateInstance = async () => {
@@ -129,6 +181,67 @@ const InstanceManagerPage: React.FC = () => {
         message: errorMessage
       })
     }
+  }
+
+  // 安装市场实例
+  const handleInstallMarketInstance = async () => {
+    if (!selectedMarketInstance || !installFormData.workingDirectory) return
+    
+    try {
+      // 转换停止命令格式
+      let stopCommand: 'ctrl+c' | 'stop' | 'exit' = 'ctrl+c'
+      if (selectedMarketInstance.stopcommand === '^C') {
+        stopCommand = 'ctrl+c'
+      } else if (selectedMarketInstance.stopcommand === 'stop') {
+        stopCommand = 'stop'
+      } else if (selectedMarketInstance.stopcommand === 'exit') {
+        stopCommand = 'exit'
+      }
+      
+      const installData: CreateInstanceRequest = {
+        name: selectedMarketInstance.name,
+        description: `从实例市场安装的 ${selectedMarketInstance.name}`,
+        workingDirectory: installFormData.workingDirectory,
+        startCommand: selectedMarketInstance.command,
+        autoStart: false,
+        stopCommand
+      }
+      
+      const response = await apiClient.createInstance(installData)
+      if (response.success) {
+        addNotification({
+          type: 'success',
+          title: '安装成功',
+          message: `实例 "${selectedMarketInstance.name}" 已安装`
+        })
+        setShowInstallModal(false)
+        setSelectedMarketInstance(null)
+        setInstallFormData({ workingDirectory: '' })
+        fetchInstances()
+        setActiveTab('instances')
+      }
+    } catch (error: any) {
+      console.error('安装实例失败:', error)
+      
+      let errorMessage = '无法安装实例'
+      if (error.message) {
+        errorMessage = error.message
+      } else if (error.error) {
+        errorMessage = error.error
+      }
+      
+      addNotification({
+        type: 'error',
+        title: '安装失败',
+        message: errorMessage
+      })
+    }
+  }
+
+  // 打开安装模态框
+  const handleOpenInstallModal = (marketInstance: MarketInstance) => {
+    setSelectedMarketInstance(marketInstance)
+    setShowInstallModal(true)
   }
 
   // 启动实例
@@ -369,48 +482,84 @@ const InstanceManagerPage: React.FC = () => {
             管理和监控您的应用实例
           </p>
         </div>
-        <button
-          onClick={() => {
-            setEditingInstance(null)
-            resetForm()
-            setShowCreateModal(true)
-          }}
-          className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-        >
-          <Plus className="w-4 h-4" />
-          <span>创建实例</span>
-        </button>
-      </div>
-
-      {/* 实例列表 */}
-      {instances.length === 0 ? (
-        <div className="text-center py-12">
-          <Server className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
-            暂无实例
-          </h3>
-          <p className="text-gray-600 dark:text-gray-400 mb-4">
-            创建您的第一个实例来开始管理应用
-          </p>
+        {activeTab === 'instances' && (
           <button
             onClick={() => {
               setEditingInstance(null)
               resetForm()
               setShowCreateModal(true)
             }}
-            className="inline-flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
           >
             <Plus className="w-4 h-4" />
             <span>创建实例</span>
           </button>
-        </div>
-      ) : (
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {instances.map((instance) => (
-            <div
-              key={instance.id}
-              className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6 hover:shadow-lg transition-shadow"
+        )}
+      </div>
+
+      {/* 标签页导航 */}
+      <div className="border-b border-gray-200 dark:border-gray-700">
+        <nav className="-mb-px flex space-x-8">
+          <button
+            onClick={() => setActiveTab('instances')}
+            className={`py-2 px-1 border-b-2 font-medium text-sm transition-colors ${
+              activeTab === 'instances'
+                ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
+            }`}
+          >
+            <div className="flex items-center space-x-2">
+              <Server className="w-4 h-4" />
+              <span>我的实例</span>
+            </div>
+          </button>
+          <button
+            onClick={() => setActiveTab('market')}
+            className={`py-2 px-1 border-b-2 font-medium text-sm transition-colors ${
+              activeTab === 'market'
+                ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
+            }`}
+          >
+            <div className="flex items-center space-x-2">
+              <ShoppingCart className="w-4 h-4" />
+              <span>实例市场</span>
+            </div>
+          </button>
+        </nav>
+      </div>
+
+      {/* 标签页内容 */}
+      {activeTab === 'instances' ? (
+        /* 我的实例列表 */
+        instances.length === 0 ? (
+          <div className="text-center py-12">
+            <Server className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
+              暂无实例
+            </h3>
+            <p className="text-gray-600 dark:text-gray-400 mb-4">
+              创建您的第一个实例来开始管理应用
+            </p>
+            <button
+              onClick={() => {
+                setEditingInstance(null)
+                resetForm()
+                setShowCreateModal(true)
+              }}
+              className="inline-flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
             >
+              <Plus className="w-4 h-4" />
+              <span>创建实例</span>
+            </button>
+          </div>
+        ) : (
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {instances.map((instance) => (
+              <div
+                key={instance.id}
+                className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6 hover:shadow-lg transition-shadow"
+              >
               {/* 实例头部 */}
               <div className="flex items-start justify-between mb-4">
                 <div className="flex-1">
@@ -511,6 +660,83 @@ const InstanceManagerPage: React.FC = () => {
               </div>
             </div>
           ))}
+        </div>
+        )
+      ) : (
+        /* 实例市场 */
+        <div className="space-y-6">
+          {marketLoading ? (
+            <div className="flex items-center justify-center h-64">
+              <Loader className="w-8 h-8 animate-spin text-blue-500" />
+              <span className="ml-2 text-gray-600 dark:text-gray-400">加载实例市场...</span>
+            </div>
+          ) : marketInstances.length === 0 ? (
+            <div className="text-center py-12">
+              <ShoppingCart className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
+                暂无可用实例
+              </h3>
+              <p className="text-gray-600 dark:text-gray-400 mb-4">
+                实例市场暂时没有可用的实例模板
+              </p>
+              <button
+                onClick={fetchMarketInstances}
+                className="inline-flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                <span>刷新</span>
+              </button>
+            </div>
+          ) : (
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+              {marketInstances.map((marketInstance, index) => (
+                <div
+                  key={index}
+                  className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6 hover:shadow-lg transition-shadow"
+                >
+                  {/* 实例头部 */}
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex-1">
+                      <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">
+                        {marketInstance.name}
+                      </h3>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                        来自实例市场的预配置实例
+                      </p>
+                    </div>
+                    <div className="flex items-center space-x-1 ml-4">
+                      <ShoppingCart className="w-5 h-5 text-blue-500" />
+                      <span className="text-sm font-medium text-blue-600 dark:text-blue-400">
+                        可安装
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* 实例信息 */}
+                  <div className="space-y-2 mb-4">
+                    <div className="flex items-center text-sm text-gray-600 dark:text-gray-400">
+                      <Terminal className="w-4 h-4 mr-2" />
+                      <span className="truncate">启动命令: {marketInstance.command}</span>
+                    </div>
+                    <div className="flex items-center text-sm text-gray-600 dark:text-gray-400">
+                      <Square className="w-4 h-4 mr-2" />
+                      <span className="truncate">停止命令: {marketInstance.stopcommand}</span>
+                    </div>
+                  </div>
+
+                  {/* 操作按钮 */}
+                  <div className="flex items-center justify-end pt-4 border-t border-gray-200 dark:border-gray-700">
+                    <button
+                      onClick={() => handleOpenInstallModal(marketInstance)}
+                      className="flex items-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                    >
+                      <Download className="w-4 h-4" />
+                      <span>安装</span>
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -621,6 +847,88 @@ const InstanceManagerPage: React.FC = () => {
                 className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {editingInstance ? '更新' : '创建'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 安装实例模态框 */}
+      {showInstallModal && selectedMarketInstance && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md mx-4">
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
+              安装实例: {selectedMarketInstance.name}
+            </h2>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  实例名称
+                </label>
+                <input
+                  type="text"
+                  value={selectedMarketInstance.name}
+                  disabled
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-gray-100 dark:bg-gray-600 text-gray-500 dark:text-gray-400"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  启动命令
+                </label>
+                <input
+                  type="text"
+                  value={selectedMarketInstance.command}
+                  disabled
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-gray-100 dark:bg-gray-600 text-gray-500 dark:text-gray-400"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  停止命令
+                </label>
+                <input
+                  type="text"
+                  value={selectedMarketInstance.stopcommand}
+                  disabled
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-gray-100 dark:bg-gray-600 text-gray-500 dark:text-gray-400"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  运行目录 *
+                </label>
+                <input
+                  type="text"
+                  value={installFormData.workingDirectory}
+                  onChange={(e) => setInstallFormData({ workingDirectory: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="请输入实例的运行目录路径"
+                />
+              </div>
+            </div>
+            
+            <div className="flex items-center justify-end space-x-3 mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
+              <button
+                onClick={() => {
+                  setShowInstallModal(false)
+                  setSelectedMarketInstance(null)
+                  setInstallFormData({ workingDirectory: '' })
+                }}
+                className="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+              >
+                取消
+              </button>
+              <button
+                onClick={handleInstallMarketInstance}
+                disabled={!installFormData.workingDirectory}
+                className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                安装
               </button>
             </div>
           </div>

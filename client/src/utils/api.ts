@@ -344,6 +344,11 @@ class ApiClient {
     return this.get(`/instances/${id}/status`)
   }
 
+  // 实例市场API
+  async getMarketInstances() {
+    return this.get('/instances/market')
+  }
+
   // 游戏部署API
   async getInstallableGames() {
     return this.get('/game-deployment/games')
