@@ -78,7 +78,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           </div>
           
           {/* 导航菜单 */}
-          <nav className="flex-1 px-4 py-6 space-y-2">
+          <nav className="flex-1 px-3 py-5 space-y-1.5">
             {navigation.map((item) => {
               const isActive = location.pathname === item.href
               return (
@@ -87,14 +87,15 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                   to={item.href}
                   onClick={() => setSidebarOpen(false)}
                   className={`
-                    flex items-center space-x-3 px-4 py-3 rounded-lg transition-all duration-200
+                    flex items-center space-x-2.5 px-3 py-2.5 rounded-lg transition-all duration-300 ease-in-out transform
+                    hover:scale-105 hover:shadow-md active:scale-95
                     ${isActive
-                      ? 'bg-blue-600/20 text-blue-600 dark:text-blue-400 border border-blue-500/30 shadow-lg'
+                      ? 'bg-blue-600/20 text-blue-600 dark:text-blue-400 border border-blue-500/30 shadow-lg scale-105'
                       : 'text-black dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/10 hover:text-black dark:hover:text-white'
                     }
                   `}
                 >
-                  <item.icon className="w-5 h-5" />
+                  <item.icon className="w-4 h-4" />
                   <span className="font-medium">{item.name}</span>
                 </Link>
               )
@@ -106,12 +107,12 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             {/* 主题切换 */}
             <button
               onClick={toggleTheme}
-              className="flex items-center space-x-3 w-full px-4 py-2 text-black dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/10 hover:text-black dark:hover:text-white rounded-lg transition-all duration-200"
+              className="flex items-center space-x-2.5 w-full px-3 py-2.5 text-black dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/10 hover:text-black dark:hover:text-white rounded-lg transition-all duration-300 ease-in-out transform hover:scale-105 hover:shadow-md active:scale-95"
             >
               {theme === 'dark' ? (
-                <Sun className="w-5 h-5" />
+                <Sun className="w-4 h-4" />
               ) : (
-                <Moon className="w-5 h-5" />
+                <Moon className="w-4 h-4" />
               )}
               <span className="font-medium">
                 {theme === 'dark' ? '浅色模式' : '深色模式'}
@@ -119,9 +120,9 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             </button>
             
             {/* 用户信息 */}
-            <div className="flex items-center space-x-3 px-4 py-2 bg-gray-100 dark:bg-white/5 rounded-lg">
-              <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
-                <User className="w-4 h-4 text-white" />
+            <div className="flex items-center space-x-2.5 px-3 py-2.5 bg-gray-100 dark:bg-white/5 rounded-lg transition-all duration-300 ease-in-out transform hover:scale-105 hover:shadow-md">
+              <div className="w-7 h-7 bg-blue-600 rounded-full flex items-center justify-center">
+                <User className="w-3.5 h-3.5 text-white" />
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-black dark:text-white truncate">
@@ -136,9 +137,9 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             {/* 登出按钮 */}
             <button
               onClick={handleLogout}
-              className="flex items-center space-x-3 w-full px-4 py-2 text-red-400 hover:bg-red-500/10 hover:text-red-300 rounded-lg transition-all duration-200"
+              className="flex items-center space-x-2.5 w-full px-3 py-2.5 text-red-400 hover:bg-red-500/10 hover:text-red-300 rounded-lg transition-all duration-300 ease-in-out transform hover:scale-105 hover:shadow-md active:scale-95"
             >
-              <LogOut className="w-5 h-5" />
+              <LogOut className="w-4 h-4" />
               <span className="font-medium">登出</span>
             </button>
           </div>
@@ -172,7 +173,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         </div>
         
         {/* 页面内容 */}
-        <main className="p-6">
+        <main className="p-6 relative overflow-hidden">
           {children}
         </main>
       </div>

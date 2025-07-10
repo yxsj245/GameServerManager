@@ -4,6 +4,7 @@ import { ConfigProvider, theme } from 'antd'
 import { useAuthStore } from '@/stores/authStore'
 import { useThemeStore } from '@/stores/themeStore'
 import Layout from '@/components/Layout'
+import PageTransition from '@/components/PageTransition'
 import LoginPage from '@/pages/LoginPage'
 import HomePage from '@/pages/HomePage'
 import TerminalPage from '@/pages/TerminalPage'
@@ -97,14 +98,14 @@ function App() {
               <ProtectedRoute>
                 <Layout>
                   <Routes>
-                    <Route path="/" element={<HomePage />} />
-                    <Route path="/terminal" element={<TerminalPage />} />
-                    <Route path="/instances" element={<InstanceManagerPage />} />
-                    <Route path="/game-deployment" element={<GameDeploymentPage />} />
-                    <Route path="/scheduled-tasks" element={<ScheduledTasksPage />} />
-                    <Route path="/files" element={<FileManagerPage />} />
-                    <Route path="/settings" element={<SettingsPage />} />
-                    <Route path="/about" element={<AboutProjectPage />} />
+                    <Route path="/" element={<PageTransition><HomePage /></PageTransition>} />
+                    <Route path="/terminal" element={<PageTransition><TerminalPage /></PageTransition>} />
+                    <Route path="/instances" element={<PageTransition><InstanceManagerPage /></PageTransition>} />
+                    <Route path="/game-deployment" element={<PageTransition><GameDeploymentPage /></PageTransition>} />
+                    <Route path="/scheduled-tasks" element={<PageTransition><ScheduledTasksPage /></PageTransition>} />
+                    <Route path="/files" element={<PageTransition><FileManagerPage /></PageTransition>} />
+                    <Route path="/settings" element={<PageTransition><SettingsPage /></PageTransition>} />
+                    <Route path="/about" element={<PageTransition><AboutProjectPage /></PageTransition>} />
                     <Route path="*" element={<Navigate to="/" replace />} />
                   </Routes>
                 </Layout>
