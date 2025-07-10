@@ -34,6 +34,8 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const [isConnected, setIsConnected] = useState(socketClient.isConnected())
   const [showDisconnectModal, setShowDisconnectModal] = useState(false)
   const [reconnecting, setReconnecting] = useState(false)
+  const [showLowPowerModal, setShowLowPowerModal] = useState(false)
+  const [isLowPowerMode, setIsLowPowerMode] = useState(socketClient.isInLowPowerMode())
   const location = useLocation()
   const { user, logout } = useAuthStore()
   const { theme, toggleTheme } = useThemeStore()
@@ -53,11 +55,67 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     await logout()
   }
 
+  // 鼠标活动监测和低功耗模式管理
+  useEffect(() => {
+    let mouseTimer: NodeJS.Timeout | null = null
+    const MOUSE_IDLE_TIME = 60000 // 1分钟
+    
+    const resetMouseTimer = () => {
+      if (mouseTimer) {
+        clearTimeout(mouseTimer)
+      }
+      
+      // 如果当前在低功耗模式，退出低功耗模式
+      if (socketClient.isInLowPowerMode()) {
+        socketClient.exitLowPowerMode()
+        setShowLowPowerModal(false)
+      }
+      
+      // 只有在非终端页面才启动定时器
+      if (location.pathname !== '/terminal') {
+        mouseTimer = setTimeout(() => {
+          // 进入低功耗模式
+          socketClient.enterLowPowerMode()
+          setShowLowPowerModal(true)
+        }, MOUSE_IDLE_TIME)
+      }
+    }
+    
+    const handleMouseMove = () => {
+      resetMouseTimer()
+    }
+    
+    const handleMouseClick = () => {
+      resetMouseTimer()
+    }
+    
+    const handleKeyPress = () => {
+      resetMouseTimer()
+    }
+    
+    // 添加事件监听器
+    document.addEventListener('mousemove', handleMouseMove)
+    document.addEventListener('mousedown', handleMouseClick)
+    document.addEventListener('keydown', handleKeyPress)
+    
+    // 初始化定时器
+    resetMouseTimer()
+    
+    return () => {
+      if (mouseTimer) {
+        clearTimeout(mouseTimer)
+      }
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mousedown', handleMouseClick)
+      document.removeEventListener('keydown', handleKeyPress)
+    }
+  }, [location.pathname])
+
   // WebSocket连接状态监听
   useEffect(() => {
     const handleConnectionStatus = (data: { connected: boolean; reason?: string }) => {
       setIsConnected(data.connected)
-      if (!data.connected) {
+      if (!data.connected && !socketClient.isInLowPowerMode()) {
         setShowDisconnectModal(true)
       } else {
         setShowDisconnectModal(false)
@@ -66,26 +124,38 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     }
 
     const handleConnectionError = () => {
-      setIsConnected(false)
-      setShowDisconnectModal(true)
+      if (!socketClient.isInLowPowerMode()) {
+        setIsConnected(false)
+        setShowDisconnectModal(true)
+      }
     }
 
     const handleMaxReconnectAttempts = () => {
       setReconnecting(false)
     }
 
+    const handleLowPowerModeChange = (isLowPower: boolean) => {
+      setIsLowPowerMode(isLowPower)
+      if (!isLowPower) {
+        setShowLowPowerModal(false)
+      }
+    }
+
     // 监听连接状态变化
     socketClient.on('connection-status', handleConnectionStatus)
     socketClient.on('connection-error', handleConnectionError)
     socketClient.on('max-reconnect-attempts', handleMaxReconnectAttempts)
+    socketClient.onLowPowerModeChange(handleLowPowerModeChange)
 
     // 初始化连接状态
     setIsConnected(socketClient.isConnected())
+    setIsLowPowerMode(socketClient.isInLowPowerMode())
 
     return () => {
       socketClient.off('connection-status', handleConnectionStatus)
       socketClient.off('connection-error', handleConnectionError)
       socketClient.off('max-reconnect-attempts', handleMaxReconnectAttempts)
+      socketClient.offLowPowerModeChange(handleLowPowerModeChange)
     }
   }, [])
 
@@ -98,6 +168,17 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   // 关闭弹窗
   const handleCloseModal = () => {
     setShowDisconnectModal(false)
+  }
+
+  // 退出低功耗模式
+  const handleExitLowPowerMode = () => {
+    socketClient.exitLowPowerMode()
+    setShowLowPowerModal(false)
+  }
+
+  // 关闭低功耗模式弹窗但保持低功耗状态
+  const handleCloseLowPowerModal = () => {
+    setShowLowPowerModal(false)
   }
   
   return (
@@ -224,7 +305,12 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               className="flex items-center space-x-2 cursor-help" 
               title="WebSocket是一种网络通信协议，允许服务器和客户端之间进行实时双向通信。在GSManager3中，WebSocket作为核心功能，用于实时传输终端输出、系统状态更新、游戏服务器状态变化等信息，确保您能够及时获得最新的系统反馈。"
             >
-              {isConnected ? (
+              {isLowPowerMode ? (
+                <>
+                  <div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse"></div>
+                  <span className="text-sm text-yellow-600 dark:text-yellow-400">低功耗模式</span>
+                </>
+              ) : isConnected ? (
                 <>
                   <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
                   <span className="text-sm text-black dark:text-gray-300">WebSocket连接已建立</span>
@@ -310,6 +396,71 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                     <span>立即重连</span>
                   </>
                 )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 低功耗模式弹窗 */}
+      {showLowPowerModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md mx-4 transform transition-all duration-300">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
+              <div className="flex items-center space-x-3">
+                <div className="w-10 h-10 bg-yellow-100 dark:bg-yellow-900/30 rounded-full flex items-center justify-center">
+                  <Moon className="w-5 h-5 text-yellow-600 dark:text-yellow-400" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  低功耗模式
+                </h3>
+              </div>
+              <button
+                onClick={handleCloseLowPowerModal}
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="p-6">
+              <div className="flex items-start space-x-3">
+                <Info className="w-5 h-5 text-blue-500 mt-0.5 flex-shrink-0" />
+                <div className="flex-1">
+                  <p className="text-gray-700 dark:text-gray-300 mb-4">
+                    检测到您的鼠标超过1分钟没有活动，页面已自动进入低功耗模式以节省系统资源。
+                  </p>
+                  <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-3 mb-4">
+                    <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      低功耗模式说明：
+                    </h4>
+                    <ul className="text-sm text-gray-600 dark:text-gray-400 space-y-1">
+                      <li>• WebSocket连接已暂时关闭</li>
+                      <li>• 实时数据更新已暂停</li>
+                      <li>• 移动鼠标或按键可立即恢复</li>
+                      <li>• 终端页面不会进入低功耗模式</li>
+                    </ul>
+                  </div>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    移动鼠标、点击或按键将自动退出低功耗模式并恢复正常功能。
+                  </p>
+                </div>
+              </div>
+            </div>
+            
+            <div className="flex space-x-3 p-6 border-t border-gray-200 dark:border-gray-700">
+              <button
+                onClick={handleCloseLowPowerModal}
+                className="flex-1 px-4 py-2 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-600 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-500 transition-colors"
+              >
+                保持低功耗
+              </button>
+              <button
+                onClick={handleExitLowPowerMode}
+                className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors flex items-center justify-center space-x-2"
+              >
+                <Sun className="w-4 h-4" />
+                <span>立即恢复</span>
               </button>
             </div>
           </div>

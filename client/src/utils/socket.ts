@@ -9,6 +9,8 @@ class SocketClient {
   private reconnectDelay = 1000
   private listeners: Map<string, Function[]> = new Map()
   private isInitialized = false
+  private isLowPowerMode = false
+  private lowPowerModeCallbacks: Function[] = []
 
   constructor() {
     // 不在构造函数中立即连接，等待用户登录后再连接
@@ -262,6 +264,62 @@ class SocketClient {
 
   unsubscribeGameStatus(gameId: string) {
     this.emit('unsubscribe-game-status', { gameId })
+  }
+
+  // 低功耗模式相关方法
+  enterLowPowerMode() {
+    if (!this.isLowPowerMode) {
+      this.isLowPowerMode = true
+      console.log('进入低功耗模式，关闭WebSocket连接')
+      
+      // 触发低功耗模式回调
+      this.lowPowerModeCallbacks.forEach(callback => {
+        try {
+          callback(true)
+        } catch (error) {
+          console.error('执行低功耗模式回调时出错:', error)
+        }
+      })
+      
+      // 断开WebSocket连接
+      if (this.socket) {
+        this.socket.disconnect()
+      }
+    }
+  }
+
+  exitLowPowerMode() {
+    if (this.isLowPowerMode) {
+      this.isLowPowerMode = false
+      console.log('退出低功耗模式，重新建立WebSocket连接')
+      
+      // 触发低功耗模式回调
+      this.lowPowerModeCallbacks.forEach(callback => {
+        try {
+          callback(false)
+        } catch (error) {
+          console.error('执行低功耗模式回调时出错:', error)
+        }
+      })
+      
+      // 重新连接
+      this.reconnectManually()
+    }
+  }
+
+  isInLowPowerMode(): boolean {
+    return this.isLowPowerMode
+  }
+
+  onLowPowerModeChange(callback: (isLowPower: boolean) => void) {
+    this.lowPowerModeCallbacks.push(callback)
+  }
+
+  offLowPowerModeChange(callback: (isLowPower: boolean) => void) {
+    const index = this.lowPowerModeCallbacks.indexOf(callback)
+    if (index > -1) {
+      this.lowPowerModeCallbacks.splice(index, 1)
+    }
   }
 }
 
