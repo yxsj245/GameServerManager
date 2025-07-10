@@ -50,6 +50,10 @@ const GameDeploymentPage: React.FC = () => {
   const [useAnonymous, setUseAnonymous] = useState(true)
   const [steamUsername, setSteamUsername] = useState('')
   const [steamPassword, setSteamPassword] = useState('')
+  
+  // 平台筛选状态
+  const [platformFilter, setPlatformFilter] = useState<string>('all') // 'all', 'compatible', 'Windows', 'Linux', 'macOS'
+  const [searchQuery, setSearchQuery] = useState('')
 
   // Minecraft相关状态
   const [minecraftCategories, setMinecraftCategories] = useState<MinecraftServerCategory[]>([])
@@ -736,6 +740,28 @@ const GameDeploymentPage: React.FC = () => {
     }
   }
 
+  // 筛选游戏
+  const filteredGames = Object.entries(games).filter(([gameKey, gameInfo]) => {
+    // 搜索筛选
+    if (searchQuery && !gameInfo.game_nameCN.toLowerCase().includes(searchQuery.toLowerCase())) {
+      return false
+    }
+    
+    // 平台筛选
+    switch (platformFilter) {
+      case 'all':
+        return true
+      case 'compatible':
+        return gameInfo.supportedOnCurrentPlatform !== false
+      case 'Windows':
+      case 'Linux':
+      case 'macOS':
+        return gameInfo.system?.includes(platformFilter) || (!gameInfo.system || gameInfo.system.length === 0)
+      default:
+        return true
+    }
+  })
+
   const tabs = [
     { id: 'steamcmd', name: 'SteamCMD', icon: Download },
     { id: 'minecraft', name: 'Minecraft部署', icon: Pickaxe },
@@ -791,9 +817,87 @@ const GameDeploymentPage: React.FC = () => {
       {/* SteamCMD 标签页内容 */}
       {activeTab === 'steamcmd' && (
         <div className="space-y-6">
+          {/* 筛选器 */}
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
+            <div className="flex flex-col sm:flex-row gap-4">
+              {/* 搜索框 */}
+              <div className="flex-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  搜索游戏
+                </label>
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="输入游戏名称搜索..."
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                />
+              </div>
+              
+              {/* 平台筛选 */}
+              <div className="sm:w-48">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  平台筛选
+                </label>
+                <select
+                  value={platformFilter}
+                  onChange={(e) => setPlatformFilter(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                >
+                  <option value="all">全部游戏</option>
+                  <option value="compatible">兼容当前平台</option>
+                  <option value="Windows">Windows</option>
+                  <option value="Linux">Linux</option>
+                  <option value="macOS">macOS</option>
+                </select>
+               </div>
+               
+               {/* 清除筛选按钮 */}
+               {(searchQuery || platformFilter !== 'all') && (
+                 <div className="sm:w-auto flex items-end">
+                   <button
+                     onClick={() => {
+                       setSearchQuery('')
+                       setPlatformFilter('all')
+                     }}
+                     className="px-4 py-2 text-sm bg-gray-100 dark:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-500 transition-colors"
+                   >
+                     清除筛选
+                   </button>
+                 </div>
+               )}
+             </div>
+             
+             {/* 统计信息 */}
+             <div className="mt-4 text-sm text-gray-600 dark:text-gray-400">
+               显示 {filteredGames.length} / {Object.keys(games).length} 个游戏
+               {platformFilter === 'compatible' && (
+                 <span className="ml-2 text-green-600 dark:text-green-400">
+                   (仅显示兼容游戏)
+                 </span>
+               )}
+               {searchQuery && (
+                 <span className="ml-2 text-blue-600 dark:text-blue-400">
+                   (搜索: "{searchQuery}")
+                 </span>
+               )}
+             </div>
+          </div>
+          
           {/* 游戏网格 */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {Object.entries(games).map(([gameKey, gameInfo]) => (
+            {filteredGames.length === 0 ? (
+              <div className="col-span-full text-center py-12">
+                <div className="text-gray-500 dark:text-gray-400">
+                  <Server className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                  <p className="text-lg font-medium mb-2">没有找到匹配的游戏</p>
+                  <p className="text-sm">
+                    {searchQuery ? '尝试修改搜索关键词' : '尝试更改筛选条件'}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              filteredGames.map(([gameKey, gameInfo]) => (
               <div
                 key={gameKey}
                 className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow"
@@ -868,7 +972,8 @@ const GameDeploymentPage: React.FC = () => {
                   </button>
                 </div>
               </div>
-            ))}
+              ))
+            )}
           </div>
         </div>
       )}
