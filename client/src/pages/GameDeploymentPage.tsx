@@ -15,7 +15,7 @@ import {
 } from 'lucide-react'
 import { useNotificationStore } from '@/stores/notificationStore'
 import apiClient from '@/utils/api'
-import { MinecraftServerCategory, MinecraftDownloadOptions, MinecraftDownloadProgress } from '@/types'
+import { MinecraftServerCategory, MinecraftDownloadOptions, MinecraftDownloadProgress, MoreGameInfo, Platform } from '@/types'
 import { io, Socket } from 'socket.io-client'
 import config from '@/config'
 
@@ -71,7 +71,7 @@ const GameDeploymentPage: React.FC = () => {
   const [creatingInstance, setCreatingInstance] = useState(false)
   
   // 更多游戏部署相关状态
-  const [moreGames, setMoreGames] = useState<any[]>([])
+  const [moreGames, setMoreGames] = useState<MoreGameInfo[]>([])
   const [moreGamesLoading, setMoreGamesLoading] = useState(false)
   const [selectedMoreGame, setSelectedMoreGame] = useState<string>('')
   const [moreGameInstallPath, setMoreGameInstallPath] = useState('')
@@ -137,6 +137,17 @@ const GameDeploymentPage: React.FC = () => {
         type: 'error',
         title: '参数错误',
         message: '请选择游戏和安装路径'
+      })
+      return
+    }
+    
+    // 检查游戏是否支持当前平台
+    const selectedGame = moreGames.find(g => g.id === selectedMoreGame)
+    if (!selectedGame?.supportedOnCurrentPlatform) {
+      addNotification({
+        type: 'error',
+        title: '平台不兼容',
+        message: `${selectedGame?.name || '所选游戏'} 不支持当前平台`
       })
       return
     }
@@ -1127,33 +1138,78 @@ const GameDeploymentPage: React.FC = () => {
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {moreGames.map((game) => (
-                  <div
-                    key={game.id}
-                    className={`
-                      p-4 border-2 rounded-lg cursor-pointer transition-all
-                      ${selectedMoreGame === game.id
-                        ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                        : 'border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500'
-                      }
-                    `}
-                    onClick={() => setSelectedMoreGame(game.id)}
-                  >
-                    <div className="flex items-center space-x-3">
-                      <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
-                        <Server className="w-6 h-6 text-white" />
-                      </div>
-                      <div>
-                        <h4 className="font-medium text-gray-900 dark:text-white">
-                          {game.name}
-                        </h4>
-                        <p className="text-sm text-gray-600 dark:text-gray-400">
-                          {game.description}
-                        </p>
+                {moreGames.map((game) => {
+                  const isSupported = game.supportedOnCurrentPlatform
+                  const platformText = {
+                    [Platform.WINDOWS]: 'Windows',
+                    [Platform.LINUX]: 'Linux',
+                    [Platform.MACOS]: 'macOS'
+                  }
+                  
+                  return (
+                    <div
+                      key={game.id}
+                      className={`
+                        p-4 border-2 rounded-lg transition-all relative
+                        ${!isSupported 
+                          ? 'border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700/50 cursor-not-allowed opacity-60'
+                          : selectedMoreGame === game.id
+                            ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 cursor-pointer'
+                            : 'border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500 cursor-pointer'
+                        }
+                      `}
+                      onClick={() => isSupported && setSelectedMoreGame(game.id)}
+                    >
+                      <div className="flex items-start space-x-3">
+                        <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${
+                           isSupported 
+                             ? 'bg-gradient-to-br from-blue-500 to-purple-600' 
+                             : 'bg-gray-400 dark:bg-gray-600'
+                         }`}>
+                           <Server className="w-6 h-6 text-white" />
+                         </div>
+                        <div className="flex-1">
+                          <div className="flex items-center justify-between">
+                            <h4 className={`font-medium ${
+                              isSupported 
+                                ? 'text-gray-900 dark:text-white' 
+                                : 'text-gray-500 dark:text-gray-400'
+                            }`}>
+                              {game.name}
+                            </h4>
+                            {!isSupported && (
+                              <AlertCircle className="w-4 h-4 text-orange-500" />
+                            )}
+                          </div>
+                          <p className={`text-sm ${
+                            isSupported 
+                              ? 'text-gray-600 dark:text-gray-400' 
+                              : 'text-gray-500 dark:text-gray-500'
+                          }`}>
+                            {game.description}
+                          </p>
+                          <div className="mt-2 flex flex-wrap gap-1">
+                            <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                              isSupported 
+                                ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400'
+                                : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
+                            }`}>
+                              当前平台: {platformText[game.currentPlatform || Platform.LINUX]}
+                            </span>
+                            {!isSupported && (
+                              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800 dark:bg-orange-900/20 dark:text-orange-400">
+                                不支持当前平台
+                              </span>
+                            )}
+                          </div>
+                          <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                            支持平台: {game.supportedPlatforms.map(p => platformText[p]).join(', ')}
+                          </div>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             )}
           </div>
@@ -1180,25 +1236,69 @@ const GameDeploymentPage: React.FC = () => {
                   />
                 </div>
                 
+                {/* 平台兼容性提示 */}
+                {(() => {
+                  const selectedGame = moreGames.find(g => g.id === selectedMoreGame)
+                  if (selectedGame && !selectedGame.supportedOnCurrentPlatform) {
+                    return (
+                      <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg p-4">
+                        <div className="flex items-center space-x-2 text-orange-800 dark:text-orange-400">
+                          <AlertCircle className="w-5 h-5" />
+                          <span className="font-medium">平台不兼容</span>
+                        </div>
+                        <p className="text-sm text-orange-700 dark:text-orange-300 mt-1">
+                          {selectedGame.name} 不支持当前平台 ({selectedGame.currentPlatform})。
+                          支持的平台: {selectedGame.supportedPlatforms.map(p => {
+                            const platformText = {
+                              [Platform.WINDOWS]: 'Windows',
+                              [Platform.LINUX]: 'Linux',
+                              [Platform.MACOS]: 'macOS'
+                            }
+                            return platformText[p]
+                          }).join(', ')}
+                        </p>
+                      </div>
+                    )
+                  }
+                  return null
+                })()}
+                
                 {/* 部署按钮 */}
                 <div className="flex justify-end">
-                  <button
-                    onClick={deployMoreGame}
-                    disabled={moreGameDeploying || !moreGameInstallPath.trim()}
-                    className="px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded-lg transition-colors flex items-center space-x-2"
-                  >
-                    {moreGameDeploying ? (
-                      <>
-                        <Loader className="w-4 h-4 animate-spin" />
-                        <span>部署中...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Download className="w-4 h-4" />
-                        <span>开始部署</span>
-                      </>
-                    )}
-                  </button>
+                  {(() => {
+                    const selectedGame = moreGames.find(g => g.id === selectedMoreGame)
+                    const isGameSupported = selectedGame?.supportedOnCurrentPlatform ?? false
+                    const isDisabled = moreGameDeploying || !moreGameInstallPath.trim() || !isGameSupported
+                    
+                    return (
+                      <button
+                        onClick={deployMoreGame}
+                        disabled={isDisabled}
+                        className={`px-6 py-2 rounded-lg transition-colors flex items-center space-x-2 ${
+                          isDisabled
+                            ? 'bg-gray-400 dark:bg-gray-600 text-gray-200 cursor-not-allowed'
+                            : 'bg-blue-600 hover:bg-blue-700 text-white'
+                        }`}
+                      >
+                        {moreGameDeploying ? (
+                          <>
+                            <Loader className="w-4 h-4 animate-spin" />
+                            <span>部署中...</span>
+                          </>
+                        ) : !isGameSupported ? (
+                          <>
+                            <AlertCircle className="w-4 h-4" />
+                            <span>不支持当前平台</span>
+                          </>
+                        ) : (
+                          <>
+                            <Download className="w-4 h-4" />
+                            <span>开始部署</span>
+                          </>
+                        )}
+                      </button>
+                    )
+                  })()}
                 </div>
                 
                 {/* 部署进度 */}

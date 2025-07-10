@@ -28,6 +28,13 @@ export enum GameType {
   FACTORIO = 'factorio'
 }
 
+// 平台类型枚举
+export enum Platform {
+  WINDOWS = 'windows',
+  LINUX = 'linux',
+  MACOS = 'macos'
+}
+
 // 游戏信息接口
 export interface GameInfo {
   id: string
@@ -36,6 +43,7 @@ export interface GameInfo {
   icon: string
   category: string
   supported: boolean
+  supportedPlatforms: Platform[]
 }
 
 // 部署选项接口
@@ -52,6 +60,27 @@ export interface DeploymentResult {
   data?: any
 }
 
+// 获取当前平台
+function getCurrentPlatform(): Platform {
+  const platform = process.platform
+  switch (platform) {
+    case 'win32':
+      return Platform.WINDOWS
+    case 'linux':
+      return Platform.LINUX
+    case 'darwin':
+      return Platform.MACOS
+    default:
+      return Platform.LINUX // 默认为Linux
+  }
+}
+
+// 检查游戏是否支持当前平台
+function isGameSupportedOnCurrentPlatform(game: GameInfo): boolean {
+  const currentPlatform = getCurrentPlatform()
+  return game.supportedPlatforms.includes(currentPlatform)
+}
+
 // 支持的游戏列表
 const supportedGames: GameInfo[] = [
   {
@@ -60,7 +89,8 @@ const supportedGames: GameInfo[] = [
     description: 'Terraria模组加载器服务端',
     icon: '🎮',
     category: '沙盒游戏',
-    supported: true
+    supported: true,
+    supportedPlatforms: [Platform.WINDOWS, Platform.LINUX, Platform.MACOS] // 全平台支持
   },
   {
     id: 'factorio',
@@ -68,16 +98,31 @@ const supportedGames: GameInfo[] = [
     description: 'Factorio工厂建造游戏服务端',
     icon: '🏭',
     category: '策略游戏',
-    supported: true
+    supported: true,
+    supportedPlatforms: [Platform.LINUX] // 仅Linux平台支持
   }
 ]
 
 // 获取支持的游戏列表
 router.get('/games', authenticateToken, async (req: Request, res: Response) => {
   try {
+    const currentPlatform = getCurrentPlatform()
+    
+    // 过滤出当前平台支持的游戏，并添加平台信息
+    const filteredGames = supportedGames.map(game => ({
+      ...game,
+      currentPlatform,
+      supportedOnCurrentPlatform: isGameSupportedOnCurrentPlatform(game)
+    }))
+    
     res.json({
       success: true,
-      data: supportedGames
+      data: filteredGames,
+      meta: {
+        currentPlatform,
+        totalGames: supportedGames.length,
+        supportedGames: filteredGames.filter(g => g.supportedOnCurrentPlatform).length
+      }
     })
   } catch (error: any) {
     logger.error('获取游戏列表失败:', error)

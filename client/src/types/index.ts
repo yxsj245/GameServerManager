@@ -241,6 +241,26 @@ export interface InstanceState {
   error: string | null
 }
 
+// 平台类型枚举
+export enum Platform {
+  WINDOWS = 'windows',
+  LINUX = 'linux',
+  MACOS = 'macos'
+}
+
+// 更多游戏信息类型
+export interface MoreGameInfo {
+  id: string
+  name: string
+  description: string
+  icon: string
+  category: string
+  supported: boolean
+  supportedPlatforms: Platform[]
+  currentPlatform?: Platform
+  supportedOnCurrentPlatform?: boolean
+}
+
 // 游戏部署相关类型
 export interface InstallableGame {
   id: string
