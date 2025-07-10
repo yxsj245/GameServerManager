@@ -37,11 +37,14 @@ import {
   CheckCircleOutlined,
   ExclamationCircleOutlined,
   ClockCircleOutlined,
-  BellOutlined
+  BellOutlined,
+  AppstoreOutlined,
+  UnorderedListOutlined
 } from '@ant-design/icons'
 import { useFileStore } from '@/stores/fileStore'
 import { useNotificationStore } from '@/stores/notificationStore'
 import { FileGridItem } from '@/components/FileGridItem'
+import { FileListItem } from '@/components/FileListItem'
 import { FileContextMenu } from '@/components/FileContextMenu'
 import { 
   CreateDialog, 
@@ -144,6 +147,18 @@ const FileManagerPage: React.FC = () => {
   
   // 任务状态抽屉
   const [taskDrawerVisible, setTaskDrawerVisible] = useState(false)
+  
+  // 视图模式
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>(() => {
+    const saved = localStorage.getItem('fileManager_viewMode')
+    return (saved as 'grid' | 'list') || 'grid'
+  })
+  
+  // 保存视图模式到localStorage
+  const handleViewModeChange = (mode: 'grid' | 'list') => {
+    setViewMode(mode)
+    localStorage.setItem('fileManager_viewMode', mode)
+  }
   
   // 初始化
   useEffect(() => {
@@ -680,6 +695,24 @@ const FileManagerPage: React.FC = () => {
         </div>
         
         <div className="flex items-center space-x-2">
+          {/* 视图切换 */}
+          <Space>
+            <Tooltip title="网格视图">
+               <Button 
+                 icon={<AppstoreOutlined />}
+                 type={viewMode === 'grid' ? 'primary' : 'default'}
+                 onClick={() => handleViewModeChange('grid')}
+               />
+             </Tooltip>
+             <Tooltip title="列表视图">
+               <Button 
+                 icon={<UnorderedListOutlined />}
+                 type={viewMode === 'list' ? 'primary' : 'default'}
+                 onClick={() => handleViewModeChange('list')}
+               />
+             </Tooltip>
+          </Space>
+          
           {/* 搜索 */}
           <Input
             placeholder="搜索文件..."
@@ -811,7 +844,7 @@ const FileManagerPage: React.FC = () => {
             description="此文件夹为空"
             image={Empty.PRESENTED_IMAGE_SIMPLE}
           />
-        ) : (
+        ) : viewMode === 'grid' ? (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-4">
             {filteredFiles.map((file) => (
               <FileContextMenu
@@ -832,6 +865,35 @@ const FileManagerPage: React.FC = () => {
                 onOpenTerminal={handleContextMenuOpenTerminal}
               >
                 <FileGridItem
+                  file={file}
+                  isSelected={selectedFiles.has(file.path)}
+                  onClick={handleFileClick}
+                  onDoubleClick={handleFileDoubleClick}
+                />
+              </FileContextMenu>
+            ))}
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {filteredFiles.map((file) => (
+              <FileContextMenu
+                key={file.path}
+                file={file}
+                selectedFiles={selectedFiles}
+                clipboard={clipboard}
+                onOpen={handleContextMenuOpen}
+                onRename={handleContextMenuRename}
+                onDelete={handleContextMenuDelete}
+                onDownload={handleContextMenuDownload}
+                onCopy={handleContextMenuCopy}
+                onCut={handleContextMenuCut}
+                onPaste={handlePaste}
+                onView={handleContextMenuView}
+                onCompress={handleContextMenuCompress}
+                onExtract={handleContextMenuExtract}
+                onOpenTerminal={handleContextMenuOpenTerminal}
+              >
+                <FileListItem
                   file={file}
                   isSelected={selectedFiles.has(file.path)}
                   onClick={handleFileClick}
