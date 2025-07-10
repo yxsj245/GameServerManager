@@ -278,10 +278,15 @@ export class SteamCMDManager {
   /**
    * 获取SteamCMD可执行文件路径
    */
-  getSteamCMDExecutablePath(): string | null {
+  async getSteamCMDExecutablePath(): Promise<string | null> {
     const config = this.configManager.getSteamCMDConfig()
-    
+    this.logger.info('Getting SteamCMD executable path with config:', { config })
+
     if (!config.isInstalled || !config.installPath) {
+      this.logger.warn('SteamCMD not installed or path not set.', {
+        isInstalled: config.isInstalled,
+        installPath: config.installPath
+      })
       return null
     }
     
@@ -292,18 +297,28 @@ export class SteamCMDManager {
     
     // 如果主要可执行文件存在，返回它
     try {
-      require('fs').accessSync(primaryPath)
+      await fs.access(primaryPath)
       return primaryPath
-    } catch {}
+    } catch (error: any) {
+      this.logger.warn('Primary executable not found, checking alternative.', {
+        primaryPath,
+        error: error.message
+      })
+    }
     
     // 否则检查另一个可执行文件
     const alternativeExecutable = isWindows ? 'steamcmd.sh' : 'steamcmd.exe'
     const alternativePath = path.join(config.installPath, alternativeExecutable)
     
     try {
-      require('fs').accessSync(alternativePath)
+      await fs.access(alternativePath)
       return alternativePath
-    } catch {}
+    } catch (error: any) {
+      this.logger.warn('Alternative executable not found.', {
+        alternativePath,
+        error: error.message
+      })
+    }
     
     return null
   }

@@ -171,10 +171,12 @@ export class ConfigManager {
   }
 
   async updateSteamCMDConfig(updates: Partial<AppConfig['steamcmd']>): Promise<void> {
+    this.logger.info('Updating SteamCMD config with:', updates)
     this.config.steamcmd = {
       ...this.config.steamcmd,
       ...updates
     }
+    this.logger.info('New SteamCMD config is:', this.config.steamcmd)
     await this.saveConfig()
     this.logger.info('SteamCMD配置已更新')
   }

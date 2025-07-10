@@ -173,7 +173,7 @@ router.post('/install', authenticateToken, async (req: Request, res: Response) =
     
     try {
       // 获取SteamCMD路径
-      const steamcmdPath = steamcmdManager.getSteamCMDExecutablePath()
+      const steamcmdPath = await steamcmdManager.getSteamCMDExecutablePath()
       if (!steamcmdPath) {
         return res.status(400).json({
           success: false,

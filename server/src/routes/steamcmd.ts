@@ -180,7 +180,7 @@ router.post('/refresh', authenticateToken, async (req, res) => {
 // 获取SteamCMD可执行文件路径
 router.get('/executable-path', authenticateToken, async (req, res) => {
   try {
-    const executablePath = steamcmdManager.getSteamCMDExecutablePath()
+    const executablePath = await steamcmdManager.getSteamCMDExecutablePath()
     
     res.json({
       success: true,
