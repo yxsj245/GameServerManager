@@ -319,6 +319,44 @@ const GameDeploymentPage: React.FC = () => {
     }
   }
 
+  // 取消Minecraft下载
+  const cancelMinecraftDownload = async () => {
+    if (!currentDownloadId.current) {
+      addNotification({
+        type: 'error',
+        title: '取消失败',
+        message: '没有正在进行的下载任务'
+      })
+      return
+    }
+
+    try {
+      const response = await apiClient.cancelMinecraftDownload(currentDownloadId.current)
+      
+      if (response.success) {
+        // 重置下载状态
+        setMinecraftDownloading(false)
+        setDownloadProgress(null)
+        currentDownloadId.current = null
+        
+        addNotification({
+          type: 'info',
+          title: '下载已取消',
+          message: 'Minecraft服务端下载已取消'
+        })
+      } else {
+        throw new Error(response.message || '取消下载失败')
+      }
+    } catch (error: any) {
+      console.error('取消下载失败:', error)
+      addNotification({
+        type: 'error',
+        title: '取消失败',
+        message: error.message || '无法取消下载'
+      })
+    }
+  }
+
   // 创建Minecraft实例
   const createMinecraftInstance = async () => {
     if (!instanceName.trim() || !downloadResult) {
@@ -782,28 +820,41 @@ const GameDeploymentPage: React.FC = () => {
                   </div>
 
                   {/* 下载按钮 */}
-                  <button
-                    onClick={downloadMinecraftServer}
-                    disabled={
-                      !selectedServer || 
-                      !selectedVersion || 
-                      !minecraftInstallPath.trim() || 
-                      minecraftDownloading
-                    }
-                    className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white py-3 px-4 rounded-lg transition-colors flex items-center justify-center space-x-2"
-                  >
-                    {minecraftDownloading ? (
-                      <>
-                        <Loader className="w-4 h-4 animate-spin" />
-                        <span>下载中...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Download className="w-4 h-4" />
-                        <span>下载服务端</span>
-                      </>
+                  <div className="space-y-2">
+                    <button
+                      onClick={downloadMinecraftServer}
+                      disabled={
+                        !selectedServer || 
+                        !selectedVersion || 
+                        !minecraftInstallPath.trim() || 
+                        minecraftDownloading
+                      }
+                      className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white py-3 px-4 rounded-lg transition-colors flex items-center justify-center space-x-2"
+                    >
+                      {minecraftDownloading ? (
+                        <>
+                          <Loader className="w-4 h-4 animate-spin" />
+                          <span>下载中...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Download className="w-4 h-4" />
+                          <span>下载服务端</span>
+                        </>
+                      )}
+                    </button>
+                    
+                    {/* 取消下载按钮 */}
+                    {minecraftDownloading && (
+                      <button
+                        onClick={cancelMinecraftDownload}
+                        className="w-full bg-red-600 hover:bg-red-700 text-white py-2 px-4 rounded-lg transition-colors flex items-center justify-center space-x-2"
+                      >
+                        <X className="w-4 h-4" />
+                        <span>取消下载</span>
+                      </button>
                     )}
-                  </button>
+                  </div>
 
                   {/* 下载进度 */}
                   {(downloadProgress || minecraftDownloading) && (

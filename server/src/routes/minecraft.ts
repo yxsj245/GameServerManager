@@ -10,6 +10,9 @@ const router = Router()
 let io: SocketIOServer
 let instanceManager: InstanceManager
 
+// 全局下载器管理器
+const activeDownloads = new Map<string, MinecraftServerDownloader>()
+
 // 设置Socket.IO和InstanceManager
 export function setMinecraftDependencies(socketIO: SocketIOServer, instManager: InstanceManager) {
   io = socketIO
@@ -35,6 +38,50 @@ router.get('/server-categories', async (req: Request, res: Response) => {
     res.status(500).json({
       success: false,
       message: error.message || '获取服务器分类失败'
+    })
+  }
+})
+
+// 取消Minecraft服务端下载
+router.post('/cancel-download', async (req: Request, res: Response) => {
+  try {
+    const { downloadId } = req.body
+    
+    if (!downloadId) {
+      return res.status(400).json({
+        success: false,
+        message: '缺少下载ID参数'
+      })
+    }
+    
+    // 查找活跃的下载任务
+    const downloader = activeDownloads.get(downloadId)
+    
+    if (!downloader) {
+      return res.status(404).json({
+        success: false,
+        message: '未找到指定的下载任务'
+      })
+    }
+    
+    // 取消下载
+    downloader.cancel()
+    
+    // 从活跃下载列表中移除
+    activeDownloads.delete(downloadId)
+    
+    logger.info(`下载任务已取消: ${downloadId}`)
+    
+    res.json({
+      success: true,
+      message: '下载已取消'
+    })
+    
+  } catch (error: any) {
+    logger.error('取消下载失败:', error)
+    res.status(500).json({
+      success: false,
+      message: error.message || '取消下载失败'
     })
   }
 })
@@ -172,8 +219,13 @@ router.post('/download', async (req: Request, res: Response) => {
               })
             }
             logger.info(`[${type.toUpperCase()}] ${message}`)
-          }
+          },
+          // 下载ID
+          downloadId
         )
+        
+        // 将下载器添加到活跃下载列表
+        activeDownloads.set(downloadId, downloader)
         
         // 执行下载
         await downloader.downloadServer({
@@ -185,6 +237,9 @@ router.post('/download', async (req: Request, res: Response) => {
         })
         
         logger.info(`Minecraft服务端下载完成: ${server} ${version}`)
+        
+        // 从活跃下载列表中移除
+        activeDownloads.delete(downloadId)
         
         // 下载完成，发送完成事件
         if (io && socketId) {
@@ -202,6 +257,9 @@ router.post('/download', async (req: Request, res: Response) => {
         
       } catch (error: any) {
         logger.error('Minecraft服务端下载失败:', error)
+        
+        // 从活跃下载列表中移除
+        activeDownloads.delete(downloadId)
         
         // 发送错误事件
         if (io && socketId) {

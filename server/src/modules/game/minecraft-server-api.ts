@@ -406,10 +406,37 @@ export class FileManager {
 export class MinecraftServerDownloader {
   private onProgress?: ProgressCallback;
   private onLog?: LogCallback;
+  private cancelled: boolean = false;
+  private downloadId?: string;
 
-  constructor(onProgress?: ProgressCallback, onLog?: LogCallback) {
+  constructor(onProgress?: ProgressCallback, onLog?: LogCallback, downloadId?: string) {
     this.onProgress = onProgress;
     this.onLog = onLog;
+    this.downloadId = downloadId;
+  }
+
+  /**
+   * 取消下载
+   */
+  cancel(): void {
+    this.cancelled = true;
+    if (this.onLog) {
+      this.onLog('下载已被用户取消', 'warn');
+    }
+  }
+
+  /**
+   * 检查是否已取消
+   */
+  isCancelled(): boolean {
+    return this.cancelled;
+  }
+
+  /**
+   * 获取下载ID
+   */
+  getDownloadId(): string | undefined {
+    return this.downloadId;
   }
 
   /**
@@ -429,6 +456,11 @@ export class MinecraftServerDownloader {
     const log = silent ? undefined : this.onLog;
 
     try {
+      // 检查是否已取消
+      if (this.cancelled) {
+        throw new Error('下载已被取消');
+      }
+
       // 验证Java环境（除非跳过）
       if (!skipJavaCheck) {
         if (log) log('检查Java环境...', 'info');
@@ -443,23 +475,43 @@ export class MinecraftServerDownloader {
         throw new Error('缺少必要参数：server 和 version');
       }
 
+      // 检查是否已取消
+      if (this.cancelled) {
+        throw new Error('下载已被取消');
+      }
+
       // 创建临时目录
       if (log) log('创建临时工作目录...', 'info');
       const tempDir = await FileManager.createTempDirectory();
       if (log) log(`临时目录创建成功: ${tempDir}`, 'success');
       
       try {
+        // 检查是否已取消
+        if (this.cancelled) {
+          throw new Error('下载已被取消');
+        }
+
         // 获取下载地址
         if (log) log('正在获取下载地址...', 'info');
         const downloadData = await ApiService.getDownloadUrl(server, version);
         if (log) log('下载地址获取成功。', 'success');
         
+        // 检查是否已取消
+        if (this.cancelled) {
+          throw new Error('下载已被取消');
+        }
+
         // 下载服务端核心
         const jarPath = FileManager.getServerJarPath(server, version);
         if (log) log(`正在下载服务端核心到: ${jarPath}`, 'info');
         await ApiService.downloadFile(downloadData.url, jarPath, this.onProgress, log);
         if (log) log('服务端核心下载完成。', 'success');
         
+        // 检查是否已取消
+        if (this.cancelled) {
+          throw new Error('下载已被取消');
+        }
+
         // 运行服务端直到EULA协议（除非跳过）
         if (!skipServerRun) {
           if (log) log('正在运行服务端核心...', 'info');
@@ -468,6 +520,11 @@ export class MinecraftServerDownloader {
           if (log) log('服务端运行完成。', 'success');
         }
         
+        // 检查是否已取消
+        if (this.cancelled) {
+          throw new Error('下载已被取消');
+        }
+
         // 移动文件到目标目录
         if (log) log(`正在移动文件到目标目录: ${targetDirectory}`, 'info');
         await FileManager.moveFilesToTarget(targetDirectory, log);

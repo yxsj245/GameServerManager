@@ -413,6 +413,10 @@ class ApiClient {
     return this.post('/minecraft/download', data)
   }
 
+  async cancelMinecraftDownload(downloadId: string) {
+    return this.post('/minecraft/cancel-download', { downloadId })
+  }
+
   async createMinecraftInstance(data: {
     name: string
     description?: string
