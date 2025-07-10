@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState, useEffect } from 'react'
 import { X, AlertTriangle, Folder, Trash2 } from 'lucide-react'
 
 interface ConfirmDeleteDialogProps {
@@ -17,26 +17,54 @@ export const ConfirmDeleteDialog: React.FC<ConfirmDeleteDialogProps> = ({
   onCancel
 }) => {
   const [deleteDirectory, setDeleteDirectory] = React.useState(false)
+  const [isVisible, setIsVisible] = useState(false)
+  const [isAnimating, setIsAnimating] = useState(false)
 
-  if (!isOpen) return null
+  useEffect(() => {
+    if (isOpen) {
+      setIsVisible(true)
+      setTimeout(() => setIsAnimating(true), 10)
+    } else {
+      setIsAnimating(false)
+      setTimeout(() => setIsVisible(false), 200)
+    }
+  }, [isOpen])
+
+  const handleCancel = () => {
+    setIsAnimating(false)
+    setTimeout(() => {
+      onCancel()
+    }, 200)
+  }
 
   const handleConfirm = () => {
-    onConfirm(deleteDirectory)
+    setIsAnimating(false)
+    setTimeout(() => {
+      onConfirm(deleteDirectory)
+    }, 200)
   }
+
+  if (!isVisible) return null
+
+
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       {/* 背景遮罩 */}
       <div 
-        className="absolute inset-0 bg-black bg-opacity-50 transition-opacity"
-        onClick={onCancel}
+        className={`absolute inset-0 bg-black transition-opacity duration-200 ${
+          isAnimating ? 'bg-opacity-50' : 'bg-opacity-0'
+        }`}
+        onClick={handleCancel}
       />
       
       {/* 对话框内容 */}
-      <div className="relative bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full mx-4 p-6">
+      <div className={`relative bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full mx-4 p-6 transform transition-all duration-200 ${
+        isAnimating ? 'scale-100 opacity-100' : 'scale-95 opacity-0'
+      }`}>
         {/* 关闭按钮 */}
         <button
-          onClick={onCancel}
+          onClick={handleCancel}
           className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
         >
           <X className="w-5 h-5" />
@@ -98,7 +126,7 @@ export const ConfirmDeleteDialog: React.FC<ConfirmDeleteDialogProps> = ({
         {/* 操作按钮 */}
         <div className="flex justify-end space-x-3">
           <button
-            onClick={onCancel}
+            onClick={handleCancel}
             className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-colors"
           >
             取消

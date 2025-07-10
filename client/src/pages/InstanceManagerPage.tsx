@@ -742,8 +742,8 @@ const InstanceManagerPage: React.FC = () => {
 
       {/* 创建/编辑实例模态框 */}
       {showCreateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 animate-fade-in">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto transform transition-all duration-300 animate-scale-in">
             <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
               {editingInstance ? '编辑实例' : '创建实例'}
             </h2>
@@ -855,8 +855,8 @@ const InstanceManagerPage: React.FC = () => {
 
       {/* 安装实例模态框 */}
       {showInstallModal && selectedMarketInstance && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md mx-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 animate-fade-in">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md mx-4 transform transition-all duration-300 animate-scale-in">
             <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
               安装实例: {selectedMarketInstance.name}
             </h2>

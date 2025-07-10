@@ -390,8 +390,8 @@ const ScheduledTasksPage: React.FC = () => {
 
       {/* 新建/编辑任务模态框 */}
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-          <div className="w-full max-w-md glass rounded-lg border border-white/20 dark:border-gray-700/30">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 animate-fade-in">
+          <div className="w-full max-w-md glass rounded-lg border border-white/20 dark:border-gray-700/30 transform transition-all duration-300 animate-scale-in">
             <div className="p-6">
               <h2 className="text-xl font-bold text-black dark:text-white mb-4">
                 {editingTask ? '编辑任务' : '新建任务'}
