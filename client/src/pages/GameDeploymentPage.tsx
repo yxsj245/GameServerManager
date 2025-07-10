@@ -700,14 +700,18 @@ const GameDeploymentPage: React.FC = () => {
           steamcmdCommand: fullCommand
         })
       
-      if (response.success) {
+      if (response.success && response.data?.terminalSessionId) {
         addNotification({
           type: 'success',
           title: '安装已启动',
-          message: `${selectedGame.info.game_nameCN} 安装已开始，请前往终端页面查看安装进度`
+          message: `${selectedGame.info.game_nameCN} 安装已开始，即将跳转到终端页面...`
         })
+        // 跳转到终端页面，并将会话ID作为参数传递
+        setTimeout(() => {
+          navigate(`/terminal?sessionId=${response.data.terminalSessionId}`)
+        }, 1500) // 延迟以便用户看到通知
       } else {
-        throw new Error(response.message || '安装失败')
+        throw new Error(response.message || '安装失败，未返回终端会话ID')
       }
     } catch (error: any) {
       console.error('游戏安装失败:', error)
