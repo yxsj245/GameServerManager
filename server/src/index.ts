@@ -368,6 +368,38 @@ function getPlatformArt(): string {
   }
 }
 
+// 检查CORS配置安全性
+function checkCORSConfiguration() {
+  const corsOrigin = process.env.CORS_ORIGIN || '*'
+  const socketCorsOrigin = process.env.SOCKET_CORS_ORIGIN || '*'
+  
+  if (corsOrigin === '*' || socketCorsOrigin === '*') {
+    console.log('\n' + '='.repeat(80))
+    console.log('🚨 CORS安全风险警告 🚨')
+    console.log('='.repeat(80))
+    
+    if (corsOrigin === '*') {
+      console.log('⚠️  检测到 CORS_ORIGIN 配置为通配符 "*"')
+      console.log('   这将允许任何域名访问您的API，存在跨域安全风险！')
+    }
+    
+    if (socketCorsOrigin === '*') {
+      console.log('⚠️  检测到 SOCKET_CORS_ORIGIN 配置为通配符 "*"')
+      console.log('   这将允许任何域名连接您的WebSocket，存在安全风险！')
+    }
+    
+    console.log('\n🔧 若在公网中使用强烈建议修改配置：')
+    console.log('   1. 在 .env 文件中将 CORS_ORIGIN 设置为具体的前端地址')
+    console.log('   2. 在 .env 文件中将 SOCKET_CORS_ORIGIN 设置为具体的前端地址')
+    console.log('   例如: CORS_ORIGIN=http://域名:端口')
+    console.log('   例如: SOCKET_CORS_ORIGIN=http://域名:端口')
+    console.log('\n💡 生产环境请务必使用具体的域名替换通配符！')
+    console.log('='.repeat(80) + '\n')
+  } else {
+    console.log('✅ CORS配置安全检查通过')
+  }
+}
+
 // 启动服务器
 async function startServer() {
   try {
@@ -575,6 +607,9 @@ async function startServer() {
       logger.info(`地址: http://${HOST}:${PORT}`)
       logger.info(`环境: ${process.env.NODE_ENV || 'development'}`)
       logger.info(`进程ID: ${process.pid}`)
+      
+      // 检查CORS配置安全性
+      checkCORSConfiguration()
       
       // 重点显示连接地址
       displayConnectionInfo(HOST, PORT)
