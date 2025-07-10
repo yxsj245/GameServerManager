@@ -12,9 +12,12 @@ const NotificationContainer: React.FC = () => {
   useEffect(() => {
     const newNotifications = notifications.filter(n => !animatingNotifications.has(n.id))
     if (newNotifications.length > 0) {
-      const newIds = new Set(animatingNotifications)
-      newNotifications.forEach(n => newIds.add(n.id))
-      setAnimatingNotifications(newIds)
+      // 延迟一帧以确保DOM已更新
+      setTimeout(() => {
+        const newIds = new Set(animatingNotifications)
+        newNotifications.forEach(n => newIds.add(n.id))
+        setAnimatingNotifications(newIds)
+      }, 10)
     }
   }, [notifications, animatingNotifications])
 
@@ -69,10 +72,12 @@ const NotificationContainer: React.FC = () => {
   }
   
   return (
-    <div className="fixed top-4 right-4 z-50 space-y-2 max-w-sm">
-      {notifications.map((notification) => {
+    <div className="fixed top-4 right-4 z-50 space-y-2 max-w-sm
+                   transition-all duration-300 ease-in-out">
+      {notifications.map((notification, index) => {
         const isExiting = exitingNotifications.has(notification.id)
         const isEntering = !animatingNotifications.has(notification.id)
+        const useBouncyAnimation = notification.type === 'success'
         
         return (
           <div
@@ -80,18 +85,20 @@ const NotificationContainer: React.FC = () => {
             className={`
               ${getBackgroundColor(notification.type)}
               border rounded-lg p-4 shadow-lg backdrop-blur-sm
-              transform transition-all duration-300 ease-in-out
-              hover:scale-105
+              transform transition-all duration-200 ease-in-out
+              hover:scale-105 hover:shadow-xl hover:-translate-y-1
               ${
                 isExiting
-                  ? 'translate-x-full opacity-0 scale-95'
+                  ? 'animate-slide-out-right'
                   : isEntering
-                  ? 'translate-x-0 opacity-100 scale-100 animate-slide-in-right'
-                  : 'translate-x-0 opacity-100 scale-100'
+                  ? 'translate-x-full opacity-0 scale-90'
+                  : useBouncyAnimation
+                  ? 'animate-bounce-in'
+                  : 'animate-slide-in-right'
               }
             `}
             style={{
-              animation: isEntering ? 'slideInRight 0.3s ease-out forwards' : undefined
+              animationDelay: isEntering ? '0ms' : `${index * 50}ms`
             }}
           >
             <div className="flex items-start space-x-3">
@@ -106,7 +113,11 @@ const NotificationContainer: React.FC = () => {
               </div>
               <button
                 onClick={() => handleRemoveNotification(notification.id)}
-                className="flex-shrink-0 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors"
+                className="flex-shrink-0 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 
+                          transition-all duration-200 ease-in-out
+                          hover:scale-110 hover:bg-gray-200 dark:hover:bg-gray-600
+                          rounded-full p-1 -m-1
+                          active:scale-95"
               >
                 <X className="w-4 h-4" />
               </button>

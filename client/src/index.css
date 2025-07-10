@@ -266,33 +266,60 @@
 
 /* 通知动画 */
 @keyframes slideInRight {
-  from {
-    transform: translateX(100%);
+  0% {
+    transform: translateX(100%) scale(0.9);
     opacity: 0;
   }
-  to {
-    transform: translateX(0);
+  60% {
+    transform: translateX(-5%) scale(1.02);
+    opacity: 0.8;
+  }
+  100% {
+    transform: translateX(0) scale(1);
     opacity: 1;
   }
 }
 
 @keyframes slideOutRight {
-  from {
-    transform: translateX(0);
+  0% {
+    transform: translateX(0) scale(1);
     opacity: 1;
   }
-  to {
-    transform: translateX(100%);
+  100% {
+    transform: translateX(100%) scale(0.9);
     opacity: 0;
   }
 }
 
+@keyframes bounceIn {
+  0% {
+    transform: translateX(100%) scale(0.3);
+    opacity: 0;
+  }
+  50% {
+    transform: translateX(-10%) scale(1.05);
+    opacity: 0.8;
+  }
+  70% {
+    transform: translateX(2%) scale(0.98);
+    opacity: 0.9;
+  }
+  100% {
+    transform: translateX(0) scale(1);
+    opacity: 1;
+  }
+}
+
 .animate-slide-in-right {
-  animation: slideInRight 0.3s ease-out forwards;
+  animation: slideInRight 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55) forwards;
 }
 
 .animate-slide-out-right {
   animation: slideOutRight 0.3s ease-in forwards;
+}
+
+.animate-bounce-in {
+  animation: bounceIn 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55) forwards;
 }
 
 @keyframes fadeIn {
