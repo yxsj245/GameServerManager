@@ -165,7 +165,10 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           
           <div className="flex items-center space-x-4">
             {/* 连接状态指示器 */}
-            <div className="flex items-center space-x-2">
+            <div 
+              className="flex items-center space-x-2 cursor-help" 
+              title="WebSocket是一种网络通信协议，允许服务器和客户端之间进行实时双向通信。在GSManager3中，WebSocket作为核心功能，用于实时传输终端输出、系统状态更新、游戏服务器状态变化等信息，确保您能够及时获得最新的系统反馈。"
+            >
               <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
               <span className="text-sm text-black dark:text-gray-300">WebSocket连接已建立</span>
             </div>
