@@ -2,10 +2,11 @@ import { Router, Request, Response } from 'express'
 import { promises as fs } from 'fs'
 import * as fsSync from 'fs'
 import path from 'path'
+import multer from 'multer'
 import { createReadStream, createWriteStream } from 'fs'
 import archiver from 'archiver'
 import unzipper from 'unzipper'
-import multer from 'multer'
+import { authenticateToken } from '../middleware/auth.js'
 
 const router = Router()
 
@@ -88,8 +89,8 @@ const isValidPath = (filePath: string): boolean => {
   return isAbsolute
 }
 
-// 获取目录内容
-router.get('/list', async (req: Request, res: Response) => {
+// 获取目录列表
+router.get('/list', authenticateToken, async (req: Request, res: Response) => {
   try {
     const { path: dirPath = '/' } = req.query
     
@@ -141,7 +142,7 @@ router.get('/list', async (req: Request, res: Response) => {
 })
 
 // 读取文件内容
-router.get('/read', async (req: Request, res: Response) => {
+router.get('/read', authenticateToken, async (req: Request, res: Response) => {
   try {
     const { path: filePath, encoding = 'utf-8' } = req.query
     
@@ -179,8 +180,8 @@ router.get('/read', async (req: Request, res: Response) => {
   }
 })
 
-// 新建文件
-router.post('/create', async (req: Request, res: Response) => {
+// 创建文件
+router.post('/create', authenticateToken, async (req: Request, res: Response) => {
   try {
     const { path: filePath, content = '', encoding = 'utf-8' } = req.body
     
@@ -229,7 +230,7 @@ router.post('/create', async (req: Request, res: Response) => {
 })
 
 // 保存文件内容
-router.post('/save', async (req: Request, res: Response) => {
+router.post('/save', authenticateToken, async (req: Request, res: Response) => {
   try {
     const { path: filePath, content, encoding = 'utf-8' } = req.body
     
@@ -255,7 +256,7 @@ router.post('/save', async (req: Request, res: Response) => {
 })
 
 // 创建目录
-router.post('/mkdir', async (req: Request, res: Response) => {
+router.post('/mkdir', authenticateToken, async (req: Request, res: Response) => {
   try {
     const { path: dirPath } = req.body
     
@@ -281,7 +282,7 @@ router.post('/mkdir', async (req: Request, res: Response) => {
 })
 
 // 删除文件或目录
-router.delete('/delete', async (req: Request, res: Response) => {
+router.delete('/delete', authenticateToken, async (req: Request, res: Response) => {
   try {
     const { paths } = req.body
     
@@ -321,7 +322,7 @@ router.delete('/delete', async (req: Request, res: Response) => {
 })
 
 // 重命名文件或目录
-router.post('/rename', async (req: Request, res: Response) => {
+router.post('/rename', authenticateToken, async (req: Request, res: Response) => {
   try {
     const { oldPath, newPath } = req.body
     
@@ -359,7 +360,7 @@ router.post('/rename', async (req: Request, res: Response) => {
 })
 
 // 复制文件或目录
-router.post('/copy', async (req: Request, res: Response) => {
+router.post('/copy', authenticateToken, async (req: Request, res: Response) => {
   try {
     const { sourcePath, targetPath } = req.body
     
@@ -392,7 +393,7 @@ router.post('/copy', async (req: Request, res: Response) => {
 })
 
 // 移动文件或目录
-router.post('/move', async (req: Request, res: Response) => {
+router.post('/move', authenticateToken, async (req: Request, res: Response) => {
   try {
     const { sourcePath, targetPath } = req.body
     
@@ -418,7 +419,7 @@ router.post('/move', async (req: Request, res: Response) => {
 })
 
 // 搜索文件
-router.get('/search', async (req: Request, res: Response) => {
+router.get('/search', authenticateToken, async (req: Request, res: Response) => {
   try {
     const { 
       path: searchPath = '/home',
@@ -465,7 +466,7 @@ router.get('/search', async (req: Request, res: Response) => {
 })
 
 // 下载文件
-router.get('/download', async (req: Request, res: Response) => {
+router.get('/download', authenticateToken, async (req: Request, res: Response) => {
   try {
     const { path: filePath } = req.query
     
@@ -499,7 +500,7 @@ router.get('/download', async (req: Request, res: Response) => {
 })
 
 // 上传文件
-router.post('/upload', upload.array('files'), async (req: Request, res: Response) => {
+router.post('/upload', authenticateToken, upload.array('files'), async (req: Request, res: Response) => {
   console.log('Upload request received:')
   console.log('Body:', req.body)
   console.log('Files:', req.files)
@@ -594,7 +595,7 @@ router.post('/upload', upload.array('files'), async (req: Request, res: Response
 })
 
 // 压缩文件夹
-router.post('/compress', async (req: Request, res: Response) => {
+router.post('/compress', authenticateToken, async (req: Request, res: Response) => {
   try {
     const { 
       sourcePaths, 
@@ -645,7 +646,7 @@ router.post('/compress', async (req: Request, res: Response) => {
 })
 
 // 解压文件
-router.post('/extract', async (req: Request, res: Response) => {
+router.post('/extract', authenticateToken, async (req: Request, res: Response) => {
   try {
     const { archivePath, targetPath } = req.body
     

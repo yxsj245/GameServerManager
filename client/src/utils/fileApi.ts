@@ -1,12 +1,37 @@
-import axios from 'axios'
+import axios, { AxiosInstance } from 'axios'
 import { FileItem, FileOperationResult, FileSearchResult, FileContent } from '@/types/file'
 
 const API_BASE = '/api/files'
 
 export class FileApiClient {
+  private client: AxiosInstance
+
+  constructor() {
+    this.client = axios.create({
+      baseURL: '',
+      timeout: 30000,
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    })
+
+    // 请求拦截器 - 自动添加认证token
+    this.client.interceptors.request.use(
+      (config) => {
+        const token = localStorage.getItem('gsm3_token')
+        if (token) {
+          config.headers.Authorization = `Bearer ${token}`
+        }
+        return config
+      },
+      (error) => {
+        return Promise.reject(error)
+      }
+    )
+  }
   // 获取目录内容
   async listDirectory(path: string = '/'): Promise<FileItem[]> {
-    const response = await axios.get(`${API_BASE}/list`, {
+    const response = await this.client.get(`${API_BASE}/list`, {
       params: { path }
     })
     return response.data.data
@@ -14,7 +39,7 @@ export class FileApiClient {
 
   // 读取文件内容
   async readFile(path: string, encoding: string = 'utf-8'): Promise<FileContent> {
-    const response = await axios.get(`${API_BASE}/read`, {
+    const response = await this.client.get(`${API_BASE}/read`, {
       params: { path, encoding }
     })
     return response.data.data
@@ -22,7 +47,7 @@ export class FileApiClient {
 
   // 保存文件内容
   async saveFile(path: string, content: string, encoding: string = 'utf-8'): Promise<FileOperationResult> {
-    const response = await axios.post(`${API_BASE}/save`, {
+    const response = await this.client.post(`${API_BASE}/save`, {
       path,
       content,
       encoding
@@ -32,7 +57,7 @@ export class FileApiClient {
 
   // 创建文件
   async createFile(path: string, content: string = '', encoding: string = 'utf-8'): Promise<FileOperationResult> {
-    const response = await axios.post(`${API_BASE}/create`, {
+    const response = await this.client.post(`${API_BASE}/create`, {
       path,
       content,
       encoding
@@ -42,7 +67,7 @@ export class FileApiClient {
 
   // 创建目录
   async createDirectory(path: string): Promise<FileOperationResult> {
-    const response = await axios.post(`${API_BASE}/mkdir`, {
+    const response = await this.client.post(`${API_BASE}/mkdir`, {
       path
     })
     return response.data
@@ -50,7 +75,7 @@ export class FileApiClient {
 
   // 删除文件或目录
   async deleteItems(paths: string[]): Promise<FileOperationResult> {
-    const response = await axios.delete(`${API_BASE}/delete`, {
+    const response = await this.client.delete(`${API_BASE}/delete`, {
       data: { paths }
     })
     return response.data
@@ -58,7 +83,7 @@ export class FileApiClient {
 
   // 重命名文件或目录
   async renameItem(oldPath: string, newPath: string): Promise<FileOperationResult> {
-    const response = await axios.post(`${API_BASE}/rename`, {
+    const response = await this.client.post(`${API_BASE}/rename`, {
       oldPath,
       newPath
     })
@@ -67,7 +92,7 @@ export class FileApiClient {
 
   // 复制文件或目录
   async copyItem(sourcePath: string, targetPath: string): Promise<FileOperationResult> {
-    const response = await axios.post(`${API_BASE}/copy`, {
+    const response = await this.client.post(`${API_BASE}/copy`, {
       sourcePath,
       targetPath
     })
@@ -76,7 +101,7 @@ export class FileApiClient {
 
   // 移动文件或目录
   async moveItem(sourcePath: string, targetPath: string): Promise<FileOperationResult> {
-    const response = await axios.post(`${API_BASE}/move`, {
+    const response = await this.client.post(`${API_BASE}/move`, {
       sourcePath,
       targetPath
     })
@@ -91,7 +116,7 @@ export class FileApiClient {
     caseSensitive: boolean = false,
     maxResults: number = 100
   ): Promise<FileSearchResult> {
-    const response = await axios.get(`${API_BASE}/search`, {
+    const response = await this.client.get(`${API_BASE}/search`, {
       params: {
         path: searchPath,
         query,
@@ -105,13 +130,29 @@ export class FileApiClient {
 
   // 下载文件
   downloadFile(path: string): void {
+    const token = localStorage.getItem('gsm3_token')
     const url = `${API_BASE}/download?path=${encodeURIComponent(path)}`
-    const link = document.createElement('a')
-    link.href = url
-    link.download = ''
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
+    
+    // 创建一个临时的a标签进行下载，但需要处理认证
+    fetch(url, {
+      headers: {
+        'Authorization': token ? `Bearer ${token}` : ''
+      }
+    })
+    .then(response => response.blob())
+    .then(blob => {
+      const downloadUrl = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = downloadUrl
+      link.download = path.split('/').pop() || 'download'
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      window.URL.revokeObjectURL(downloadUrl)
+    })
+    .catch(error => {
+      console.error('下载失败:', error)
+    })
   }
 
   // 上传文件
@@ -127,7 +168,7 @@ export class FileApiClient {
       formData.append('files', files[i])
     }
 
-    const response = await axios.post(`${API_BASE}/upload`, formData, {
+    const response = await this.client.post(`${API_BASE}/upload`, formData, {
       headers: {
         'Content-Type': 'multipart/form-data'
       },
@@ -154,7 +195,7 @@ export class FileApiClient {
     format: string = 'zip',
     compressionLevel: number = 6
   ): Promise<FileOperationResult> {
-    const response = await axios.post(`${API_BASE}/compress`, {
+    const response = await this.client.post(`${API_BASE}/compress`, {
       sourcePaths,
       targetPath,
       archiveName,
@@ -166,7 +207,7 @@ export class FileApiClient {
 
   // 解压文件
   async extractArchive(archivePath: string, targetPath: string): Promise<FileOperationResult> {
-    const response = await axios.post(`${API_BASE}/extract`, {
+    const response = await this.client.post(`${API_BASE}/extract`, {
       archivePath,
       targetPath
     })
