@@ -68,6 +68,17 @@ const GameDeploymentPage: React.FC = () => {
   const [instanceDescription, setInstanceDescription] = useState('')
   const [creatingInstance, setCreatingInstance] = useState(false)
   
+  // 更多游戏部署相关状态
+  const [moreGames, setMoreGames] = useState<any[]>([])
+  const [moreGamesLoading, setMoreGamesLoading] = useState(false)
+  const [selectedMoreGame, setSelectedMoreGame] = useState<string>('')
+  const [moreGameInstallPath, setMoreGameInstallPath] = useState('')
+  const [moreGameDeploying, setMoreGameDeploying] = useState(false)
+  const [moreGameDeployResult, setMoreGameDeployResult] = useState<any>(null)
+  const [moreGameDeployProgress, setMoreGameDeployProgress] = useState<any>(null)
+  const [moreGameDeployLogs, setMoreGameDeployLogs] = useState<string[]>([])
+  const [moreGameDeployComplete, setMoreGameDeployComplete] = useState(false)
+  
   const socketRef = useRef<Socket | null>(null)
   const currentDownloadId = useRef<string | null>(null)
 
@@ -91,6 +102,114 @@ const GameDeploymentPage: React.FC = () => {
       })
     } finally {
       setLoading(false)
+    }
+  }
+
+  // 获取更多游戏列表
+  const fetchMoreGames = async () => {
+    try {
+      setMoreGamesLoading(true)
+      const response = await apiClient.getMoreGames()
+      
+      if (response.success) {
+        setMoreGames(response.data || [])
+      } else {
+        throw new Error(response.message || '获取更多游戏列表失败')
+      }
+    } catch (error: any) {
+      console.error('获取更多游戏列表失败:', error)
+      addNotification({
+        type: 'error',
+        title: '获取失败',
+        message: error.message || '无法获取更多游戏列表'
+      })
+    } finally {
+      setMoreGamesLoading(false)
+    }
+  }
+
+  // 部署更多游戏
+  const deployMoreGame = async () => {
+    if (!selectedMoreGame || !moreGameInstallPath) {
+      addNotification({
+        type: 'error',
+        title: '参数错误',
+        message: '请选择游戏和安装路径'
+      })
+      return
+    }
+
+    try {
+      // 重置状态
+      setMoreGameDeploying(true)
+      setMoreGameDeployResult(null)
+      setMoreGameDeployProgress(null)
+      setMoreGameDeployLogs([])
+      setMoreGameDeployComplete(false)
+      
+      // 初始化WebSocket连接并等待连接建立
+      initializeSocket()
+      
+      // 等待WebSocket连接建立
+      const waitForConnection = () => {
+        return new Promise<string>((resolve, reject) => {
+          if (socketRef.current?.connected && socketRef.current?.id) {
+            resolve(socketRef.current.id)
+            return
+          }
+          
+          const timeout = setTimeout(() => {
+            reject(new Error('WebSocket连接超时'))
+          }, 10000) // 10秒超时
+          
+          const checkConnection = () => {
+            if (socketRef.current?.connected && socketRef.current?.id) {
+              clearTimeout(timeout)
+              resolve(socketRef.current.id)
+            } else {
+              setTimeout(checkConnection, 100)
+            }
+          }
+          
+          checkConnection()
+        })
+      }
+      
+      const socketId = await waitForConnection()
+      console.log('WebSocket连接已建立，Socket ID:', socketId)
+      
+      let response
+      if (selectedMoreGame === 'tmodloader') {
+        response = await apiClient.deployTModLoader({
+          installPath: moreGameInstallPath,
+          socketId
+        })
+      } else if (selectedMoreGame === 'factorio') {
+        response = await apiClient.deployFactorio({
+          installPath: moreGameInstallPath,
+          socketId
+        })
+      } else {
+        throw new Error('不支持的游戏类型')
+      }
+      
+      if (response.success) {
+        addNotification({
+          type: 'info',
+          title: '开始部署',
+          message: `开始部署 ${selectedMoreGame}`
+        })
+      } else {
+        throw new Error(response.message || '启动部署失败')
+      }
+    } catch (error: any) {
+      console.error('启动部署失败:', error)
+      setMoreGameDeploying(false)
+      addNotification({
+        type: 'error',
+        title: '部署失败',
+        message: error.message || '无法启动游戏部署'
+      })
     }
   }
 
@@ -232,6 +351,45 @@ const GameDeploymentPage: React.FC = () => {
           message: data.error || '下载过程中发生错误'
         })
       }
+    })
+
+    // 监听更多游戏部署进度
+    socketRef.current.on('more-games-deploy-progress', (data) => {
+      console.log('收到更多游戏部署进度:', data)
+      setMoreGameDeployProgress(data.progress)
+    })
+
+    // 监听更多游戏部署日志
+    socketRef.current.on('more-games-deploy-log', (data) => {
+      console.log('收到更多游戏部署日志:', data)
+      const message = typeof data.message === 'string' ? data.message : JSON.stringify(data.message)
+      setMoreGameDeployLogs(prev => [...prev, message])
+    })
+
+    // 监听更多游戏部署完成
+    socketRef.current.on('more-games-deploy-complete', (data) => {
+      console.log('收到更多游戏部署完成事件:', data)
+      setMoreGameDeploying(false)
+      setMoreGameDeployComplete(true)
+      setMoreGameDeployResult(data.data)
+      
+      addNotification({
+        type: 'success',
+        title: '部署完成',
+        message: data.message || '游戏部署完成！'
+      })
+    })
+
+    // 监听更多游戏部署错误
+    socketRef.current.on('more-games-deploy-error', (data) => {
+      console.log('收到更多游戏部署错误事件:', data)
+      setMoreGameDeploying(false)
+      
+      addNotification({
+        type: 'error',
+        title: '部署失败',
+        message: data.error || '部署过程中发生错误'
+      })
     })
   }
 
@@ -430,6 +588,9 @@ const GameDeploymentPage: React.FC = () => {
       fetchMinecraftCategories()
       validateJava()
     }
+    if (activeTab === 'more-games') {
+      fetchMoreGames()
+    }
   }, [activeTab])
 
   // 清理WebSocket连接
@@ -530,7 +691,8 @@ const GameDeploymentPage: React.FC = () => {
 
   const tabs = [
     { id: 'steamcmd', name: 'SteamCMD', icon: Download },
-    { id: 'minecraft', name: 'Minecraft部署', icon: Pickaxe }
+    { id: 'minecraft', name: 'Minecraft部署', icon: Pickaxe },
+    { id: 'more-games', name: '更多游戏部署', icon: Server }
   ]
 
   if (loading) {
@@ -923,6 +1085,177 @@ const GameDeploymentPage: React.FC = () => {
                     </div>
                   )}
                 </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 更多游戏部署标签页内容 */}
+      {activeTab === 'more-games' && (
+        <div className="space-y-6">
+          {/* 游戏选择 */}
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+              选择游戏
+            </h3>
+            
+            {moreGamesLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader className="w-6 h-6 animate-spin text-blue-500" />
+                <span className="ml-2 text-gray-600 dark:text-gray-400">加载游戏列表中...</span>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {moreGames.map((game) => (
+                  <div
+                    key={game.id}
+                    className={`
+                      p-4 border-2 rounded-lg cursor-pointer transition-all
+                      ${selectedMoreGame === game.id
+                        ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                        : 'border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500'
+                      }
+                    `}
+                    onClick={() => setSelectedMoreGame(game.id)}
+                  >
+                    <div className="flex items-center space-x-3">
+                      <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
+                        <Server className="w-6 h-6 text-white" />
+                      </div>
+                      <div>
+                        <h4 className="font-medium text-gray-900 dark:text-white">
+                          {game.name}
+                        </h4>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">
+                          {game.description}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* 部署配置 */}
+          {selectedMoreGame && (
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+                部署配置
+              </h3>
+              
+              <div className="space-y-4">
+                {/* 安装路径 */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    安装路径 *
+                  </label>
+                  <input
+                    type="text"
+                    value={moreGameInstallPath}
+                    onChange={(e) => setMoreGameInstallPath(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    placeholder={`输入 ${moreGames.find(g => g.id === selectedMoreGame)?.name} 的安装路径`}
+                  />
+                </div>
+                
+                {/* 部署按钮 */}
+                <div className="flex justify-end">
+                  <button
+                    onClick={deployMoreGame}
+                    disabled={moreGameDeploying || !moreGameInstallPath.trim()}
+                    className="px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded-lg transition-colors flex items-center space-x-2"
+                  >
+                    {moreGameDeploying ? (
+                      <>
+                        <Loader className="w-4 h-4 animate-spin" />
+                        <span>部署中...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Download className="w-4 h-4" />
+                        <span>开始部署</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+                
+                {/* 部署进度 */}
+                {(moreGameDeployProgress || moreGameDeploying) && (
+                  <div className="mt-4 space-y-3">
+                    {moreGameDeployProgress && (
+                      <div>
+                        <div className="flex justify-between text-sm text-gray-600 dark:text-gray-400 mb-1">
+                          <span>部署进度</span>
+                          <span>{moreGameDeployProgress.percentage || 0}%</span>
+                        </div>
+                        <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                          <div
+                            className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                            style={{ width: `${moreGameDeployProgress.percentage || 0}%` }}
+                          ></div>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* 部署日志 */}
+                    {moreGameDeployLogs.length > 0 && (
+                      <div>
+                        <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                          部署日志
+                        </h4>
+                        <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-3 max-h-32 overflow-y-auto">
+                          {moreGameDeployLogs.slice(-10).map((log, index) => (
+                            <div key={index} className="text-xs text-gray-600 dark:text-gray-400 font-mono">
+                              {typeof log === 'string' ? log : JSON.stringify(log)}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* 部署完成后的操作 */}
+          {moreGameDeployComplete && moreGameDeployResult && (
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+                部署完成
+              </h3>
+              
+              <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
+                <div className="flex items-center space-x-2 text-green-800 dark:text-green-400 mb-3">
+                  <CheckCircle className="w-5 h-5" />
+                  <span className="font-medium">部署成功！</span>
+                </div>
+                <div className="text-sm text-green-700 dark:text-green-300 space-y-1 mb-3">
+                  <p><strong>安装路径:</strong> {moreGameDeployResult.installPath}</p>
+                  {moreGameDeployResult.version && (
+                    <p><strong>版本:</strong> {moreGameDeployResult.version}</p>
+                  )}
+                  {moreGameDeployResult.serverExecutablePath && (
+                    <p><strong>服务端文件:</strong> {moreGameDeployResult.serverExecutablePath}</p>
+                  )}
+                </div>
+                <button
+                  onClick={() => {
+                    // 重置状态
+                    setSelectedMoreGame('')
+                    setMoreGameInstallPath('')
+                    setMoreGameDeployComplete(false)
+                    setMoreGameDeployResult(null)
+                    setMoreGameDeployProgress(null)
+                    setMoreGameDeployLogs([])
+                  }}
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg transition-colors flex items-center justify-center space-x-2"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>部署其他游戏</span>
+                </button>
               </div>
             </div>
           )}

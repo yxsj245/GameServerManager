@@ -435,6 +435,45 @@ class ApiClient {
   async validateJavaEnvironment() {
     return this.get('/minecraft/validate-java')
   }
+
+  // 更多游戏部署API
+  async getMoreGames() {
+    return this.get('/more-games/games')
+  }
+
+  async getMoreGameInfo(gameId: string) {
+    return this.get(`/more-games/games/${gameId}`)
+  }
+
+  async deployTModLoader(data: {
+    installPath: string
+    options?: {
+      deleteAfterExtract?: boolean
+      clearExtractDir?: boolean
+      createVersionDir?: boolean
+    }
+    socketId?: string
+  }) {
+    return this.post('/more-games/deploy/tmodloader', data)
+  }
+
+  async deployFactorio(data: {
+    installPath: string
+    options?: {
+      tempDir?: string
+    }
+    socketId?: string
+  }) {
+    return this.post('/more-games/deploy/factorio', data)
+  }
+
+  async getMoreGameDeploymentStatus(gameId: string, installPath: string) {
+    return this.get(`/more-games/status/${gameId}/${encodeURIComponent(installPath)}`)
+  }
+
+  async getMoreGameVersion(gameId: string) {
+    return this.get(`/more-games/version/${gameId}`)
+  }
 }
 
 // 创建单例实例
