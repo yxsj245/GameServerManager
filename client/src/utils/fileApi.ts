@@ -1,5 +1,5 @@
 import axios, { AxiosInstance } from 'axios'
-import { FileItem, FileOperationResult, FileSearchResult, FileContent } from '@/types/file'
+import { FileItem, FileOperationResult, FileSearchResult, FileContent, Task } from '@/types/file'
 
 const API_BASE = '/api/files'
 
@@ -211,6 +211,30 @@ export class FileApiClient {
       archivePath,
       targetPath
     })
+    return response.data
+  }
+
+  // 获取所有任务
+  async getTasks(): Promise<Task[]> {
+    const response = await this.client.get(`${API_BASE}/tasks`)
+    return response.data.data
+  }
+
+  // 获取活动任务
+  async getActiveTasks(): Promise<Task[]> {
+    const response = await this.client.get(`${API_BASE}/tasks/active`)
+    return response.data.data
+  }
+
+  // 获取单个任务状态
+  async getTask(taskId: string): Promise<Task> {
+    const response = await this.client.get(`${API_BASE}/tasks/${taskId}`)
+    return response.data.data
+  }
+
+  // 删除任务
+  async deleteTask(taskId: string): Promise<FileOperationResult> {
+    const response = await this.client.delete(`${API_BASE}/tasks/${taskId}`)
     return response.data
   }
 }

@@ -7,6 +7,8 @@ import { createReadStream, createWriteStream } from 'fs'
 import archiver from 'archiver'
 import unzipper from 'unzipper'
 import { authenticateToken } from '../middleware/auth.js'
+import { taskManager } from '../modules/task/taskManager.js'
+import { compressionWorker } from '../modules/task/compressionWorker.js'
 
 const router = Router()
 
@@ -630,11 +632,24 @@ router.post('/compress', authenticateToken, async (req: Request, res: Response) 
 
     const archivePath = path.join(targetPath, archiveName)
     
-    await compressFiles(sourcePaths, archivePath, format, compressionLevel)
+    // 创建异步任务
+    const taskId = taskManager.createTask('compress', {
+      sourcePaths,
+      archivePath,
+      format,
+      compressionLevel
+    })
+    
+    // 异步执行压缩
+    compressionWorker.compressFiles(taskId, sourcePaths, archivePath, format, compressionLevel)
+      .catch(error => {
+        console.error('压缩任务失败:', error)
+      })
     
     res.json({
       status: 'success',
-      message: '压缩完成',
+      message: '解压/压缩命令已下发',
+      taskId,
       archivePath
     })
   } catch (error: any) {
@@ -657,11 +672,22 @@ router.post('/extract', authenticateToken, async (req: Request, res: Response) =
       })
     }
 
-    await extractArchive(archivePath, targetPath)
+    // 创建异步任务
+    const taskId = taskManager.createTask('extract', {
+      archivePath,
+      targetPath
+    })
+    
+    // 异步执行解压
+    compressionWorker.extractArchive(taskId, archivePath, targetPath)
+      .catch(error => {
+        console.error('解压任务失败:', error)
+      })
     
     res.json({
       status: 'success',
-      message: '解压完成'
+      message: '解压/压缩命令已下发',
+      taskId
     })
   } catch (error: any) {
     res.status(500).json({
@@ -798,5 +824,96 @@ async function extractArchive(archivePath: string, targetPath: string) {
     }
   })
 }
+
+// 获取任务状态
+router.get('/tasks', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const tasks = taskManager.getAllTasks()
+    res.json({
+      status: 'success',
+      data: tasks
+    })
+  } catch (error: any) {
+    res.status(500).json({
+      status: 'error',
+      message: error.message
+    })
+  }
+})
+
+// 获取活动任务
+router.get('/tasks/active', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const tasks = taskManager.getActiveTasks()
+    res.json({
+      status: 'success',
+      data: tasks
+    })
+  } catch (error: any) {
+    res.status(500).json({
+      status: 'error',
+      message: error.message
+    })
+  }
+})
+
+// 获取单个任务状态
+router.get('/tasks/:taskId', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const { taskId } = req.params
+    const task = taskManager.getTask(taskId)
+    
+    if (!task) {
+      return res.status(404).json({
+        status: 'error',
+        message: '任务不存在'
+      })
+    }
+    
+    res.json({
+      status: 'success',
+      data: task
+    })
+  } catch (error: any) {
+    res.status(500).json({
+      status: 'error',
+      message: error.message
+    })
+  }
+})
+
+// 删除任务
+router.delete('/tasks/:taskId', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const { taskId } = req.params
+    const task = taskManager.getTask(taskId)
+    
+    if (!task) {
+      return res.status(404).json({
+        status: 'error',
+        message: '任务不存在'
+      })
+    }
+    
+    if (task.status === 'running') {
+      return res.status(400).json({
+        status: 'error',
+        message: '无法删除正在运行的任务'
+      })
+    }
+    
+    taskManager.deleteTask(taskId)
+    
+    res.json({
+      status: 'success',
+      message: '任务已删除'
+    })
+  } catch (error: any) {
+    res.status(500).json({
+      status: 'error',
+      message: error.message
+    })
+  }
+})
 
 export default router

@@ -11,7 +11,10 @@ import {
   Space,
   Tabs,
   Card,
-  Modal
+  Modal,
+  Progress,
+  Badge,
+  Drawer
 } from 'antd'
 import {
   HomeOutlined,
@@ -29,7 +32,12 @@ import {
   CopyOutlined,
   ScissorOutlined,
   SnippetsOutlined,
-  FileAddOutlined
+  FileAddOutlined,
+  LoadingOutlined,
+  CheckCircleOutlined,
+  ExclamationCircleOutlined,
+  ClockCircleOutlined,
+  BellOutlined
 } from '@ant-design/icons'
 import { useFileStore } from '@/stores/fileStore'
 import { useNotificationStore } from '@/stores/notificationStore'
@@ -60,6 +68,8 @@ const FileManagerPage: React.FC = () => {
     clipboard,
     openFiles,
     activeFile,
+    tasks,
+    activeTasks,
     setCurrentPath,
     loadFiles,
     selectFile,
@@ -83,7 +93,11 @@ const FileManagerPage: React.FC = () => {
     setActiveFile,
     setError,
     updateFileContent,
-    isFileModified
+    isFileModified,
+    loadTasks,
+    loadActiveTasks,
+    getTask,
+    deleteTask
   } = useFileStore()
   
   const { addNotification } = useNotificationStore()
@@ -122,6 +136,9 @@ const FileManagerPage: React.FC = () => {
   // 编辑器模态框
   const [editorModalVisible, setEditorModalVisible] = useState(false)
   
+  // 任务状态抽屉
+  const [taskDrawerVisible, setTaskDrawerVisible] = useState(false)
+  
   // 初始化
   useEffect(() => {
     // 检查 URL 参数中的路径
@@ -133,7 +150,28 @@ const FileManagerPage: React.FC = () => {
       // 否则加载默认路径
       loadFiles()
     }
-  }, [searchParams, setCurrentPath, loadFiles])
+    
+    // 初始加载任务列表
+    loadActiveTasks()
+  }, [searchParams, setCurrentPath, loadFiles, loadActiveTasks])
+  
+  // 定期刷新活动任务
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (activeTasks.length > 0) {
+        loadActiveTasks()
+        // 如果有任务完成，刷新文件列表
+        const hasCompletedTasks = activeTasks.some(task => 
+          task.status === 'completed' || task.status === 'failed'
+        )
+        if (hasCompletedTasks) {
+          loadFiles()
+        }
+      }
+    }, 2000) // 每2秒刷新一次
+    
+    return () => clearInterval(interval)
+  }, [activeTasks, loadActiveTasks, loadFiles])
   
   // 键盘快捷键
   useEffect(() => {
@@ -558,6 +596,38 @@ const FileManagerPage: React.FC = () => {
     file.name.toLowerCase().includes(searchQuery.toLowerCase())
   )
   
+  // 获取任务状态图标
+  const getTaskStatusIcon = (status: string) => {
+    switch (status) {
+      case 'pending':
+        return <ClockCircleOutlined style={{ color: '#faad14' }} />
+      case 'running':
+        return <LoadingOutlined style={{ color: '#1890ff' }} />
+      case 'completed':
+        return <CheckCircleOutlined style={{ color: '#52c41a' }} />
+      case 'failed':
+        return <ExclamationCircleOutlined style={{ color: '#ff4d4f' }} />
+      default:
+        return <ClockCircleOutlined />
+    }
+  }
+  
+  // 获取任务状态文本
+  const getTaskStatusText = (status: string) => {
+    switch (status) {
+      case 'pending':
+        return '等待中'
+      case 'running':
+        return '进行中'
+      case 'completed':
+        return '已完成'
+      case 'failed':
+        return '失败'
+      default:
+        return '未知'
+    }
+  }
+  
   return (
     <div className="h-full flex flex-col bg-white dark:bg-gray-900">
       {/* 工具栏 */}
@@ -684,6 +754,17 @@ const FileManagerPage: React.FC = () => {
                 </Button>
               </Tooltip>
             )}
+            {/* 任务状态按钮 */}
+            <Tooltip title="查看任务状态">
+              <Badge count={activeTasks.length} size="small">
+                <Button 
+                  icon={<BellOutlined />}
+                  onClick={() => setTaskDrawerVisible(true)}
+                >
+                  任务
+                </Button>
+              </Badge>
+            </Tooltip>
           </Space>
         </div>
       </div>
@@ -855,6 +936,110 @@ const FileManagerPage: React.FC = () => {
           </Tabs>
         )}
       </Modal>
+      
+      {/* 任务状态抽屉 */}
+      <Drawer
+        title="任务状态"
+        placement="right"
+        onClose={() => setTaskDrawerVisible(false)}
+        open={taskDrawerVisible}
+        width={400}
+      >
+        <div className="space-y-4">
+          {activeTasks.length === 0 ? (
+            <Empty 
+              description="暂无活动任务"
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+            />
+          ) : (
+            activeTasks.map((task) => (
+              <Card key={task.id} size="small" className="mb-2">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center space-x-2">
+                    {getTaskStatusIcon(task.status)}
+                    <span className="font-medium">
+                      {task.type === 'compress' ? '压缩' : '解压'}
+                    </span>
+                    <span className="text-gray-500">
+                      {getTaskStatusText(task.status)}
+                    </span>
+                  </div>
+                  {(task.status === 'completed' || task.status === 'failed') && (
+                    <Button 
+                      size="small" 
+                      type="text" 
+                      danger
+                      onClick={async () => {
+                        try {
+                          const result = await deleteTask(task.id)
+                          if (result.status === 'success') {
+                            addNotification({
+                              type: 'success',
+                              title: '删除成功',
+                              message: '任务已删除'
+                            })
+                          } else {
+                            addNotification({
+                              type: 'error',
+                              title: '删除失败',
+                              message: result.message || '删除任务失败'
+                            })
+                          }
+                        } catch (error: any) {
+                          addNotification({
+                            type: 'error',
+                            title: '删除失败',
+                            message: error.message || '删除任务失败'
+                          })
+                        }
+                      }}
+                    >
+                      删除
+                    </Button>
+                  )}
+                </div>
+                
+                {task.status === 'running' && (
+                  <Progress 
+                    percent={task.progress || 0} 
+                    size="small"
+                    status="active"
+                  />
+                )}
+                
+                {task.message && (
+                  <div className="text-sm text-gray-600 mt-2">
+                    {task.message}
+                  </div>
+                )}
+                
+                <div className="text-xs text-gray-400 mt-2">
+                  创建时间: {new Date(task.createdAt).toLocaleString()}
+                  {task.updatedAt && (
+                    <div>
+                      更新时间: {new Date(task.updatedAt).toLocaleString()}
+                    </div>
+                  )}
+                </div>
+              </Card>
+            ))
+          )}
+          
+          {activeTasks.length > 0 && (
+            <div className="text-center pt-4">
+              <Button 
+                type="primary" 
+                onClick={() => {
+                  loadActiveTasks()
+                  loadTasks()
+                }}
+              >
+                刷新任务状态
+              </Button>
+            </div>
+          )}
+        </div>
+      </Drawer>
     </div>
   )
 }

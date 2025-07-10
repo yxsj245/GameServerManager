@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { FileItem } from '@/types/file'
+import { FileItem, Task, FileOperationResult } from '@/types/file'
 import { fileApiClient } from '@/utils/fileApi'
 
 interface FileStore {
@@ -20,6 +20,10 @@ interface FileStore {
   openFiles: Map<string, string> // path -> content
   originalFiles: Map<string, string> // path -> original content
   activeFile: string | null
+  
+  // 任务相关
+  tasks: Task[]
+  activeTasks: Task[]
   
   // 操作方法
   setCurrentPath: (path: string) => void
@@ -55,6 +59,12 @@ interface FileStore {
   updateFileContent: (path: string, content: string) => void
   isFileModified: (path: string) => boolean
   
+  // 任务管理
+  loadTasks: () => Promise<void>
+  loadActiveTasks: () => Promise<void>
+  getTask: (taskId: string) => Promise<Task | null>
+  deleteTask: (taskId: string) => Promise<FileOperationResult>
+  
   // 工具方法
   setLoading: (loading: boolean) => void
   setError: (error: string | null) => void
@@ -74,6 +84,8 @@ export const useFileStore = create<FileStore>((set, get) => ({
   openFiles: new Map(),
   originalFiles: new Map(),
   activeFile: null,
+  tasks: [],
+  activeTasks: [],
 
   // 设置当前路径
   setCurrentPath: (path: string) => {
@@ -388,8 +400,9 @@ export const useFileStore = create<FileStore>((set, get) => ({
     const { currentPath } = get()
     
     try {
-      await fileApiClient.compressFiles(filePaths, currentPath, archiveName, format)
-      await get().loadFiles()
+      const result = await fileApiClient.compressFiles(filePaths, currentPath, archiveName, format)
+      // 立即刷新活动任务列表
+      await get().loadActiveTasks()
       return true
     } catch (error: any) {
       set({ error: error.message || '压缩文件失败' })
@@ -402,8 +415,9 @@ export const useFileStore = create<FileStore>((set, get) => ({
     const { currentPath } = get()
     
     try {
-      await fileApiClient.extractArchive(archivePath, currentPath)
-      await get().loadFiles()
+      const result = await fileApiClient.extractArchive(archivePath, currentPath)
+      // 立即刷新活动任务列表
+      await get().loadActiveTasks()
       return true
     } catch (error: any) {
       set({ error: error.message || '解压文件失败' })
@@ -425,5 +439,48 @@ export const useFileStore = create<FileStore>((set, get) => ({
     const currentContent = openFiles.get(path)
     const originalContent = originalFiles.get(path)
     return currentContent !== originalContent
+  },
+  
+  // 任务管理
+  loadTasks: async () => {
+    try {
+      const tasks = await fileApiClient.getTasks()
+      set({ tasks })
+    } catch (error: any) {
+      set({ error: error.message || '加载任务列表失败' })
+    }
+  },
+
+  loadActiveTasks: async () => {
+    try {
+      const activeTasks = await fileApiClient.getActiveTasks()
+      set({ activeTasks })
+    } catch (error: any) {
+      set({ error: error.message || '加载活动任务失败' })
+    }
+  },
+
+  getTask: async (taskId: string) => {
+    try {
+      return await fileApiClient.getTask(taskId)
+    } catch (error: any) {
+      set({ error: error.message || '获取任务状态失败' })
+      return null
+    }
+  },
+
+  deleteTask: async (taskId: string) => {
+    try {
+      const result = await fileApiClient.deleteTask(taskId)
+      if (result.status === 'success') {
+        // 刷新任务列表
+        await get().loadActiveTasks()
+        await get().loadTasks()
+      }
+      return result
+    } catch (error: any) {
+      set({ error: error.message || '删除任务失败' })
+      return { status: 'error', message: error.message || '删除任务失败' }
+    }
   }
 }))

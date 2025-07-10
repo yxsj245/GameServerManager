@@ -31,3 +31,14 @@ export interface FileContent {
   size: number
   modified: string
 }
+
+export interface Task {
+  id: string
+  type: 'compress' | 'extract'
+  status: 'pending' | 'running' | 'completed' | 'failed'
+  progress: number
+  message: string
+  createdAt: string
+  updatedAt: string
+  data: any
+}
