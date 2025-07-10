@@ -49,6 +49,7 @@ class SocketClient {
 
     this.socket.on('connect_error', (error) => {
       console.error('Socket连接错误:', error)
+      this.emit('connection-status', { connected: false, reason: 'connect_error' })
       this.emit('connection-error', { error: error.message })
       this.reconnect()
     })
@@ -89,10 +90,28 @@ class SocketClient {
 
   // 发送事件
   emit(event: string, data?: any) {
+    // 首先触发本地监听器
+    this.emitLocal(event, data)
+    
+    // 然后尝试向服务器发送事件
     if (this.socket?.connected) {
       this.socket.emit(event, data)
     } else {
       console.warn('Socket未连接，无法发送事件:', event)
+    }
+  }
+
+  // 触发本地监听器
+  private emitLocal(event: string, data?: any) {
+    const listeners = this.listeners.get(event)
+    if (listeners) {
+      listeners.forEach(callback => {
+        try {
+          callback(data)
+        } catch (error) {
+          console.error(`执行事件监听器时出错 (${event}):`, error)
+        }
+      })
     }
   }
 
