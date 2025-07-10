@@ -614,7 +614,7 @@ const TerminalPage: React.FC = () => {
       socketClient.off('session-reconnect-failed', handleSessionReconnectFailed)
       socketClient.off('terminal-resized', handleTerminalResized)
     }
-  }, [addNotification]) // 只依赖addNotification，不依赖sessions
+  }, []) // 移除addNotification依赖，避免重复注册事件监听器
   
   useEffect(() => {
     // 处理URL参数：cwd和instance
@@ -642,12 +642,6 @@ const TerminalPage: React.FC = () => {
             socketClient.resizeTerminal(targetSession.id, cols, rows)
           }
         }, 800)
-        
-        addNotification({
-          type: 'success',
-          title: '已连接到实例终端',
-          message: `已切换到实例终端会话`
-        })
       } else {
         // 如果没有找到对应的会话，等待一段时间后再次查找
         setTimeout(() => {
@@ -663,12 +657,6 @@ const TerminalPage: React.FC = () => {
                 socketClient.resizeTerminal(delayedSession.id, cols, rows)
               }
             }, 300)
-            
-            addNotification({
-              type: 'success',
-              title: '已连接到实例终端',
-              message: `已切换到实例终端会话`
-            })
           } else {
             addNotification({
               type: 'warning',
@@ -732,7 +720,7 @@ const TerminalPage: React.FC = () => {
     urlParamProcessed.current = true
     navigate('/terminal', { replace: true })
     
-  }, [sessionsLoaded, navigate, createTerminalSession, searchParams, switchTerminalSession, addNotification])
+  }, [sessionsLoaded, navigate, createTerminalSession, searchParams, switchTerminalSession])
 
   // 当活动会话改变时，挂载终端到DOM
   useEffect(() => {
