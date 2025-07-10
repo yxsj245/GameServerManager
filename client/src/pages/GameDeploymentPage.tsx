@@ -25,6 +25,9 @@ interface GameInfo {
   tip: string
   image: string
   url: string
+  system?: string[]
+  supportedOnCurrentPlatform?: boolean
+  currentPlatform?: string
 }
 
 interface Games {
@@ -618,6 +621,16 @@ const GameDeploymentPage: React.FC = () => {
 
   // 打开安装对话框
   const handleInstallGame = (gameKey: string, gameInfo: GameInfo) => {
+    // 检查游戏是否支持当前平台
+    if (gameInfo.supportedOnCurrentPlatform === false) {
+      addNotification({
+        type: 'error',
+        title: '平台不兼容',
+        message: `${gameInfo.game_nameCN} 不支持当前平台 (${gameInfo.currentPlatform})，无法安装`
+      })
+      return
+    }
+    
     setSelectedGame({ key: gameKey, info: gameInfo })
     setInstanceName(gameInfo.game_nameCN)
     setInstallPath('')
@@ -807,17 +820,47 @@ const GameDeploymentPage: React.FC = () => {
 
                 {/* 游戏信息 */}
                 <div className="p-4">
-                  <h3 className="font-semibold text-gray-900 dark:text-white mb-4 text-center">
+                  <h3 className="font-semibold text-gray-900 dark:text-white mb-2 text-center">
                     {gameInfo.game_nameCN}
                   </h3>
+                  
+                  {/* 平台兼容性信息 */}
+                  <div className="mb-4 text-center">
+                    {gameInfo.system && gameInfo.system.length > 0 ? (
+                      <div className="text-xs text-gray-600 dark:text-gray-400">
+                        <span>支持平台: {gameInfo.system.join(', ')}</span>
+                        {gameInfo.currentPlatform && (
+                          <div className={`mt-1 text-xs ${
+                            gameInfo.supportedOnCurrentPlatform 
+                              ? 'text-green-600 dark:text-green-400' 
+                              : 'text-red-600 dark:text-red-400'
+                          }`}>
+                            当前平台: {gameInfo.currentPlatform} 
+                            {gameInfo.supportedOnCurrentPlatform ? '✓ 兼容' : '✗ 不兼容'}
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="text-xs text-green-600 dark:text-green-400">
+                        ✓ 支持全平台
+                      </div>
+                    )}
+                  </div>
 
                   {/* 操作按钮 */}
                   <button
                     onClick={() => handleInstallGame(gameKey, gameInfo)}
-                    className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg transition-colors flex items-center justify-center space-x-2"
+                    disabled={gameInfo.supportedOnCurrentPlatform === false}
+                    className={`w-full py-2 px-4 rounded-lg transition-colors flex items-center justify-center space-x-2 ${
+                      gameInfo.supportedOnCurrentPlatform === false
+                        ? 'bg-gray-400 cursor-not-allowed text-gray-200'
+                        : 'bg-blue-600 hover:bg-blue-700 text-white'
+                    }`}
                   >
                     <Download className="w-4 h-4" />
-                    <span>安装游戏</span>
+                    <span>
+                      {gameInfo.supportedOnCurrentPlatform === false ? '平台不兼容' : '安装游戏'}
+                    </span>
                   </button>
                 </div>
               </div>

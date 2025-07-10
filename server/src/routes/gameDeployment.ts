@@ -10,6 +10,49 @@ import { ConfigManager } from '../modules/config/ConfigManager.js'
 import logger from '../utils/logger.js'
 import { authenticateToken } from '../middleware/auth.js'
 
+// 平台枚举
+enum Platform {
+  Windows = 'Windows',
+  Linux = 'Linux',
+  MacOS = 'MacOS'
+}
+
+// 游戏信息接口
+interface SteamGameInfo {
+  game_nameCN: string
+  appid: string
+  tip: string
+  image: string
+  url: string
+  system?: Platform[]
+}
+
+// 获取当前平台
+function getCurrentPlatform(): Platform {
+  const platform = os.platform()
+  switch (platform) {
+    case 'win32':
+      return Platform.Windows
+    case 'linux':
+      return Platform.Linux
+    case 'darwin':
+      return Platform.MacOS
+    default:
+      return Platform.Linux // 默认为Linux
+  }
+}
+
+// 检查游戏是否支持当前平台
+function isGameSupportedOnCurrentPlatform(game: SteamGameInfo): boolean {
+  // 如果游戏没有定义system字段，默认支持全平台
+  if (!game.system || game.system.length === 0) {
+    return true
+  }
+  
+  const currentPlatform = getCurrentPlatform()
+  return game.system.includes(currentPlatform)
+}
+
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
@@ -40,11 +83,30 @@ router.get('/games', authenticateToken, async (req: Request, res: Response) => {
     const gamesFilePath = path.join(__dirname, '../../data/games/installgame.json')
     // const gamesFilePath = path.join(__dirname, '../data/games/installgame.json')
     const gamesData = await fs.readFile(gamesFilePath, 'utf-8')
-    const games = JSON.parse(gamesData)
+    const allGames: { [key: string]: SteamGameInfo } = JSON.parse(gamesData)
+    
+    const currentPlatform = getCurrentPlatform()
+    const filteredGames: { [key: string]: SteamGameInfo & { supportedOnCurrentPlatform: boolean, currentPlatform: Platform } } = {}
+    
+    // 过滤游戏并添加平台信息
+    for (const [gameKey, gameInfo] of Object.entries(allGames)) {
+      const isSupported = isGameSupportedOnCurrentPlatform(gameInfo)
+      
+      // 只返回支持当前平台的游戏，如果没有system字段则默认支持全平台
+      if (isSupported) {
+        filteredGames[gameKey] = {
+          ...gameInfo,
+          supportedOnCurrentPlatform: isSupported,
+          currentPlatform
+        }
+      }
+    }
+    
+    logger.info(`当前平台: ${currentPlatform}, 支持的游戏数量: ${Object.keys(filteredGames).length}/${Object.keys(allGames).length}`)
     
     res.json({
       success: true,
-      data: games
+      data: filteredGames
     })
   } catch (error: any) {
     logger.error('获取游戏列表失败:', error)

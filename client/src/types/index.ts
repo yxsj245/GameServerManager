@@ -269,6 +269,9 @@ export interface InstallableGame {
   hint: string
   image: string
   url: string
+  system?: Platform[]
+  supportedOnCurrentPlatform?: boolean
+  currentPlatform?: Platform
 }
 
 export interface GameInstallRequest {
