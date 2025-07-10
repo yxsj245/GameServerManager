@@ -234,9 +234,143 @@ process.on('unhandledRejection', (reason, promise) => {
   process.exit(1)
 })
 
+// 艺术字输出函数
+function printAsciiArt() {
+  const terminalWidth = process.stdout.columns || 120
+  
+  const mainArtLines = [
+    ' ██████╗ ███████╗███╗   ███╗                                           ',
+    '██╔════╝ ██╔════╝████╗ ████║                                           ',
+    '██║  ███╗███████╗██╔████╔██║ __ _ _ __   __ _  __ _  ___ _ __             ',
+    '██║   ██║╚════██║██║╚██╔╝██║/ _` | \'_ \\ / _` |/ _` |/ _ \\ \'__|            ',
+    '╚██████╔╝███████║██║ ╚═╝ ██║ (_| | | | | (_| | (_| |  __/ |               ',
+    ' ╚═════╝ ╚══════╝╚═╝     ╚═╝\\__,_|_| |_|\\__,_|\\__, |\\___|_|               ',
+    '                                              |___/                    '
+  ]
+  
+  const subtitle = '🎮 游戏服务器管理面板 v3.0 🎮'
+  const startupText = '正在启动服务器...'
+  
+  // 居中显示主艺术字
+  console.log('')
+  mainArtLines.forEach(line => {
+    const padding = Math.max(0, Math.floor((terminalWidth - line.length) / 2))
+    console.log(' '.repeat(padding) + line)
+  })
+  
+  console.log('')
+  
+  // 居中显示副标题
+  const subtitlePadding = Math.max(0, Math.floor((terminalWidth - subtitle.length) / 2))
+  console.log(' '.repeat(subtitlePadding) + subtitle)
+  
+  // 获取并居中显示平台艺术字
+  const platformArt = getPlatformArt()
+  const platformLines = platformArt.split('\n').filter(line => line.trim())
+  platformLines.forEach(line => {
+    const cleanLine = line.trim()
+    if (cleanLine) {
+      const padding = Math.max(0, Math.floor((terminalWidth - cleanLine.length) / 2))
+      console.log(' '.repeat(padding) + cleanLine)
+    }
+  })
+  
+  console.log('')
+  
+  // 居中显示启动文本
+  const startupPadding = Math.max(0, Math.floor((terminalWidth - startupText.length) / 2))
+  console.log(' '.repeat(startupPadding) + startupText)
+  
+  console.log('')
+}
+
+// 显示连接信息
+function displayConnectionInfo(host: string, port: number) {
+  const terminalWidth = process.stdout.columns || 80
+  
+  console.log('')
+  console.log('='.repeat(terminalWidth))
+  console.log('')
+  
+  const title = '🚀 服务器启动完成！'
+  const titlePadding = Math.max(0, Math.floor((terminalWidth - title.length) / 2))
+  console.log(' '.repeat(titlePadding) + title)
+  
+  console.log('')
+  
+  // 显示连接地址
+  const localUrl = `http://localhost:${port}`
+  const networkUrl = host === '0.0.0.0' ? `http://127.0.0.1:${port}` : `http://${host}:${port}`
+  
+  const localText = `📍 本地访问: ${localUrl}`
+  const networkText = `🌐 网络访问: ${networkUrl}`
+  
+  const localPadding = Math.max(0, Math.floor((terminalWidth - localText.length) / 2))
+  const networkPadding = Math.max(0, Math.floor((terminalWidth - networkText.length) / 2))
+  
+  console.log(' '.repeat(localPadding) + localText)
+  console.log(' '.repeat(networkPadding) + networkText)
+  
+  console.log('')
+  
+  const tipText = '💡 请在浏览器中打开上述地址访问管理面板'
+  const tipPadding = Math.max(0, Math.floor((terminalWidth - tipText.length) / 2))
+  console.log(' '.repeat(tipPadding) + tipText)
+  
+  console.log('')
+  console.log('='.repeat(terminalWidth))
+  console.log('')
+}
+
+// 获取平台艺术字
+function getPlatformArt(): string {
+  const platform = process.platform
+  
+  switch (platform) {
+    case 'win32':
+      return `
+██╗    ██╗██╗███╗   ██╗██████╗  ██████╗ ██╗    ██╗███████╗
+██║    ██║██║████╗  ██║██╔══██╗██╔═══██╗██║    ██║██╔════╝
+██║ █╗ ██║██║██╔██╗ ██║██║  ██║██║   ██║██║ █╗ ██║███████╗
+██║███╗██║██║██║╚██╗██║██║  ██║██║   ██║██║███╗██║╚════██║
+╚███╔███╔╝██║██║ ╚████║██████╔╝╚██████╔╝╚███╔███╔╝███████║
+ ╚══╝╚══╝ ╚═╝╚═╝  ╚═══╝╚═════╝  ╚═════╝  ╚══╝╚══╝ ╚══════╝`
+    
+    case 'linux':
+      return `
+██╗     ██╗███╗   ██╗██╗   ██╗██╗  ██╗
+██║     ██║████╗  ██║██║   ██║╚██╗██╔╝
+██║     ██║██╔██╗ ██║██║   ██║ ╚███╔╝ 
+██║     ██║██║╚██╗██║██║   ██║ ██╔██╗ 
+███████╗██║██║ ╚████║╚██████╔╝██╔╝ ██╗
+╚══════╝╚═╝╚═╝  ╚═══╝ ╚═════╝ ╚═╝  ╚═╝`
+    
+    case 'darwin':
+      return `
+███╗   ███╗ █████╗  ██████╗ ██████╗ ███████╗
+████╗ ████║██╔══██╗██╔════╝██╔═══██╗██╔════╝
+██╔████╔██║███████║██║     ██║   ██║███████╗
+██║╚██╔╝██║██╔══██║██║     ██║   ██║╚════██║
+██║ ╚═╝ ██║██║  ██║╚██████╗╚██████╔╝███████║
+╚═╝     ╚═╝╚═╝  ╚═╝ ╚═════╝ ╚═════╝ ╚══════╝`
+    
+    default:
+      return `
+██╗   ██╗███╗   ██╗██╗██╗  ██╗
+██║   ██║████╗  ██║██║╚██╗██╔╝
+██║   ██║██╔██╗ ██║██║ ╚███╔╝ 
+██║   ██║██║╚██╗██║██║ ██╔██╗ 
+╚██████╔╝██║ ╚████║██║██╔╝ ██╗
+ ╚═════╝ ╚═╝  ╚═══╝╚═╝╚═╝  ╚═╝`
+  }
+}
+
 // 启动服务器
 async function startServer() {
   try {
+    // 输出艺术字
+    printAsciiArt()
+    
     // 确保uploads目录存在
     const uploadsDir = path.join(process.cwd(), 'uploads')
     try {
@@ -438,6 +572,9 @@ async function startServer() {
       logger.info(`地址: http://${HOST}:${PORT}`)
       logger.info(`环境: ${process.env.NODE_ENV || 'development'}`)
       logger.info(`进程ID: ${process.pid}`)
+      
+      // 重点显示连接地址
+      displayConnectionInfo(HOST, PORT)
     })
   } catch (error) {
     logger.error('服务器启动失败:', error)
