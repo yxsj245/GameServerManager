@@ -88,21 +88,20 @@ router.get('/games', authenticateToken, async (req: Request, res: Response) => {
     const currentPlatform = getCurrentPlatform()
     const filteredGames: { [key: string]: SteamGameInfo & { supportedOnCurrentPlatform: boolean, currentPlatform: Platform } } = {}
     
-    // 过滤游戏并添加平台信息
+    // 添加平台信息到所有游戏（不再过滤不兼容的游戏）
     for (const [gameKey, gameInfo] of Object.entries(allGames)) {
       const isSupported = isGameSupportedOnCurrentPlatform(gameInfo)
       
-      // 只返回支持当前平台的游戏，如果没有system字段则默认支持全平台
-      if (isSupported) {
-        filteredGames[gameKey] = {
-          ...gameInfo,
-          supportedOnCurrentPlatform: isSupported,
-          currentPlatform
-        }
+      // 返回所有游戏，包括不支持当前平台的游戏
+      filteredGames[gameKey] = {
+        ...gameInfo,
+        supportedOnCurrentPlatform: isSupported,
+        currentPlatform
       }
     }
     
-    logger.info(`当前平台: ${currentPlatform}, 支持的游戏数量: ${Object.keys(filteredGames).length}/${Object.keys(allGames).length}`)
+    const supportedCount = Object.values(filteredGames).filter(game => game.supportedOnCurrentPlatform).length
+    logger.info(`当前平台: ${currentPlatform}, 支持的游戏数量: ${supportedCount}/${Object.keys(allGames).length}`)
     
     res.json({
       success: true,
