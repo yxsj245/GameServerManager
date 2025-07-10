@@ -205,7 +205,7 @@ router.post('/install', authenticateToken, async (req: Request, res: Response) =
       })
       
       // 等待终端完全初始化
-      await new Promise(resolve => setTimeout(resolve, 2000))
+      await new Promise(resolve => setTimeout(resolve, 1000))
       
       // 根据操作系统构建SteamCMD执行命令
       const platform = os.platform()
