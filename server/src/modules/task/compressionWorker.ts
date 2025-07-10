@@ -126,22 +126,39 @@ export class CompressionWorker {
           const stream = createReadStream(archivePath)
             .pipe(unzipper.Parse())
 
-          stream.on('entry', (entry) => {
+          stream.on('entry', async (entry) => {
             totalFiles++
             const fileName = entry.path
             const type = entry.type
             const filePath = path.join(targetPath, fileName)
 
             if (type === 'File') {
-              entry.pipe(createWriteStream(filePath))
-              entry.on('close', () => {
-                extractedFiles++
-                const progress = Math.floor((extractedFiles / totalFiles) * 90) + 5
-                taskManager.updateTask(taskId, {
-                  message: `正在解压... (${extractedFiles}/${totalFiles})`,
-                  progress: Math.min(95, progress)
+              try {
+                // 确保文件所在的目录存在
+                const fileDir = path.dirname(filePath)
+                await fs.mkdir(fileDir, { recursive: true })
+                
+                entry.pipe(createWriteStream(filePath))
+                entry.on('close', () => {
+                  extractedFiles++
+                  const progress = Math.floor((extractedFiles / totalFiles) * 90) + 5
+                  taskManager.updateTask(taskId, {
+                    message: `正在解压... (${extractedFiles}/${totalFiles})`,
+                    progress: Math.min(95, progress)
+                  })
                 })
-              })
+              } catch (error) {
+                console.error(`创建目录失败: ${path.dirname(filePath)}`, error)
+                entry.autodrain()
+              }
+            } else if (type === 'Directory') {
+              // 处理目录条目
+              try {
+                await fs.mkdir(filePath, { recursive: true })
+              } catch (error) {
+                console.error(`创建目录失败: ${filePath}`, error)
+              }
+              entry.autodrain()
             } else {
               entry.autodrain()
             }

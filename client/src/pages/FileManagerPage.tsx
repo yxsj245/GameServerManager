@@ -515,8 +515,8 @@ const FileManagerPage: React.FC = () => {
     if (success) {
       addNotification({
         type: 'success',
-        title: '压缩成功',
-        message: `成功创建压缩文件 "${archiveName}"`
+        title: '压缩任务已下发',
+        message: `异步操作，详细进度可查看任务栏 "${archiveName}"`
       })
     }
     setCompressDialog({ visible: false, files: [] })
