@@ -1,0 +1,635 @@
+import axios from 'axios';
+import * as fs from 'fs-extra';
+import * as path from 'path';
+import { spawn, ChildProcess } from 'child_process';
+
+// ==================== 类型定义 ====================
+
+// API响应类型定义
+export interface ApiResponse<T> {
+  code: number;
+  message: string;
+  data: T;
+}
+
+// 服务器分类数据类型
+export interface ServerClassifyData {
+  pluginsCore: string[];
+  pluginsAndModsCore: string[];
+  modsCore_Forge: string[];
+  modsCore_Fabric: string[];
+  vanillaCore: string[];
+  bedrockCore: string[];
+  proxyCore: string[];
+}
+
+// 版本列表数据类型
+export interface VersionListData {
+  versionList: string[];
+}
+
+// 下载数据类型
+export interface DownloadData {
+  url: string;
+  sha256: string;
+}
+
+// 服务器分类选项
+export interface ServerCategory {
+  name: string;
+  displayName: string;
+  servers: string[];
+}
+
+// 下载选项配置
+export interface DownloadOptions {
+  server: string; // 指定服务端
+  version: string; // 指定版本
+  targetDirectory?: string; // 指定目标目录，默认为 './minecraft-server'
+  skipJavaCheck?: boolean; // 跳过Java环境检查
+  skipServerRun?: boolean; // 跳过服务端运行
+  silent?: boolean; // 静默模式，不输出日志
+}
+
+// 下载进度回调
+export interface DownloadProgress {
+  loaded: number;
+  total: number;
+  percentage: number;
+}
+
+export type ProgressCallback = (progress: DownloadProgress) => void;
+export type LogCallback = (message: string, type?: 'info' | 'error' | 'success' | 'warn') => void;
+
+// ==================== API服务类 ====================
+
+export class ApiService {
+  private static readonly BASE_URL = 'https://api.mslmc.cn/v3';
+
+  /**
+   * 获取服务器分类核心列表
+   */
+  static async getServerClassify(): Promise<ServerClassifyData> {
+    try {
+      const response = await axios.get<ApiResponse<ServerClassifyData>>(
+        `${this.BASE_URL}/query/server_classify`
+      );
+      
+      if (response.data.code !== 200) {
+        throw new Error(`API错误: ${response.data.message}`);
+      }
+      
+      return response.data.data;
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        throw new Error(`网络请求失败: ${error.message}`);
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * 查询特定服务端支持的MC版本
+   */
+  static async getAvailableVersions(server: string): Promise<string[]> {
+    try {
+      const response = await axios.get<ApiResponse<VersionListData>>(
+        `${this.BASE_URL}/query/available_versions/${server}`
+      );
+      
+      if (response.data.code !== 200) {
+        throw new Error(`API错误: ${response.data.message}`);
+      }
+      
+      return response.data.data.versionList;
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        throw new Error(`网络请求失败: ${error.message}`);
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * 获取服务端下载地址
+   */
+  static async getDownloadUrl(server: string, version: string): Promise<DownloadData> {
+    try {
+      const response = await axios.get<ApiResponse<DownloadData>>(
+        `${this.BASE_URL}/download/server/${server}/${version}`
+      );
+      
+      if (response.data.code !== 200) {
+        throw new Error(`API错误: ${response.data.message}`);
+      }
+      
+      return response.data.data;
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        throw new Error(`网络请求失败: ${error.message}`);
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * 下载文件
+   */
+  static async downloadFile(
+    url: string, 
+    filePath: string, 
+    onProgress?: ProgressCallback,
+    onLog?: LogCallback
+  ): Promise<void> {
+    try {
+      if (onLog && !onLog.length) {
+        onLog('开始下载文件...', 'info');
+      }
+      
+      const response = await axios({
+        method: 'GET',
+        url: url,
+        responseType: 'stream',
+        timeout: 300000, // 5分钟超时
+        onDownloadProgress: (progressEvent) => {
+          if (progressEvent.total && onProgress) {
+            const percentage = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+            onProgress({
+              loaded: progressEvent.loaded,
+              total: progressEvent.total,
+              percentage
+            });
+          }
+        }
+      });
+
+      const writer = fs.createWriteStream(filePath);
+      
+      response.data.pipe(writer);
+      
+      return new Promise((resolve, reject) => {
+        writer.on('finish', () => {
+          if (onLog) {
+            onLog('文件下载完成!', 'success');
+          }
+          resolve();
+        });
+        writer.on('error', (error: Error) => {
+          if (onLog) {
+            onLog('文件写入失败!', 'error');
+          }
+          reject(error);
+        });
+        
+        // 添加超时处理
+        const timeout = setTimeout(() => {
+          writer.destroy();
+          reject(new Error('下载超时'));
+        }, 300000);
+        
+        writer.on('finish', () => clearTimeout(timeout));
+        writer.on('error', () => clearTimeout(timeout));
+      });
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        if (error.code === 'ECONNABORTED') {
+          throw new Error('下载超时，请检查网络连接');
+        }
+        throw new Error(`文件下载失败: ${error.message}`);
+      }
+      throw error;
+    }
+  }
+}
+
+// ==================== 文件管理类 ====================
+
+export class FileManager {
+  private static tempDir = path.join(process.cwd(), 'temp-minecraft-server');
+
+  /**
+   * 创建临时目录
+   */
+  static async createTempDirectory(): Promise<string> {
+    await fs.ensureDir(this.tempDir);
+    return this.tempDir;
+  }
+
+  /**
+   * 获取服务端jar文件路径
+   */
+  static getServerJarPath(server: string, version: string): string {
+    return path.join(this.tempDir, `${server}-${version}.jar`);
+  }
+
+  /**
+   * 检查文件是否存在
+   */
+  static async fileExists(filePath: string): Promise<boolean> {
+    try {
+      await fs.access(filePath);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * 运行服务端直到EULA协议出现
+   */
+  static async runServerUntilEula(jarPath: string, onLog?: LogCallback): Promise<void> {
+    return new Promise((resolve, reject) => {
+      if (onLog) {
+        onLog('正在启动服务端...', 'info');
+      }
+      
+      const serverProcess: ChildProcess = spawn('java', ['-jar', path.basename(jarPath)], {
+        cwd: path.dirname(jarPath),
+        stdio: ['pipe', 'pipe', 'pipe']
+      });
+
+      let hasEulaMessage = false;
+
+      // 监听标准输出
+      serverProcess.stdout?.on('data', (data: Buffer) => {
+        const output = data.toString();
+        if (onLog) {
+          onLog(output, 'info');
+        }
+        
+        // 检查是否出现EULA相关信息
+        if (output.toLowerCase().includes('eula') || 
+            output.toLowerCase().includes('you need to agree to the eula')) {
+          hasEulaMessage = true;
+          if (onLog) {
+            onLog('检测到EULA协议提示，正在关闭服务端...', 'info');
+          }
+          serverProcess.kill('SIGTERM');
+        }
+      });
+
+      // 监听标准错误
+      serverProcess.stderr?.on('data', (data: Buffer) => {
+        const output = data.toString();
+        if (onLog) {
+          onLog(output, 'error');
+        }
+        
+        if (output.toLowerCase().includes('eula')) {
+          hasEulaMessage = true;
+          if (onLog) {
+            onLog('检测到EULA协议提示，正在关闭服务端...', 'info');
+          }
+          serverProcess.kill('SIGTERM');
+        }
+      });
+
+      // 监听进程退出
+      serverProcess.on('close', (code: number | null) => {
+        if (hasEulaMessage) {
+          if (onLog) {
+            onLog('服务端已关闭，EULA协议检测完成。', 'success');
+          }
+          resolve();
+        } else if (code === 0) {
+          if (onLog) {
+            onLog('服务端正常退出。', 'success');
+          }
+          resolve();
+        } else {
+          reject(new Error(`服务端异常退出，退出码: ${code}`));
+        }
+      });
+
+      // 监听进程错误
+      serverProcess.on('error', (error: Error) => {
+        reject(new Error(`启动服务端失败: ${error.message}`));
+      });
+
+      // 设置超时（5分钟）
+      setTimeout(() => {
+        if (!serverProcess.killed) {
+          if (onLog) {
+            onLog('服务端运行超时，正在强制关闭...', 'warn');
+          }
+          serverProcess.kill('SIGKILL');
+          resolve();
+        }
+      }, 5 * 60 * 1000);
+    });
+  }
+
+  /**
+   * 移动文件到目标目录
+   */
+  static async moveFilesToTarget(targetDir: string, onLog?: LogCallback): Promise<void> {
+    // 确保目标目录存在
+    await fs.ensureDir(targetDir);
+    
+    // 获取临时目录中的所有文件
+    const files = await fs.readdir(this.tempDir);
+    
+    if (onLog) {
+      onLog(`正在移动 ${files.length} 个文件到目标目录...`, 'info');
+    }
+    
+    for (const file of files) {
+      const sourcePath = path.join(this.tempDir, file);
+      const targetPath = path.join(targetDir, file);
+      
+      // 检查是否是文件
+      const stat = await fs.stat(sourcePath);
+      if (stat.isFile()) {
+        await fs.move(sourcePath, targetPath, { overwrite: true });
+        if (onLog) {
+          onLog(`已移动: ${file}`, 'info');
+        }
+      } else if (stat.isDirectory()) {
+        await fs.copy(sourcePath, targetPath, { overwrite: true });
+        if (onLog) {
+          onLog(`已复制目录: ${file}`, 'info');
+        }
+      }
+    }
+  }
+
+  /**
+   * 清理临时目录
+   */
+  static async cleanupTempDirectory(onLog?: LogCallback): Promise<void> {
+    try {
+      if (await this.fileExists(this.tempDir)) {
+        await fs.remove(this.tempDir);
+        if (onLog) {
+          onLog('临时目录已清理。', 'info');
+        }
+      }
+    } catch (error) {
+      if (onLog) {
+        onLog(`清理临时目录时出现警告: ${error}`, 'warn');
+      }
+    }
+  }
+
+  /**
+   * 获取临时目录路径
+   */
+  static getTempDirectory(): string {
+    return this.tempDir;
+  }
+
+  /**
+   * 验证Java环境
+   */
+  static async validateJavaEnvironment(): Promise<boolean> {
+    return new Promise((resolve) => {
+      const javaProcess = spawn('java', ['-version'], { stdio: 'pipe' });
+      
+      javaProcess.on('close', (code) => {
+        resolve(code === 0);
+      });
+      
+      javaProcess.on('error', () => {
+        resolve(false);
+      });
+    });
+  }
+}
+
+// ==================== 主要下载器类 ====================
+
+/**
+ * Minecraft服务端核心下载工具 - 纯API版本
+ * 专为模块集成设计，无交互式界面
+ */
+export class MinecraftServerDownloader {
+  private onProgress?: ProgressCallback;
+  private onLog?: LogCallback;
+
+  constructor(onProgress?: ProgressCallback, onLog?: LogCallback) {
+    this.onProgress = onProgress;
+    this.onLog = onLog;
+  }
+
+  /**
+   * 下载服务端
+   * @param options 下载选项
+   */
+  async downloadServer(options: DownloadOptions): Promise<void> {
+    const {
+      server,
+      version,
+      targetDirectory = './minecraft-server',
+      skipJavaCheck = false,
+      skipServerRun = false,
+      silent = false
+    } = options;
+
+    const log = silent ? undefined : this.onLog;
+
+    try {
+      // 验证Java环境（除非跳过）
+      if (!skipJavaCheck) {
+        if (log) log('检查Java环境...', 'info');
+        const hasJava = await FileManager.validateJavaEnvironment();
+        if (!hasJava) {
+          throw new Error('未检测到Java环境，请确保已安装Java并添加到PATH环境变量中。');
+        }
+        if (log) log('Java环境检查通过。', 'success');
+      }
+
+      if (!server || !version) {
+        throw new Error('缺少必要参数：server 和 version');
+      }
+
+      // 创建临时目录
+      if (log) log('创建临时工作目录...', 'info');
+      const tempDir = await FileManager.createTempDirectory();
+      if (log) log(`临时目录创建成功: ${tempDir}`, 'success');
+      
+      try {
+        // 获取下载地址
+        if (log) log('正在获取下载地址...', 'info');
+        const downloadData = await ApiService.getDownloadUrl(server, version);
+        if (log) log('下载地址获取成功。', 'success');
+        
+        // 下载服务端核心
+        const jarPath = FileManager.getServerJarPath(server, version);
+        if (log) log(`正在下载服务端核心到: ${jarPath}`, 'info');
+        await ApiService.downloadFile(downloadData.url, jarPath, this.onProgress, log);
+        if (log) log('服务端核心下载完成。', 'success');
+        
+        // 运行服务端直到EULA协议（除非跳过）
+        if (!skipServerRun) {
+          if (log) log('正在运行服务端核心...', 'info');
+          if (log) log('注意: 服务端将运行直到出现EULA协议提示，然后自动关闭。', 'info');
+          await FileManager.runServerUntilEula(jarPath, log);
+          if (log) log('服务端运行完成。', 'success');
+        }
+        
+        // 移动文件到目标目录
+        if (log) log(`正在移动文件到目标目录: ${targetDirectory}`, 'info');
+        await FileManager.moveFilesToTarget(targetDirectory, log);
+        if (log) log('文件移动完成。', 'success');
+        
+      } finally {
+        // 清理临时目录
+        if (log) log('正在清理临时文件...', 'info');
+        await FileManager.cleanupTempDirectory(log);
+        if (log) log('临时文件清理完成。', 'success');
+      }
+      
+      if (log) {
+        log('=== 所有操作完成 ===', 'success');
+        log(`服务端文件已保存到: ${targetDirectory}`, 'info');
+        log('您现在可以在目标目录中找到服务端文件。', 'info');
+        if (!skipServerRun) {
+          log('如需同意EULA协议，请编辑 eula.txt 文件并将 eula=false 改为 eula=true', 'info');
+        }
+      }
+      
+    } catch (error) {
+      // 确保清理临时目录
+      try {
+        await FileManager.cleanupTempDirectory();
+      } catch (cleanupError) {
+        if (log) log(`清理临时目录时出现问题: ${cleanupError}`, 'warn');
+      }
+      
+      throw error;
+    }
+  }
+
+  /**
+   * 获取可用的服务器分类
+   */
+  async getServerCategories(): Promise<ServerCategory[]> {
+    const serverClassifyData = await ApiService.getServerClassify();
+    return this.formatServerCategories(serverClassifyData);
+  }
+
+  /**
+   * 获取指定服务端的可用版本
+   */
+  async getAvailableVersions(server: string): Promise<string[]> {
+    return await ApiService.getAvailableVersions(server);
+  }
+
+  /**
+   * 获取下载信息（不实际下载）
+   */
+  async getDownloadInfo(server: string, version: string): Promise<DownloadData> {
+    return await ApiService.getDownloadUrl(server, version);
+  }
+
+  /**
+   * 验证Java环境
+   */
+  async validateJava(): Promise<boolean> {
+    return await FileManager.validateJavaEnvironment();
+  }
+
+  /**
+   * 将服务器分类数据转换为用户友好的格式
+   */
+  private formatServerCategories(data: ServerClassifyData): ServerCategory[] {
+    const categories = [
+      {
+        name: 'pluginsCore',
+        displayName: '插件服务端核心',
+        servers: data.pluginsCore || []
+      },
+      {
+        name: 'pluginsAndModsCore',
+        displayName: '插件+模组服务端核心',
+        servers: data.pluginsAndModsCore || []
+      },
+      {
+        name: 'modsCore_Forge',
+        displayName: '模组服务端核心 (Forge)',
+        servers: data.modsCore_Forge || []
+      },
+      {
+        name: 'modsCore_Fabric',
+        displayName: '模组服务端核心 (Fabric)',
+        servers: data.modsCore_Fabric || []
+      },
+      {
+        name: 'vanillaCore',
+        displayName: '原版服务端核心',
+        servers: data.vanillaCore || []
+      },
+      {
+        name: 'bedrockCore',
+        displayName: '基岩版服务端核心',
+        servers: data.bedrockCore || []
+      },
+      {
+        name: 'proxyCore',
+        displayName: '代理服务端核心',
+        servers: data.proxyCore || []
+      }
+    ];
+    
+    // 过滤掉没有服务器的分类
+    return categories.filter(cat => cat.servers.length > 0);
+  }
+}
+
+// ==================== 便捷函数 ====================
+
+/**
+ * 快速下载指定服务端
+ * @param server 服务端名称
+ * @param version MC版本
+ * @param targetDirectory 目标目录
+ * @param options 额外选项
+ */
+export async function downloadMinecraftServer(
+  server: string,
+  version: string,
+  targetDirectory?: string,
+  options?: Partial<DownloadOptions>
+): Promise<void> {
+  const downloader = new MinecraftServerDownloader();
+  await downloader.downloadServer({
+    server,
+    version,
+    targetDirectory,
+    ...options
+  });
+}
+
+/**
+ * 获取所有可用的服务器分类
+ */
+export async function getServerCategories(): Promise<ServerCategory[]> {
+  const downloader = new MinecraftServerDownloader();
+  return await downloader.getServerCategories();
+}
+
+/**
+ * 获取指定服务端的可用版本
+ */
+export async function getAvailableVersions(server: string): Promise<string[]> {
+  const downloader = new MinecraftServerDownloader();
+  return await downloader.getAvailableVersions(server);
+}
+
+/**
+ * 获取下载信息（不实际下载）
+ */
+export async function getDownloadInfo(server: string, version: string): Promise<DownloadData> {
+  const downloader = new MinecraftServerDownloader();
+  return await downloader.getDownloadInfo(server, version);
+}
+
+/**
+ * 验证Java环境
+ */
+export async function validateJavaEnvironment(): Promise<boolean> {
+  return await FileManager.validateJavaEnvironment();
+}
+
+// 默认导出主类
+export default MinecraftServerDownloader;

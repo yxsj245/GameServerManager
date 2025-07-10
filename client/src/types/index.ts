@@ -263,5 +263,31 @@ export interface GameInstallProgress {
   instanceId?: string
 }
 
+// Minecraft服务端相关类型
+export interface MinecraftServerCategory {
+  name: string
+  displayName: string
+  servers: string[]
+}
+
+export interface MinecraftDownloadOptions {
+  server: string
+  version: string
+  targetDirectory: string
+  skipJavaCheck?: boolean
+  skipServerRun?: boolean
+}
+
+export interface MinecraftDownloadProgress {
+  loaded: number
+  total: number
+  percentage: number
+}
+
+export interface MinecraftDownloadInfo {
+  url: string
+  sha256: string
+}
+
 // 文件管理相关类型
 export * from './file'

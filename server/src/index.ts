@@ -28,6 +28,7 @@ import filesRouter from './routes/files.js'
 import { setupInstanceRoutes } from './routes/instances.js'
 import steamcmdRouter, { setSteamCMDManager } from './routes/steamcmd.js'
 import gameDeploymentRouter, { setGameDeploymentManagers } from './routes/gameDeployment.js'
+import minecraftRouter from './routes/minecraft.js'
 
 // 获取当前文件目录
 const __filename = fileURLToPath(import.meta.url)
@@ -304,6 +305,9 @@ async function startServer() {
     // 设置游戏部署路由
     setGameDeploymentManagers(terminalManager, instanceManager, steamcmdManager, configManager)
     app.use('/api/game-deployment', gameDeploymentRouter)
+    
+    // 设置Minecraft路由
+    app.use('/api/minecraft', minecraftRouter)
 
     // 前端路由处理（SPA支持）
     app.get('*', (req, res) => {

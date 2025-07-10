@@ -7,10 +7,14 @@ import {
   FolderOpen,
   Play,
   X,
-  Loader
+  Loader,
+  Pickaxe,
+  CheckCircle,
+  AlertCircle
 } from 'lucide-react'
 import { useNotificationStore } from '@/stores/notificationStore'
 import apiClient from '@/utils/api'
+import { MinecraftServerCategory, MinecraftDownloadOptions, MinecraftDownloadProgress } from '@/types'
 
 interface GameInfo {
   game_nameCN: string
@@ -41,6 +45,20 @@ const GameDeploymentPage: React.FC = () => {
   const [steamUsername, setSteamUsername] = useState('')
   const [steamPassword, setSteamPassword] = useState('')
 
+  // Minecraft相关状态
+  const [minecraftCategories, setMinecraftCategories] = useState<MinecraftServerCategory[]>([])
+  const [minecraftLoading, setMinecraftLoading] = useState(false)
+  const [selectedCategory, setSelectedCategory] = useState<string>('')
+  const [selectedServer, setSelectedServer] = useState<string>('')
+  const [availableVersions, setAvailableVersions] = useState<string[]>([])
+  const [selectedVersion, setSelectedVersion] = useState<string>('')
+  const [minecraftInstallPath, setMinecraftInstallPath] = useState('')
+  const [skipJavaCheck, setSkipJavaCheck] = useState(false)
+  const [skipServerRun, setSkipServerRun] = useState(false)
+  const [minecraftDownloading, setMinecraftDownloading] = useState(false)
+  const [downloadProgress, setDownloadProgress] = useState<MinecraftDownloadProgress | null>(null)
+  const [javaValidated, setJavaValidated] = useState<boolean | null>(null)
+
   // 获取游戏列表
   const fetchGames = async () => {
     try {
@@ -64,9 +82,138 @@ const GameDeploymentPage: React.FC = () => {
     }
   }
 
+  // 获取Minecraft服务器分类
+  const fetchMinecraftCategories = async () => {
+    try {
+      setMinecraftLoading(true)
+      const response = await apiClient.getMinecraftServerCategories()
+      
+      if (response.success) {
+        setMinecraftCategories(response.data || [])
+      } else {
+        throw new Error(response.message || '获取Minecraft服务器分类失败')
+      }
+    } catch (error: any) {
+      console.error('获取Minecraft服务器分类失败:', error)
+      addNotification({
+        type: 'error',
+        title: '获取失败',
+        message: error.message || '无法获取Minecraft服务器分类'
+      })
+    } finally {
+      setMinecraftLoading(false)
+    }
+  }
+
+  // 获取指定服务端的可用版本
+  const fetchMinecraftVersions = async (server: string) => {
+    try {
+      const response = await apiClient.getMinecraftVersions(server)
+      
+      if (response.success) {
+        setAvailableVersions(response.data || [])
+        setSelectedVersion('')
+      } else {
+        throw new Error(response.message || '获取版本列表失败')
+      }
+    } catch (error: any) {
+      console.error('获取版本列表失败:', error)
+      addNotification({
+        type: 'error',
+        title: '获取失败',
+        message: error.message || '无法获取版本列表'
+      })
+    }
+  }
+
+  // 验证Java环境
+  const validateJava = async () => {
+    try {
+      const response = await apiClient.validateJavaEnvironment()
+      setJavaValidated(response.success)
+      
+      if (!response.success) {
+        addNotification({
+          type: 'warning',
+          title: 'Java环境检查',
+          message: 'Java环境验证失败，请确保已安装Java并添加到PATH环境变量中'
+        })
+      }
+    } catch (error: any) {
+      console.error('Java环境验证失败:', error)
+      setJavaValidated(false)
+    }
+  }
+
+  // 下载Minecraft服务端
+  const downloadMinecraftServer = async () => {
+    if (!selectedServer || !selectedVersion || !minecraftInstallPath.trim()) {
+      addNotification({
+        type: 'error',
+        title: '参数错误',
+        message: '请选择服务端、版本并填写安装路径'
+      })
+      return
+    }
+
+    try {
+      setMinecraftDownloading(true)
+      setDownloadProgress(null)
+      
+      const downloadOptions: MinecraftDownloadOptions = {
+        server: selectedServer,
+        version: selectedVersion,
+        targetDirectory: minecraftInstallPath.trim(),
+        skipJavaCheck,
+        skipServerRun
+      }
+      
+      const response = await apiClient.downloadMinecraftServer(downloadOptions)
+      
+      if (response.success) {
+        addNotification({
+          type: 'success',
+          title: '下载完成',
+          message: `${selectedServer} ${selectedVersion} 下载完成！`
+        })
+        
+        // 重置表单
+        setSelectedCategory('')
+        setSelectedServer('')
+        setSelectedVersion('')
+        setMinecraftInstallPath('')
+        setAvailableVersions([])
+      } else {
+        throw new Error(response.message || '下载失败')
+      }
+    } catch (error: any) {
+      console.error('Minecraft服务端下载失败:', error)
+      addNotification({
+        type: 'error',
+        title: '下载失败',
+        message: error.message || '无法下载Minecraft服务端'
+      })
+    } finally {
+      setMinecraftDownloading(false)
+      setDownloadProgress(null)
+    }
+  }
+
+  // 处理服务端选择
+  const handleServerSelect = (server: string) => {
+    setSelectedServer(server)
+    setSelectedVersion('')
+    setAvailableVersions([])
+    fetchMinecraftVersions(server)
+  }
+
   useEffect(() => {
     fetchGames()
-  }, [])
+    if (activeTab === 'minecraft') {
+      fetchMinecraftCategories()
+      validateJava()
+    }
+  }, [activeTab])
 
   // 打开安装对话框
   const handleInstallGame = (gameKey: string, gameInfo: GameInfo) => {
@@ -155,7 +302,8 @@ const GameDeploymentPage: React.FC = () => {
   }
 
   const tabs = [
-    { id: 'steamcmd', name: 'SteamCMD', icon: Download }
+    { id: 'steamcmd', name: 'SteamCMD', icon: Download },
+    { id: 'minecraft', name: 'Minecraft部署', icon: Pickaxe }
   ]
 
   if (loading) {
@@ -256,6 +404,240 @@ const GameDeploymentPage: React.FC = () => {
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* Minecraft 标签页内容 */}
+      {activeTab === 'minecraft' && (
+        <div className="space-y-6">
+          {/* Java环境状态 */}
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
+            <div className="flex items-center space-x-3">
+              {javaValidated === null ? (
+                <Loader className="w-5 h-5 animate-spin text-blue-500" />
+              ) : javaValidated ? (
+                <CheckCircle className="w-5 h-5 text-green-500" />
+              ) : (
+                <AlertCircle className="w-5 h-5 text-red-500" />
+              )}
+              <div>
+                <h3 className="font-medium text-gray-900 dark:text-white">
+                  Java环境状态
+                </h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  {javaValidated === null
+                    ? '检查中...'
+                    : javaValidated
+                    ? 'Java环境正常'
+                    : 'Java环境未找到，请安装Java并添加到PATH环境变量'}
+                </p>
+              </div>
+              <button
+                onClick={validateJava}
+                className="ml-auto px-3 py-1 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors"
+              >
+                重新检查
+              </button>
+            </div>
+          </div>
+
+          {minecraftLoading ? (
+            <div className="flex items-center justify-center h-64">
+              <Loader className="w-8 h-8 animate-spin text-blue-500" />
+              <span className="ml-2 text-gray-600 dark:text-gray-400">加载Minecraft服务器列表中...</span>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* 服务器选择 */}
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+                  选择服务端类型
+                </h3>
+                
+                <div className="space-y-4">
+                  {/* 服务器分类 */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      服务器分类
+                    </label>
+                    <select
+                      value={selectedCategory}
+                      onChange={(e) => {
+                        setSelectedCategory(e.target.value)
+                        setSelectedServer('')
+                        setSelectedVersion('')
+                        setAvailableVersions([])
+                      }}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    >
+                      <option value="">请选择服务器分类</option>
+                      {minecraftCategories.map((category) => (
+                        <option key={category.name} value={category.name}>
+                          {category.displayName}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* 具体服务端 */}
+                  {selectedCategory && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        服务端
+                      </label>
+                      <select
+                        value={selectedServer}
+                        onChange={(e) => handleServerSelect(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      >
+                        <option value="">请选择服务端</option>
+                        {minecraftCategories
+                          .find(cat => cat.name === selectedCategory)
+                          ?.servers.map((server) => (
+                            <option key={server} value={server}>
+                              {server}
+                            </option>
+                          ))}
+                      </select>
+                    </div>
+                  )}
+
+                  {/* 版本选择 */}
+                  {selectedServer && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Minecraft版本
+                      </label>
+                      <select
+                        value={selectedVersion}
+                        onChange={(e) => setSelectedVersion(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      >
+                        <option value="">请选择版本</option>
+                        {availableVersions.map((version) => (
+                          <option key={version} value={version}>
+                            {version}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* 下载配置 */}
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+                  下载配置
+                </h3>
+                
+                <div className="space-y-4">
+                  {/* 安装路径 */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      安装路径
+                    </label>
+                    <div className="flex space-x-2">
+                      <input
+                        type="text"
+                        value={minecraftInstallPath}
+                        onChange={(e) => setMinecraftInstallPath(e.target.value)}
+                        className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        placeholder="输入服务端安装路径"
+                      />
+                      <button
+                        onClick={() => {
+                          const path = prompt('请输入安装路径:', 'D:\\MinecraftServers\\' + (selectedServer || 'server'))
+                          if (path) setMinecraftInstallPath(path)
+                        }}
+                        className="px-3 py-2 bg-gray-100 dark:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-500 transition-colors"
+                      >
+                        <FolderOpen className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* 高级选项 */}
+                  <div className="space-y-3">
+                    <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                      高级选项
+                    </h4>
+                    
+                    <div className="space-y-2">
+                      <div className="flex items-center space-x-2">
+                        <input
+                          type="checkbox"
+                          id="skipJavaCheck"
+                          checked={skipJavaCheck}
+                          onChange={(e) => setSkipJavaCheck(e.target.checked)}
+                          className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
+                        />
+                        <label htmlFor="skipJavaCheck" className="text-sm text-gray-700 dark:text-gray-300">
+                          跳过Java环境检查
+                        </label>
+                      </div>
+                      
+                      <div className="flex items-center space-x-2">
+                        <input
+                          type="checkbox"
+                          id="skipServerRun"
+                          checked={skipServerRun}
+                          onChange={(e) => setSkipServerRun(e.target.checked)}
+                          className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
+                        />
+                        <label htmlFor="skipServerRun" className="text-sm text-gray-700 dark:text-gray-300">
+                          跳过服务端运行（不生成EULA文件）
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 下载按钮 */}
+                  <button
+                    onClick={downloadMinecraftServer}
+                    disabled={
+                      !selectedServer || 
+                      !selectedVersion || 
+                      !minecraftInstallPath.trim() || 
+                      minecraftDownloading
+                    }
+                    className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white py-3 px-4 rounded-lg transition-colors flex items-center justify-center space-x-2"
+                  >
+                    {minecraftDownloading ? (
+                      <>
+                        <Loader className="w-4 h-4 animate-spin" />
+                        <span>下载中...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Download className="w-4 h-4" />
+                        <span>下载服务端</span>
+                      </>
+                    )}
+                  </button>
+
+                  {/* 下载进度 */}
+                  {downloadProgress && (
+                    <div className="mt-4">
+                      <div className="flex justify-between text-sm text-gray-600 dark:text-gray-400 mb-1">
+                        <span>下载进度</span>
+                        <span>{downloadProgress.percentage}%</span>
+                      </div>
+                      <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                        <div
+                          className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                          style={{ width: `${downloadProgress.percentage}%` }}
+                        ></div>
+                      </div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        {Math.round(downloadProgress.loaded / 1024 / 1024)}MB / {Math.round(downloadProgress.total / 1024 / 1024)}MB
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

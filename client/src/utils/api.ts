@@ -388,6 +388,33 @@ class ApiClient {
   async toggleScheduledTask(id: string, enabled: boolean) {
     return this.patch(`/scheduled-tasks/${id}/toggle`, { enabled })
   }
+
+  // Minecraft服务端API
+  async getMinecraftServerCategories() {
+    return this.get('/minecraft/server-categories')
+  }
+
+  async getMinecraftVersions(server: string) {
+    return this.get(`/minecraft/versions/${server}`)
+  }
+
+  async getMinecraftDownloadInfo(server: string, version: string) {
+    return this.get(`/minecraft/download-info/${server}/${version}`)
+  }
+
+  async downloadMinecraftServer(data: {
+    server: string
+    version: string
+    targetDirectory: string
+    skipJavaCheck?: boolean
+    skipServerRun?: boolean
+  }) {
+    return this.post('/minecraft/download', data)
+  }
+
+  async validateJavaEnvironment() {
+    return this.get('/minecraft/validate-java')
+  }
 }
 
 // 创建单例实例
