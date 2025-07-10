@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express'
 import { InstanceManager } from '../modules/instance/InstanceManager.js'
+import { authenticateToken } from '../middleware/auth.js'
 import logger from '../utils/logger.js'
 import os from 'os'
 import https from 'https'
@@ -16,7 +17,7 @@ export function setInstanceManager(manager: InstanceManager) {
 }
 
 // 获取所有实例
-router.get('/', (req: Request, res: Response) => {
+router.get('/', authenticateToken, (req: Request, res: Response) => {
   try {
     if (!instanceManager) {
       return res.status(500).json({ 
@@ -41,7 +42,7 @@ router.get('/', (req: Request, res: Response) => {
 })
 
 // 获取实例市场列表
-router.get('/market', async (req: Request, res: Response) => {
+router.get('/market', authenticateToken, async (req: Request, res: Response) => {
   try {
     // 确定系统类型
     const platform = os.platform()
@@ -119,7 +120,7 @@ router.get('/market', async (req: Request, res: Response) => {
 })
 
 // 获取单个实例
-router.get('/:id', (req: Request, res: Response) => {
+router.get('/:id', authenticateToken, (req: Request, res: Response) => {
   try {
     if (!instanceManager) {
       return res.status(500).json({ 
@@ -153,7 +154,7 @@ router.get('/:id', (req: Request, res: Response) => {
 })
 
 // 创建实例
-router.post('/', async (req: Request, res: Response) => {
+router.post('/', authenticateToken, async (req: Request, res: Response) => {
   try {
     if (!instanceManager) {
       return res.status(500).json({ 
@@ -211,7 +212,7 @@ router.post('/', async (req: Request, res: Response) => {
 })
 
 // 更新实例
-router.put('/:id', async (req: Request, res: Response) => {
+router.put('/:id', authenticateToken, async (req: Request, res: Response) => {
   try {
     if (!instanceManager) {
       return res.status(500).json({ 
@@ -286,7 +287,7 @@ router.put('/:id', async (req: Request, res: Response) => {
 })
 
 // 删除实例
-router.delete('/:id', async (req: Request, res: Response) => {
+router.delete('/:id', authenticateToken, async (req: Request, res: Response) => {
   try {
     if (!instanceManager) {
       return res.status(500).json({ 
@@ -322,7 +323,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
 })
 
 // 启动实例
-router.post('/:id/start', async (req: Request, res: Response) => {
+router.post('/:id/start', authenticateToken, async (req: Request, res: Response) => {
   try {
     if (!instanceManager) {
       return res.status(500).json({ 
@@ -360,7 +361,7 @@ router.post('/:id/start', async (req: Request, res: Response) => {
 })
 
 // 停止实例
-router.post('/:id/stop', async (req: Request, res: Response) => {
+router.post('/:id/stop', authenticateToken, async (req: Request, res: Response) => {
   try {
     if (!instanceManager) {
       return res.status(500).json({ 
@@ -395,7 +396,7 @@ router.post('/:id/stop', async (req: Request, res: Response) => {
 })
 
 // 获取实例状态
-router.get('/:id/status', (req: Request, res: Response) => {
+router.get('/:id/status', authenticateToken, (req: Request, res: Response) => {
   try {
     if (!instanceManager) {
       return res.status(500).json({ 
@@ -429,7 +430,7 @@ router.get('/:id/status', (req: Request, res: Response) => {
 })
 
 // 向实例发送输入
-router.post('/:id/input', (req: Request, res: Response) => {
+router.post('/:id/input', authenticateToken, (req: Request, res: Response) => {
   try {
     if (!instanceManager) {
       return res.status(500).json({ 
