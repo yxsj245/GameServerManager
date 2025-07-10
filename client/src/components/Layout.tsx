@@ -167,7 +167,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             {/* 连接状态指示器 */}
             <div className="flex items-center space-x-2">
               <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-              <span className="text-sm text-black dark:text-gray-300">已连接</span>
+              <span className="text-sm text-black dark:text-gray-300">WebSocket连接已建立</span>
             </div>
           </div>
         </div>
