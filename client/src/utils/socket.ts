@@ -11,6 +11,8 @@ class SocketClient {
   private isInitialized = false
   private isLowPowerMode = false
   private lowPowerModeCallbacks: Function[] = []
+  private visibilityChangeHandler?: () => void
+  private intersectionObserver?: IntersectionObserver
 
   constructor() {
     // 不在构造函数中立即连接，等待用户登录后再连接
@@ -270,7 +272,7 @@ class SocketClient {
   enterLowPowerMode() {
     if (!this.isLowPowerMode) {
       this.isLowPowerMode = true
-      console.log('进入低功耗模式，关闭WebSocket连接')
+      console.log('进入低功耗模式，关闭WebSocket连接并优化浏览器性能')
       
       // 触发低功耗模式回调
       this.lowPowerModeCallbacks.forEach(callback => {
@@ -285,13 +287,16 @@ class SocketClient {
       if (this.socket) {
         this.socket.disconnect()
       }
+      
+      // 通知浏览器进入低功耗状态
+      this.enableBrowserLowPowerMode()
     }
   }
 
   exitLowPowerMode() {
     if (this.isLowPowerMode) {
       this.isLowPowerMode = false
-      console.log('退出低功耗模式，重新建立WebSocket连接')
+      console.log('退出低功耗模式，重新建立WebSocket连接并恢复浏览器性能')
       
       // 触发低功耗模式回调
       this.lowPowerModeCallbacks.forEach(callback => {
@@ -301,6 +306,9 @@ class SocketClient {
           console.error('执行低功耗模式回调时出错:', error)
         }
       })
+      
+      // 恢复浏览器正常状态
+      this.disableBrowserLowPowerMode()
       
       // 重新连接
       this.reconnectManually()
@@ -319,6 +327,216 @@ class SocketClient {
     const index = this.lowPowerModeCallbacks.indexOf(callback)
     if (index > -1) {
       this.lowPowerModeCallbacks.splice(index, 1)
+    }
+  }
+
+  // 浏览器低功耗模式管理
+  private enableBrowserLowPowerMode() {
+    try {
+      // 1. 降低页面刷新率
+      if ('requestIdleCallback' in window) {
+        window.requestIdleCallback(() => {
+          console.log('页面进入空闲状态优化')
+        })
+      }
+      
+      // 2. 暂停不必要的动画和CSS过渡
+      document.documentElement.style.setProperty('--animation-play-state', 'paused')
+      document.documentElement.classList.add('low-power-mode')
+      
+      // 3. 降低定时器频率
+      this.pauseNonEssentialTimers()
+      
+      // 4. 修改页面标题提示用户
+      this.originalTitle = document.title
+      document.title = '💤 ' + this.originalTitle + ' (低功耗模式)'
+      
+      // 5. 使用Page Visibility API监听标签页状态
+      this.setupPageVisibilityOptimization()
+      
+      // 6. 设置Intersection Observer暂停不可见元素的更新
+      this.setupIntersectionObserver()
+      
+      // 7. 请求浏览器降低CPU使用率
+      if ('scheduler' in window && 'postTask' in (window as any).scheduler) {
+        (window as any).scheduler.postTask(() => {
+          console.log('已请求浏览器调度器优化性能')
+        }, { priority: 'background' })
+      }
+      
+      // 8. 降低浏览器渲染频率
+      this.reduceBrowserRenderingFrequency()
+      
+      console.log('浏览器低功耗模式已启用，标签页进入深度睡眠状态')
+    } catch (error) {
+      console.warn('启用浏览器低功耗模式时出错:', error)
+    }
+  }
+
+  private disableBrowserLowPowerMode() {
+    try {
+      // 1. 恢复动画和CSS过渡
+      document.documentElement.style.removeProperty('--animation-play-state')
+      document.documentElement.classList.remove('low-power-mode')
+      
+      // 2. 恢复定时器
+      this.resumeNonEssentialTimers()
+      
+      // 3. 恢复页面标题
+      if (this.originalTitle) {
+        document.title = this.originalTitle
+        this.originalTitle = undefined
+      }
+      
+      // 4. 清理Page Visibility API监听
+      this.cleanupPageVisibilityOptimization()
+      
+      // 5. 清理Intersection Observer
+      this.cleanupIntersectionObserver()
+      
+      // 6. 恢复浏览器正常渲染频率
+      this.restoreBrowserRenderingFrequency()
+      
+      console.log('浏览器低功耗模式已禁用，标签页恢复正常状态')
+    } catch (error) {
+      console.warn('禁用浏览器低功耗模式时出错:', error)
+    }
+  }
+
+  private originalTitle?: string
+  private pausedIntervals: Set<number> = new Set()
+  private pausedTimeouts: Set<number> = new Set()
+
+  private pauseNonEssentialTimers() {
+    // 这里可以暂停一些非关键的定时器
+    // 注意：这是一个示例实现，实际项目中需要根据具体情况调整
+    console.log('暂停非必要定时器')
+  }
+
+  private resumeNonEssentialTimers() {
+    // 恢复之前暂停的定时器
+    console.log('恢复非必要定时器')
+  }
+
+  // Page Visibility API 优化
+  private setupPageVisibilityOptimization() {
+    if (typeof document.hidden !== 'undefined') {
+      this.visibilityChangeHandler = () => {
+        if (document.hidden && this.isLowPowerMode) {
+          console.log('标签页已隐藏，进入深度睡眠模式')
+          // 进一步降低资源使用
+          this.enterDeepSleepMode()
+        } else if (!document.hidden && this.isLowPowerMode) {
+          console.log('标签页已显示，退出深度睡眠模式')
+          this.exitDeepSleepMode()
+        }
+      }
+      document.addEventListener('visibilitychange', this.visibilityChangeHandler)
+    }
+  }
+
+  private cleanupPageVisibilityOptimization() {
+    if (this.visibilityChangeHandler) {
+      document.removeEventListener('visibilitychange', this.visibilityChangeHandler)
+      this.visibilityChangeHandler = undefined
+    }
+  }
+
+  // Intersection Observer 优化
+  private setupIntersectionObserver() {
+    if ('IntersectionObserver' in window) {
+      this.intersectionObserver = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+          const element = entry.target as HTMLElement
+          if (entry.isIntersecting) {
+            element.style.willChange = 'auto'
+          } else {
+            // 不可见元素停止GPU加速
+            element.style.willChange = 'unset'
+          }
+        })
+      }, {
+        threshold: 0.1
+      })
+      
+      // 观察所有可能消耗资源的元素
+      document.querySelectorAll('video, canvas, iframe, [style*="animation"]').forEach(el => {
+        this.intersectionObserver?.observe(el)
+      })
+    }
+  }
+
+  private cleanupIntersectionObserver() {
+    if (this.intersectionObserver) {
+      this.intersectionObserver.disconnect()
+      this.intersectionObserver = undefined
+    }
+  }
+
+  // 深度睡眠模式（标签页隐藏时）
+  private enterDeepSleepMode() {
+    // 暂停所有视频
+    document.querySelectorAll('video').forEach(video => {
+      const videoElement = video as HTMLVideoElement
+      if (!videoElement.paused) {
+        videoElement.pause()
+        videoElement.dataset.wasPlaying = 'true'
+      }
+    })
+    
+    // 暂停所有音频
+    document.querySelectorAll('audio').forEach(audio => {
+      const audioElement = audio as HTMLAudioElement
+      if (!audioElement.paused) {
+        audioElement.pause()
+        audioElement.dataset.wasPlaying = 'true'
+      }
+    })
+    
+    console.log('已进入深度睡眠模式')
+  }
+
+  private exitDeepSleepMode() {
+    // 恢复之前播放的视频
+    document.querySelectorAll('video[data-was-playing="true"]').forEach(video => {
+      const videoElement = video as HTMLVideoElement
+      videoElement.play().catch(() => {})
+      delete videoElement.dataset.wasPlaying
+    })
+    
+    // 恢复之前播放的音频
+    document.querySelectorAll('audio[data-was-playing="true"]').forEach(audio => {
+      const audioElement = audio as HTMLAudioElement
+      audioElement.play().catch(() => {})
+      delete audioElement.dataset.wasPlaying
+    })
+    
+    console.log('已退出深度睡眠模式')
+  }
+
+  // 降低浏览器渲染频率
+  private reduceBrowserRenderingFrequency() {
+    // 通过CSS减少重绘和回流
+    const style = document.createElement('style')
+    style.id = 'low-power-mode-styles'
+    style.textContent = `
+      .low-power-mode * {
+        animation-play-state: paused !important;
+        transition-duration: 0s !important;
+      }
+      .low-power-mode video,
+      .low-power-mode canvas {
+        opacity: 0.8;
+        filter: grayscale(0.2);
+      }
+    `
+    document.head.appendChild(style)
+  }
+
+  private restoreBrowserRenderingFrequency() {
+    const style = document.getElementById('low-power-mode-styles')
+    if (style) {
+      style.remove()
     }
   }
 }

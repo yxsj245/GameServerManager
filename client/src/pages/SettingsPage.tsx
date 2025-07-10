@@ -4,7 +4,7 @@ import { useAuthStore } from '@/stores/authStore'
 import { useNotificationStore } from '@/stores/notificationStore'
 import {
   Settings,
-  Palette,
+  Monitor,
   Shield,
   User,
   Save,
@@ -17,7 +17,9 @@ import {
   FolderOpen,
   CheckCircle,
   XCircle,
-  Loader2
+  Loader2,
+  Battery,
+  Moon
 } from 'lucide-react'
 
 const SettingsPage: React.FC = () => {
@@ -43,6 +45,14 @@ const SettingsPage: React.FC = () => {
   })
   const [usernameLoading, setUsernameLoading] = useState(false)
   
+  // 网页设置状态
+  const [webSettings, setWebSettings] = useState({
+    enableLowPowerMode: true,
+    lowPowerModeTimeout: 60, // 秒
+    enableDeepSleep: true,
+    deepSleepTimeout: 10 // 秒
+  })
+
   // SteamCMD设置状态
   const [steamcmdSettings, setSteamcmdSettings] = useState({
     installMode: 'online' as 'online' | 'manual',
@@ -382,9 +392,20 @@ const SettingsPage: React.FC = () => {
     }
   }
 
-  // 页面加载时获取SteamCMD状态
+  // 页面加载时获取SteamCMD状态和本地设置
   React.useEffect(() => {
     fetchSteamCMDStatus()
+    
+    // 从localStorage加载网页设置
+    try {
+      const savedWebSettings = localStorage.getItem('webSettings')
+      if (savedWebSettings) {
+        const parsedSettings = JSON.parse(savedWebSettings)
+        setWebSettings(prev => ({ ...prev, ...parsedSettings }))
+      }
+    } catch (error) {
+      console.error('加载本地设置失败:', error)
+    }
   }, [])
 
   // 路径变化时检查
@@ -402,16 +423,38 @@ const SettingsPage: React.FC = () => {
   
   // 保存设置
   const saveSettings = () => {
-    // 这里可以调用API保存设置到后端
-    addNotification({
-      type: 'success',
-      title: '设置已保存',
-      message: '您的设置已成功保存'
-    })
+    try {
+      // 保存网页设置到localStorage
+      localStorage.setItem('webSettings', JSON.stringify(webSettings))
+      
+      addNotification({
+        type: 'success',
+        title: '设置已保存',
+        message: '您的设置已成功保存'
+      })
+    } catch (error) {
+      addNotification({
+        type: 'error',
+        title: '保存失败',
+        message: '设置保存失败，请稍后重试'
+      })
+    }
   }
   
   // 重置设置
   const resetSettings = () => {
+    const defaultWebSettings = {
+      enableLowPowerMode: true,
+      lowPowerModeTimeout: 60,
+      enableDeepSleep: true,
+      deepSleepTimeout: 10
+    }
+    
+    setWebSettings(defaultWebSettings)
+    
+    // 清除localStorage中的设置
+    localStorage.removeItem('webSettings')
+    
     addNotification({
       type: 'info',
       title: '设置已重置',
@@ -435,14 +478,15 @@ const SettingsPage: React.FC = () => {
       </div>
       
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-        {/* 外观设置 */}
+        {/* 网页设置 */}
         <div className="card-game p-6">
           <div className="flex items-center space-x-3 mb-6">
-            <Palette className="w-5 h-5 text-purple-500" />
-            <h2 className="text-lg font-semibold text-black dark:text-white">外观设置</h2>
+            <Monitor className="w-5 h-5 text-purple-500" />
+            <h2 className="text-lg font-semibold text-black dark:text-white">网页设置</h2>
           </div>
           
-          <div className="space-y-4">
+          <div className="space-y-6">
+            {/* 主题模式 */}
             <div className="flex items-center justify-between">
               <div>
                 <label className="text-sm font-medium text-gray-800 dark:text-gray-200">主题模式</label>
@@ -464,10 +508,116 @@ const SettingsPage: React.FC = () => {
               </button>
             </div>
             
+            {/* 低功耗模式 */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <Battery className="w-4 h-4 text-green-500" />
+                  <div>
+                    <label className="text-sm font-medium text-gray-800 dark:text-gray-200">低功耗模式</label>
+                    <p className="text-xs text-gray-600 dark:text-gray-400">鼠标无活动时自动断开WebSocket连接并优化页面性能</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setWebSettings(prev => ({ ...prev, enableLowPowerMode: !prev.enableLowPowerMode }))}
+                  className={`
+                    relative inline-flex h-6 w-11 items-center rounded-full transition-colors
+                    ${webSettings.enableLowPowerMode ? 'bg-green-600' : 'bg-gray-300'}
+                  `}
+                >
+                  <span
+                    className={`
+                      inline-block h-4 w-4 transform rounded-full bg-white transition-transform
+                      ${webSettings.enableLowPowerMode ? 'translate-x-6' : 'translate-x-1'}
+                    `}
+                  />
+                </button>
+              </div>
+              
+              {webSettings.enableLowPowerMode && (
+                <div className="ml-6 space-y-2">
+                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300">
+                    进入时间 (秒)
+                  </label>
+                  <input
+                    type="number"
+                    min="10"
+                    max="300"
+                    value={webSettings.lowPowerModeTimeout}
+                    onChange={(e) => setWebSettings(prev => ({ 
+                      ...prev, 
+                      lowPowerModeTimeout: Math.max(10, Math.min(300, parseInt(e.target.value) || 60))
+                    }))}
+                    className="w-20 px-2 py-1 text-sm bg-white/10 border border-white/20 rounded text-black dark:text-white focus:outline-none focus:ring-2 focus:ring-green-500"
+                  />
+                  <p className="text-xs text-gray-600 dark:text-gray-400">
+                    当前设置: {webSettings.lowPowerModeTimeout}秒后进入低功耗模式
+                  </p>
+                </div>
+              )}
+            </div>
+            
+            {/* 深度睡眠模式 */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <Moon className="w-4 h-4 text-blue-500" />
+                  <div>
+                    <label className="text-sm font-medium text-gray-800 dark:text-gray-200">深度睡眠模式</label>
+                    <p className="text-xs text-gray-600 dark:text-gray-400">标签页隐藏时快速进入低功耗状态，暂停媒体播放</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setWebSettings(prev => ({ ...prev, enableDeepSleep: !prev.enableDeepSleep }))}
+                  className={`
+                    relative inline-flex h-6 w-11 items-center rounded-full transition-colors
+                    ${webSettings.enableDeepSleep ? 'bg-blue-600' : 'bg-gray-300'}
+                  `}
+                >
+                  <span
+                    className={`
+                      inline-block h-4 w-4 transform rounded-full bg-white transition-transform
+                      ${webSettings.enableDeepSleep ? 'translate-x-6' : 'translate-x-1'}
+                    `}
+                  />
+                </button>
+              </div>
+              
+              {webSettings.enableDeepSleep && (
+                <div className="ml-6 space-y-2">
+                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300">
+                    进入时间 (秒)
+                  </label>
+                  <input
+                    type="number"
+                    min="5"
+                    max="60"
+                    value={webSettings.deepSleepTimeout}
+                    onChange={(e) => setWebSettings(prev => ({ 
+                      ...prev, 
+                      deepSleepTimeout: Math.max(5, Math.min(60, parseInt(e.target.value) || 10))
+                    }))}
+                    className="w-20 px-2 py-1 text-sm bg-white/10 border border-white/20 rounded text-black dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <p className="text-xs text-gray-600 dark:text-gray-400">
+                    当前设置: 标签页隐藏{webSettings.deepSleepTimeout}秒后进入深度睡眠
+                  </p>
+                </div>
+              )}
+            </div>
+            
             <div className="pt-4 border-t border-gray-700">
               <p className="text-sm text-gray-700 dark:text-gray-300">
                 当前主题: <span className="font-semibold">{theme === 'dark' ? '深色模式' : '浅色模式'}</span>
               </p>
+              <div className="mt-2 space-y-1">
+                <p className="text-xs text-gray-600 dark:text-gray-400">
+                  • 低功耗模式: {webSettings.enableLowPowerMode ? '已启用' : '已禁用'}
+                </p>
+                <p className="text-xs text-gray-600 dark:text-gray-400">
+                  • 深度睡眠: {webSettings.enableDeepSleep ? '已启用' : '已禁用'}
+                </p>
+              </div>
             </div>
           </div>
         </div>

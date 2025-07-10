@@ -58,7 +58,51 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   // 鼠标活动监测和低功耗模式管理
   useEffect(() => {
     let mouseTimer: NodeJS.Timeout | null = null
-    const MOUSE_IDLE_TIME = 60000 // 1分钟
+    let visibilityTimer: NodeJS.Timeout | null = null
+    
+    // 从localStorage读取网页设置
+    const getWebSettings = () => {
+      try {
+        const savedSettings = localStorage.getItem('webSettings')
+        if (savedSettings) {
+          return JSON.parse(savedSettings)
+        }
+      } catch (error) {
+        console.error('读取网页设置失败:', error)
+      }
+      // 默认设置
+      return {
+        enableLowPowerMode: true,
+        lowPowerModeTimeout: 60,
+        enableDeepSleep: true,
+        deepSleepTimeout: 10
+      }
+    }
+    
+    const webSettings = getWebSettings()
+    const MOUSE_IDLE_TIME = webSettings.lowPowerModeTimeout * 1000 // 转换为毫秒
+    const VISIBILITY_IDLE_TIME = webSettings.deepSleepTimeout * 1000 // 转换为毫秒
+    
+    const enterLowPowerMode = () => {
+      if (!socketClient.isInLowPowerMode() && webSettings.enableLowPowerMode) {
+        socketClient.enterLowPowerMode()
+        setShowLowPowerModal(true)
+      }
+    }
+    
+    const enterDeepSleepMode = () => {
+      if (!socketClient.isInLowPowerMode() && webSettings.enableDeepSleep) {
+        socketClient.enterLowPowerMode()
+        setShowLowPowerModal(true)
+      }
+    }
+    
+    const exitLowPowerMode = () => {
+      if (socketClient.isInLowPowerMode()) {
+        socketClient.exitLowPowerMode()
+        setShowLowPowerModal(false)
+      }
+    }
     
     const resetMouseTimer = () => {
       if (mouseTimer) {
@@ -66,18 +110,26 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       }
       
       // 如果当前在低功耗模式，退出低功耗模式
-      if (socketClient.isInLowPowerMode()) {
-        socketClient.exitLowPowerMode()
-        setShowLowPowerModal(false)
+      exitLowPowerMode()
+      
+      // 只有在非终端页面且启用了低功耗模式才启动定时器
+      if (location.pathname !== '/terminal' && webSettings.enableLowPowerMode) {
+        mouseTimer = setTimeout(() => {
+          enterLowPowerMode()
+        }, MOUSE_IDLE_TIME)
+      }
+    }
+    
+    const resetVisibilityTimer = () => {
+      if (visibilityTimer) {
+        clearTimeout(visibilityTimer)
       }
       
-      // 只有在非终端页面才启动定时器
-      if (location.pathname !== '/terminal') {
-        mouseTimer = setTimeout(() => {
-          // 进入低功耗模式
-          socketClient.enterLowPowerMode()
-          setShowLowPowerModal(true)
-        }, MOUSE_IDLE_TIME)
+      // 只有在非终端页面、标签页隐藏且启用了深度睡眠时才启动定时器
+      if (location.pathname !== '/terminal' && document.hidden && webSettings.enableDeepSleep) {
+        visibilityTimer = setTimeout(() => {
+          enterDeepSleepMode()
+        }, VISIBILITY_IDLE_TIME)
       }
     }
     
@@ -93,21 +145,55 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       resetMouseTimer()
     }
     
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        // 标签页隐藏时，清除鼠标定时器并启动可见性定时器
+        if (mouseTimer) {
+          clearTimeout(mouseTimer)
+          mouseTimer = null
+        }
+        resetVisibilityTimer()
+      } else {
+        // 标签页显示时，清除可见性定时器并退出低功耗模式，重新启动鼠标定时器
+        if (visibilityTimer) {
+          clearTimeout(visibilityTimer)
+          visibilityTimer = null
+        }
+        exitLowPowerMode()
+        resetMouseTimer()
+      }
+    }
+    
     // 添加事件监听器
     document.addEventListener('mousemove', handleMouseMove)
     document.addEventListener('mousedown', handleMouseClick)
     document.addEventListener('keydown', handleKeyPress)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
     
     // 初始化定时器
-    resetMouseTimer()
+    if (!document.hidden) {
+      // 标签页可见时，启动鼠标活动监测（如果启用了低功耗模式）
+      if (webSettings.enableLowPowerMode) {
+        resetMouseTimer()
+      }
+    } else {
+      // 标签页隐藏时，启动深度睡眠监测（如果启用了深度睡眠）
+      if (webSettings.enableDeepSleep) {
+        resetVisibilityTimer()
+      }
+    }
     
     return () => {
       if (mouseTimer) {
         clearTimeout(mouseTimer)
       }
+      if (visibilityTimer) {
+        clearTimeout(visibilityTimer)
+      }
       document.removeEventListener('mousemove', handleMouseMove)
       document.removeEventListener('mousedown', handleMouseClick)
       document.removeEventListener('keydown', handleKeyPress)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
     }
   }, [location.pathname])
 
@@ -428,15 +514,19 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                 <Info className="w-5 h-5 text-blue-500 mt-0.5 flex-shrink-0" />
                 <div className="flex-1">
                   <p className="text-gray-700 dark:text-gray-300 mb-4">
-                    检测到您的鼠标超过1分钟没有活动，页面已自动进入低功耗模式以节省系统资源。
+                    检测到您的鼠标超过1分钟没有活动，页面已自动进入低功耗模式以节省系统资源和电池电量。
                   </p>
                   <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-3 mb-4">
                     <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      低功耗模式说明：
+                      低功耗模式功能：
                     </h4>
                     <ul className="text-sm text-gray-600 dark:text-gray-400 space-y-1">
                       <li>• WebSocket连接已暂时关闭</li>
                       <li>• 实时数据更新已暂停</li>
+                      <li>• 页面动画和过渡效果已暂停</li>
+                      <li>• 浏览器标签页进入睡眠状态</li>
+                      <li>• 视频和音频播放已暂停</li>
+                      <li>• CPU和GPU使用率已降低</li>
                       <li>• 移动鼠标或按键可立即恢复</li>
                       <li>• 终端页面不会进入低功耗模式</li>
                     </ul>
