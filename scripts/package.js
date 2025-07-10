@@ -38,7 +38,7 @@ async function createPackage() {
     
     // 复制环境变量配置文件
     await fs.copy(
-      path.join(__dirname, '..', 'server', '.env.example'),
+      path.join(__dirname, '..', 'server', '.env'),
       path.join(packageDir, 'server', '.env')
     )
     

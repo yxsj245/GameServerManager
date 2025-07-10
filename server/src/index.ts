@@ -66,7 +66,7 @@ const app = express()
 const server = createServer(app)
 const io = new SocketIOServer(server, {
   cors: {
-    origin: '*', // 允许所有来源
+    origin: process.env.SOCKET_CORS_ORIGIN || '*', // 从环境变量读取CORS配置
     methods: ['GET', 'POST'],
   },
   transports: ['websocket', 'polling'],
@@ -88,7 +88,7 @@ app.use(helmet({
 }))
 
 app.use(cors({
-  origin: '*', // 允许所有来源访问
+  origin: process.env.CORS_ORIGIN || '*', // 从环境变量读取CORS配置
   credentials: true,
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH']
