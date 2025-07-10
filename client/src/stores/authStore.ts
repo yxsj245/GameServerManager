@@ -38,8 +38,8 @@ export const useAuthStore = create<AuthStore>()(
               error: null,
             })
             
-            // 更新Socket认证
-            socketClient.updateAuth(response.token)
+            // 初始化Socket连接
+            socketClient.initialize()
             
             return { success: true, message: response.message }
           } else {
@@ -86,8 +86,7 @@ export const useAuthStore = create<AuthStore>()(
           // 断开Socket连接
           socketClient.disconnect()
           
-          // 重定向到登录页
-          window.location.href = '/login'
+          // 不再自动跳转到登录页，让调用方决定
         }
       },
 
@@ -117,12 +116,13 @@ export const useAuthStore = create<AuthStore>()(
               error: null,
             })
             
+            // 初始化Socket连接
+            socketClient.initialize()
+            
             return true
           } else {
+            // Token验证失败时不清除认证状态，只设置错误信息
             set({
-              isAuthenticated: false,
-              user: null,
-              token: null,
               loading: false,
               error: response.message,
             })
@@ -130,10 +130,8 @@ export const useAuthStore = create<AuthStore>()(
             return false
           }
         } catch (error: any) {
+          // 网络错误或其他异常时也不清除认证状态
           set({
-            isAuthenticated: false,
-            user: null,
-            token: null,
             loading: false,
             error: error.message || 'Token验证失败',
           })

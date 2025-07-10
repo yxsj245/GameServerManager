@@ -28,6 +28,7 @@ export default defineConfig({
     'process.env': {},
   },
   server: {
+    host: '0.0.0.0', // 允许网络访问
     port: clientPort,
     proxy: {
       '/api': {

@@ -35,9 +35,9 @@ class ApiClient {
       },
       (error) => {
         if (error.response?.status === 401) {
-          // Token过期或无效，清除本地存储的token
-          this.clearToken()
-          window.location.href = '/login'
+          // 只记录认证失败信息，不自动跳转登录页面
+          console.warn('认证失败，请检查登录状态')
+          // 不再自动清除token和跳转，让用户手动处理
         }
         return Promise.reject(error)
       }
@@ -155,7 +155,7 @@ class ApiClient {
       const response = await this.client.get('/auth/verify')
       return response.data
     } catch (error: any) {
-      this.clearToken()
+      // 不再自动清除token，让调用方决定如何处理
       return {
         success: false,
         message: error.response?.data?.message || 'Token验证失败',

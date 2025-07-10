@@ -38,7 +38,7 @@ export function authenticateToken(req: AuthenticatedRequest, res: Response, next
   const decoded = authManager.verifyToken(token)
   
   if (!decoded) {
-    return res.status(403).json({
+    return res.status(401).json({
       error: '访问被拒绝',
       message: '无效或过期的访问令牌'
     })

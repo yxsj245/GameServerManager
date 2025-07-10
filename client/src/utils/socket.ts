@@ -8,13 +8,28 @@ class SocketClient {
   private maxReconnectAttempts = 5
   private reconnectDelay = 1000
   private listeners: Map<string, Function[]> = new Map()
+  private isInitialized = false
 
   constructor() {
-    this.connect()
+    // 不在构造函数中立即连接，等待用户登录后再连接
+  }
+
+  // 初始化连接（仅在用户登录后调用）
+  initialize() {
+    if (!this.isInitialized) {
+      this.connect()
+      this.isInitialized = true
+    }
   }
 
   private connect() {
     const token = localStorage.getItem('gsm3_token')
+    
+    // 如果没有token，不建立连接
+    if (!token) {
+      console.log('没有找到认证token，跳过Socket连接')
+      return
+    }
     
     this.socket = io(config.serverUrl, {
       auth: {
@@ -176,7 +191,7 @@ class SocketClient {
     if (this.socket) {
       this.socket.connect()
     } else {
-      this.connect()
+      this.initialize()
     }
   }
 
@@ -187,6 +202,7 @@ class SocketClient {
       this.socket = null
     }
     this.listeners.clear()
+    this.isInitialized = false
   }
 
   // 更新认证token
@@ -194,6 +210,9 @@ class SocketClient {
     if (this.socket) {
       this.socket.auth = { token }
       this.socket.disconnect().connect()
+    } else {
+      // 如果socket不存在，初始化连接
+      this.initialize()
     }
   }
 
