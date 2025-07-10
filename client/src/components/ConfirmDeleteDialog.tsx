@@ -19,29 +19,34 @@ export const ConfirmDeleteDialog: React.FC<ConfirmDeleteDialogProps> = ({
   const [deleteDirectory, setDeleteDirectory] = React.useState(false)
   const [isVisible, setIsVisible] = useState(false)
   const [isAnimating, setIsAnimating] = useState(false)
+  const [isClosing, setIsClosing] = useState(false)
 
   useEffect(() => {
     if (isOpen) {
+      setIsClosing(false)
       setIsVisible(true)
       setTimeout(() => setIsAnimating(true), 10)
     } else {
       setIsAnimating(false)
-      setTimeout(() => setIsVisible(false), 200)
+      setIsClosing(true)
+      setTimeout(() => setIsVisible(false), 300)
     }
   }, [isOpen])
 
   const handleCancel = () => {
     setIsAnimating(false)
+    setIsClosing(true)
     setTimeout(() => {
       onCancel()
-    }, 200)
+    }, 300)
   }
 
   const handleConfirm = () => {
     setIsAnimating(false)
+    setIsClosing(true)
     setTimeout(() => {
       onConfirm(deleteDirectory)
-    }, 200)
+    }, 300)
   }
 
   if (!isVisible) return null
@@ -52,15 +57,15 @@ export const ConfirmDeleteDialog: React.FC<ConfirmDeleteDialogProps> = ({
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       {/* 背景遮罩 */}
       <div 
-        className={`absolute inset-0 bg-black transition-opacity duration-200 ${
-          isAnimating ? 'bg-opacity-50' : 'bg-opacity-0'
+        className={`absolute inset-0 bg-black/50 ${
+          isClosing ? 'animate-fade-out' : isAnimating ? 'animate-fade-in' : 'opacity-0'
         }`}
         onClick={handleCancel}
       />
       
       {/* 对话框内容 */}
-      <div className={`relative bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full mx-4 p-6 transform transition-all duration-200 ${
-        isAnimating ? 'scale-100 opacity-100' : 'scale-95 opacity-0'
+      <div className={`relative bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full mx-4 p-6 ${
+        isClosing ? 'animate-scale-out' : isAnimating ? 'animate-scale-in' : 'opacity-0 scale-95'
       }`}>
         {/* 关闭按钮 */}
         <button

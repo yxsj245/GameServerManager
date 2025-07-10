@@ -50,7 +50,9 @@ const InstanceManagerPage: React.FC = () => {
   const [loading, setLoading] = useState(true)
   const [marketLoading, setMarketLoading] = useState(false)
   const [showCreateModal, setShowCreateModal] = useState(false)
+  const [createModalAnimating, setCreateModalAnimating] = useState(false)
   const [showInstallModal, setShowInstallModal] = useState(false)
+  const [installModalAnimating, setInstallModalAnimating] = useState(false)
   const [selectedMarketInstance, setSelectedMarketInstance] = useState<MarketInstance | null>(null)
   const [editingInstance, setEditingInstance] = useState<Instance | null>(null)
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
@@ -125,8 +127,7 @@ const InstanceManagerPage: React.FC = () => {
           title: '创建成功',
           message: `实例 "${formData.name}" 已创建`
         })
-        setShowCreateModal(false)
-        resetForm()
+        handleCloseCreateModal()
         fetchInstances()
       }
     } catch (error: any) {
@@ -160,8 +161,7 @@ const InstanceManagerPage: React.FC = () => {
           title: '更新成功',
           message: `实例 "${formData.name}" 已更新`
         })
-        setEditingInstance(null)
-        resetForm()
+        handleCloseCreateModal()
         fetchInstances()
       }
     } catch (error: any) {
@@ -214,9 +214,7 @@ const InstanceManagerPage: React.FC = () => {
           title: '安装成功',
           message: `实例 "${selectedMarketInstance.name}" 已安装`
         })
-        setShowInstallModal(false)
-        setSelectedMarketInstance(null)
-        setInstallFormData({ workingDirectory: '' })
+        handleCloseInstallModal()
         fetchInstances()
         setActiveTab('instances')
       }
@@ -242,6 +240,7 @@ const InstanceManagerPage: React.FC = () => {
   const handleOpenInstallModal = (marketInstance: MarketInstance) => {
     setSelectedMarketInstance(marketInstance)
     setShowInstallModal(true)
+    setTimeout(() => setInstallModalAnimating(true), 10)
   }
 
   // 启动实例
@@ -420,6 +419,26 @@ const InstanceManagerPage: React.FC = () => {
     })
   }
 
+  // 关闭创建/编辑模态框
+  const handleCloseCreateModal = () => {
+    setCreateModalAnimating(false)
+    setTimeout(() => {
+      setShowCreateModal(false)
+      setEditingInstance(null)
+      resetForm()
+    }, 300)
+  }
+
+  // 关闭安装模态框
+  const handleCloseInstallModal = () => {
+    setInstallModalAnimating(false)
+    setTimeout(() => {
+      setShowInstallModal(false)
+      setSelectedMarketInstance(null)
+      setInstallFormData({ workingDirectory: '' })
+    }, 300)
+  }
+
   // 编辑实例
   const handleEditInstance = (instance: Instance) => {
     setEditingInstance(instance)
@@ -432,6 +451,7 @@ const InstanceManagerPage: React.FC = () => {
       stopCommand: instance.stopCommand
     })
     setShowCreateModal(true)
+    setTimeout(() => setCreateModalAnimating(true), 10)
   }
 
   // 获取状态图标
@@ -488,6 +508,7 @@ const InstanceManagerPage: React.FC = () => {
               setEditingInstance(null)
               resetForm()
               setShowCreateModal(true)
+              setTimeout(() => setCreateModalAnimating(true), 10)
             }}
             className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
           >
@@ -546,6 +567,7 @@ const InstanceManagerPage: React.FC = () => {
                 setEditingInstance(null)
                 resetForm()
                 setShowCreateModal(true)
+                setTimeout(() => setCreateModalAnimating(true), 10)
               }}
               className="inline-flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
             >
@@ -742,8 +764,12 @@ const InstanceManagerPage: React.FC = () => {
 
       {/* 创建/编辑实例模态框 */}
       {showCreateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 animate-fade-in">
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto transform transition-all duration-300 animate-scale-in">
+        <div className={`fixed inset-0 z-50 flex items-center justify-center bg-black/50 transition-opacity duration-300 ${
+          createModalAnimating ? 'opacity-100' : 'opacity-0'
+        }`}>
+          <div className={`bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto transform transition-all duration-300 ${
+            createModalAnimating ? 'scale-100 opacity-100' : 'scale-95 opacity-0'
+          }`}>
             <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
               {editingInstance ? '编辑实例' : '创建实例'}
             </h2>
@@ -832,11 +858,7 @@ const InstanceManagerPage: React.FC = () => {
             
             <div className="flex items-center justify-end space-x-3 mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
               <button
-                onClick={() => {
-                  setShowCreateModal(false)
-                  setEditingInstance(null)
-                  resetForm()
-                }}
+                onClick={handleCloseCreateModal}
                 className="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
               >
                 取消
@@ -855,8 +877,12 @@ const InstanceManagerPage: React.FC = () => {
 
       {/* 安装实例模态框 */}
       {showInstallModal && selectedMarketInstance && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 animate-fade-in">
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md mx-4 transform transition-all duration-300 animate-scale-in">
+        <div className={`fixed inset-0 z-50 flex items-center justify-center bg-black/50 transition-opacity duration-300 ${
+          installModalAnimating ? 'opacity-100' : 'opacity-0'
+        }`}>
+          <div className={`bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md mx-4 transform transition-all duration-300 ${
+            installModalAnimating ? 'scale-100 opacity-100' : 'scale-95 opacity-0'
+          }`}>
             <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
               安装实例: {selectedMarketInstance.name}
             </h2>
@@ -914,11 +940,7 @@ const InstanceManagerPage: React.FC = () => {
             
             <div className="flex items-center justify-end space-x-3 mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
               <button
-                onClick={() => {
-                  setShowInstallModal(false)
-                  setSelectedMarketInstance(null)
-                  setInstallFormData({ workingDirectory: '' })
-                }}
+                onClick={handleCloseInstallModal}
                 className="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
               >
                 取消

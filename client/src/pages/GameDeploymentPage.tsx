@@ -40,6 +40,7 @@ const GameDeploymentPage: React.FC = () => {
   const [games, setGames] = useState<Games>({})
   const [loading, setLoading] = useState(true)
   const [showInstallModal, setShowInstallModal] = useState(false)
+  const [installModalAnimating, setInstallModalAnimating] = useState(false)
   const [selectedGame, setSelectedGame] = useState<{ key: string; info: GameInfo } | null>(null)
   const [installPath, setInstallPath] = useState('')
   const [installing, setInstalling] = useState(false)
@@ -64,6 +65,7 @@ const GameDeploymentPage: React.FC = () => {
   const [downloadComplete, setDownloadComplete] = useState(false)
   const [downloadResult, setDownloadResult] = useState<any>(null)
   const [showCreateInstanceModal, setShowCreateInstanceModal] = useState(false)
+  const [createInstanceModalAnimating, setCreateInstanceModalAnimating] = useState(false)
   const [instanceName, setInstanceName] = useState('')
   const [instanceDescription, setInstanceDescription] = useState('')
   const [creatingInstance, setCreatingInstance] = useState(false)
@@ -544,7 +546,7 @@ const GameDeploymentPage: React.FC = () => {
           message: `Minecraft实例 "${instanceName}" 创建成功！`
         })
         
-        setShowCreateInstanceModal(false)
+        handleCloseCreateInstanceModal()
         
         // 重置表单
         setSelectedCategory('')
@@ -609,6 +611,23 @@ const GameDeploymentPage: React.FC = () => {
     setInstanceName(gameInfo.game_nameCN)
     setInstallPath('')
     setShowInstallModal(true)
+    setTimeout(() => setInstallModalAnimating(true), 10)
+  }
+
+  // 关闭安装对话框
+  const handleCloseInstallModal = () => {
+    setInstallModalAnimating(false)
+    setTimeout(() => {
+      setShowInstallModal(false)
+    }, 300)
+  }
+
+  // 关闭创建实例对话框
+  const handleCloseCreateInstanceModal = () => {
+    setCreateInstanceModalAnimating(false)
+    setTimeout(() => {
+      setShowCreateInstanceModal(false)
+    }, 300)
   }
 
   // 开始安装游戏
@@ -642,7 +661,7 @@ const GameDeploymentPage: React.FC = () => {
       const fullCommand = `steamcmd +${loginCommand} +${installCommand} +quit`
       
       // 关闭对话框
-      setShowInstallModal(false)
+      handleCloseInstallModal()
       
       // 调用后端API开始游戏安装
        const response = await apiClient.installGame({
@@ -1076,6 +1095,7 @@ const GameDeploymentPage: React.FC = () => {
                           setInstanceName(`${selectedServer}-${selectedVersion}`)
                           setInstanceDescription(`Minecraft ${selectedServer} ${selectedVersion} 服务器`)
                           setShowCreateInstanceModal(true)
+                          setTimeout(() => setCreateInstanceModalAnimating(true), 10)
                         }}
                         className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg transition-colors flex items-center justify-center space-x-2"
                       >
@@ -1264,14 +1284,18 @@ const GameDeploymentPage: React.FC = () => {
 
       {/* 安装配置对话框 */}
       {showInstallModal && selectedGame && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 animate-fade-in">
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md mx-4 transform transition-all duration-300 animate-scale-in">
+        <div className={`fixed inset-0 bg-black/50 flex items-center justify-center z-50 transition-opacity duration-300 ${
+          installModalAnimating ? 'opacity-100' : 'opacity-0'
+        }`}>
+          <div className={`bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md mx-4 transform transition-all duration-300 ${
+            installModalAnimating ? 'scale-100 opacity-100' : 'scale-95 opacity-0'
+          }`}>
             <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
                 安装 {selectedGame.info.game_nameCN}
               </h3>
               <button
-                onClick={() => setShowInstallModal(false)}
+                onClick={handleCloseInstallModal}
                 className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
               >
                 <X className="w-5 h-5" />
@@ -1380,7 +1404,7 @@ const GameDeploymentPage: React.FC = () => {
             
             <div className="flex justify-end space-x-3 p-6 border-t border-gray-200 dark:border-gray-700">
               <button
-                onClick={() => setShowInstallModal(false)}
+                onClick={handleCloseInstallModal}
                 className="px-4 py-2 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-600 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-500 transition-colors"
               >
                 取消
@@ -1404,14 +1428,18 @@ const GameDeploymentPage: React.FC = () => {
 
       {/* 创建Minecraft实例对话框 */}
       {showCreateInstanceModal && downloadResult && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 animate-fade-in">
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md mx-4 transform transition-all duration-300 animate-scale-in">
+        <div className={`fixed inset-0 bg-black/50 flex items-center justify-center z-50 transition-opacity duration-300 ${
+          createInstanceModalAnimating ? 'opacity-100' : 'opacity-0'
+        }`}>
+          <div className={`bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md mx-4 transform transition-all duration-300 ${
+            createInstanceModalAnimating ? 'scale-100 opacity-100' : 'scale-95 opacity-0'
+          }`}>
             <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
                 创建Minecraft实例
               </h3>
               <button
-                onClick={() => setShowCreateInstanceModal(false)}
+                onClick={handleCloseCreateInstanceModal}
                 className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
               >
                 <X className="w-5 h-5" />
@@ -1463,7 +1491,7 @@ const GameDeploymentPage: React.FC = () => {
             
             <div className="flex space-x-3 p-6 border-t border-gray-200 dark:border-gray-700">
               <button
-                onClick={() => setShowCreateInstanceModal(false)}
+                onClick={handleCloseCreateInstanceModal}
                 className="flex-1 px-4 py-2 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-600 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-500 transition-colors"
               >
                 取消

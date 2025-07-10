@@ -315,12 +315,40 @@
   }
 }
 
+@keyframes fadeOut {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes scaleOut {
+  from {
+    transform: scale(1);
+    opacity: 1;
+  }
+  to {
+    transform: scale(0.95);
+    opacity: 0;
+  }
+}
+
 .animate-fade-in {
   animation: fadeIn 0.2s ease-out forwards;
 }
 
 .animate-scale-in {
   animation: scaleIn 0.3s ease-out forwards;
+}
+
+.animate-fade-out {
+  animation: fadeOut 0.2s ease-in forwards;
+}
+
+.animate-scale-out {
+  animation: scaleOut 0.3s ease-in forwards;
 }
 
 /* 游戏字体 - 使用系统字体 */

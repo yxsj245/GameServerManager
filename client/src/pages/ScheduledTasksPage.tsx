@@ -43,6 +43,7 @@ const ScheduledTasksPage: React.FC = () => {
   const [instances, setInstances] = useState<Instance[]>([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
+  const [modalAnimating, setModalAnimating] = useState(false)
   const [editingTask, setEditingTask] = useState<ScheduledTask | null>(null)
   const [formData, setFormData] = useState({
     name: '',
@@ -160,9 +161,7 @@ const ScheduledTasksPage: React.FC = () => {
         }
       }
 
-      setShowModal(false)
-      setEditingTask(null)
-      resetForm()
+      handleCloseModal()
       fetchTasks()
     } catch (error: any) {
       console.error('保存定时任务失败:', error)
@@ -186,6 +185,7 @@ const ScheduledTasksPage: React.FC = () => {
       enabled: task.enabled
     })
     setShowModal(true)
+    setTimeout(() => setModalAnimating(true), 10)
   }
 
   const handleDelete = async (taskId: string) => {
@@ -251,9 +251,12 @@ const ScheduledTasksPage: React.FC = () => {
   }
 
   const handleCloseModal = () => {
-    setShowModal(false)
-    setEditingTask(null)
-    resetForm()
+    setModalAnimating(false)
+    setTimeout(() => {
+      setShowModal(false)
+      setEditingTask(null)
+      resetForm()
+    }, 300)
   }
 
   const getActionIcon = (action: string) => {
@@ -308,7 +311,10 @@ const ScheduledTasksPage: React.FC = () => {
           </div>
         </div>
         <button
-          onClick={() => setShowModal(true)}
+          onClick={() => {
+            setShowModal(true)
+            setTimeout(() => setModalAnimating(true), 10)
+          }}
           className="flex items-center space-x-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
         >
           <Plus className="w-4 h-4" />
@@ -325,7 +331,10 @@ const ScheduledTasksPage: React.FC = () => {
               <h3 className="text-lg font-medium text-black dark:text-white mb-2">暂无定时任务</h3>
               <p className="text-gray-600 dark:text-gray-400 mb-4">创建您的第一个定时任务</p>
               <button
-                onClick={() => setShowModal(true)}
+                onClick={() => {
+                  setShowModal(true)
+                  setTimeout(() => setModalAnimating(true), 10)
+                }}
                 className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
               >
                 新建任务
@@ -390,8 +399,12 @@ const ScheduledTasksPage: React.FC = () => {
 
       {/* 新建/编辑任务模态框 */}
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 animate-fade-in">
-          <div className="w-full max-w-md glass rounded-lg border border-white/20 dark:border-gray-700/30 transform transition-all duration-300 animate-scale-in">
+        <div className={`fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 transition-opacity duration-300 ${
+          modalAnimating ? 'opacity-100' : 'opacity-0'
+        }`}>
+          <div className={`w-full max-w-md glass rounded-lg border border-white/20 dark:border-gray-700/30 transform transition-all duration-300 ${
+            modalAnimating ? 'scale-100 opacity-100' : 'scale-95 opacity-0'
+          }`}>
             <div className="p-6">
               <h2 className="text-xl font-bold text-black dark:text-white mb-4">
                 {editingTask ? '编辑任务' : '新建任务'}
