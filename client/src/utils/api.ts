@@ -491,6 +491,11 @@ class ApiClient {
   async saveGameConfig(instanceId: string, configId: string, configData: any) {
     return this.post(`/instances/${instanceId}/configs/${encodeURIComponent(configId)}`, { configData })
   }
+
+  // Python环境检测API
+  async checkPythonEnvironment() {
+    return this.get('/instances/python/check')
+  }
 }
 
 // 创建单例实例

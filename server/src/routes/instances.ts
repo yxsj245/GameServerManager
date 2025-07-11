@@ -5,9 +5,12 @@ import logger from '../utils/logger.js'
 import os from 'os'
 import https from 'https'
 import http from 'http'
-import { spawn } from 'child_process'
+import { spawn, exec } from 'child_process'
 import path from 'path'
 import { fileURLToPath } from 'url'
+import { promisify } from 'util'
+
+const execAsync = promisify(exec)
 
 const router = Router()
 
@@ -750,6 +753,47 @@ router.post('/:instanceId/configs/:configId', authenticateToken, async (req: Req
       success: false,
       error: '保存游戏配置失败',
       message: error.message
+    })
+  }
+})
+
+// Python环境检测
+router.get('/python/check', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const platform = os.platform()
+    let pythonCommand = 'python'
+    
+    // Linux和macOS系统优先使用python3
+    if (platform === 'linux' || platform === 'darwin') {
+      pythonCommand = 'python3'
+    }
+    
+    logger.info(`检测Python环境，平台: ${platform}，使用命令: ${pythonCommand}`)
+    
+    const { stdout } = await execAsync(`${pythonCommand} --version`)
+    const version = stdout.trim()
+    
+    logger.info(`Python环境检测成功: ${version}`)
+    
+    res.json({
+      success: true,
+      data: {
+        available: true,
+        version: version,
+        command: pythonCommand,
+        platform: platform
+      }
+    })
+  } catch (error: any) {
+    logger.error('Python环境检测异常:', error)
+    
+    res.json({
+      success: true,
+      data: {
+        available: false,
+        error: `未检测到Python环境: ${error.message}`,
+        platform: os.platform()
+      }
     })
   }
 })
