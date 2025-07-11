@@ -36,6 +36,19 @@ async function createPackage() {
       path.join(packageDir, 'server', 'PTY')
     )
     
+    console.log('🐍 复制Python文件...')
+    // 复制Python文件和配置
+    const pythonSourcePath = path.join(__dirname, '..', 'server', 'src', 'Python')
+    if (await fs.pathExists(pythonSourcePath)) {
+      await fs.copy(
+        pythonSourcePath,
+        path.join(packageDir, 'server', 'Python')
+      )
+      console.log('✅ Python文件复制完成')
+    } else {
+      console.log('⚠️  警告: Python目录不存在，跳过复制')
+    }
+    
     // 复制环境变量配置文件
     await fs.copy(
       path.join(__dirname, '..', 'server', '.env'),
@@ -104,9 +117,36 @@ cd server
       startShScript
     )
     
+    console.log('🐍 创建Python依赖安装脚本...')
+    // 创建Python依赖安装脚本
+    const installPythonDepsScript = `@echo off
+echo 正在安装Python依赖...
+cd server\Python
+pip install -r requirements.txt
+echo Python依赖安装完成！
+pause`
+    
+    await fs.writeFile(
+      path.join(packageDir, 'install-python-deps.bat'),
+      installPythonDepsScript
+    )
+    
+    // 创建Linux Python依赖安装脚本
+    const installPythonDepsShScript = `#!/bin/bash
+echo "正在安装Python依赖..."
+cd server/Python
+pip install -r requirements.txt
+echo "Python依赖安装完成！"`
+    
+    await fs.writeFile(
+      path.join(packageDir, 'install-python-deps.sh'),
+      installPythonDepsShScript
+    )
+    
     // 设置执行权限
     try {
       execSync(`chmod +x "${path.join(packageDir, 'start.sh')}"`)
+      execSync(`chmod +x "${path.join(packageDir, 'install-python-deps.sh')}"`)
     } catch (e) {
       // Windows环境下忽略chmod错误
     }
@@ -118,11 +158,21 @@ cd server
 ## 安装说明
 
 1. 确保已安装 Node.js (版本 >= 18)
-2. 解压缩包到目标目录
-3. (可选) 配置端口和其他参数:
+2. 确保已安装 Python (版本 >= 3.8) 和 pip
+3. 解压缩包到目标目录
+4. 安装Python依赖:
+   - 方式一 (推荐): 运行安装脚本
+     - Windows: 双击 install-python-deps.bat
+     - Linux/Mac: 运行 ./install-python-deps.sh
+   - 方式二: 手动安装
+     \`\`\`bash
+     cd server/Python
+     pip install -r requirements.txt
+     \`\`\`
+5. (可选) 配置端口和其他参数:
    - 复制 .env.example 为 .env 并修改 SERVER_PORT 等配置
    - 复制 server/.env.example 为 server/.env 并配置详细参数
-4. 运行启动脚本:
+6. 运行启动脚本:
    - Windows: 双击 start.bat
    - Linux/Mac: 运行 ./start.sh
 
@@ -136,12 +186,21 @@ http://localhost:3001
 - 修改后需要重启服务才能生效
 - 确保防火墙允许新端口访问
 
+## Python组件说明
+
+本管理面板包含Python组件用于游戏配置文件的解析和管理:
+- 支持多种配置文件格式 (YAML, JSON, TOML, Properties等)
+- 提供游戏配置模板和自动化配置管理
+- 位置: server/Python/
+- 配置模板: server/Python/public/gameconfig/
+
 ## 注意事项
 
-- 依赖已预装，无需手动安装
+- Node.js依赖已预装，但需要手动安装Python依赖
 - 首次运行会自动创建默认管理员账户 (admin/admin123)
 - 请立即登录并修改默认密码
 - 确保防火墙允许相关端口访问
+- Python组件需要Python 3.8+环境支持
 - 建议在生产环境中使用 PM2 等进程管理工具
 
 版本: ${version}
