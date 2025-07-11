@@ -499,30 +499,77 @@ function installPythonDependencies(): Promise<void> {
     }
     
     const requirementsPath = path.join(__dirname, '..', 'Python', 'requirements.txt')
-    const installProcess = spawn('pip', ['install', '-r', requirementsPath], {
-      stdio: ['pipe', 'pipe', 'pipe']
-    })
     
-    let stderr = ''
-    installProcess.stderr.on('data', (data) => {
-      stderr += data.toString()
-    })
-    
-    installProcess.on('close', (code) => {
-      if (code === 0) {
-        pythonDepsInstalled = true
-        logger.info('Python依赖安装成功')
-        resolve()
-      } else {
-        logger.warn(`Python依赖安装失败: ${stderr}，将尝试直接运行脚本`)
-        resolve() // 即使安装失败也继续，可能依赖已经存在
+    // 国内镜像源列表，按优先级排序
+    const mirrors = [
+      {
+        url: 'https://pypi.tuna.tsinghua.edu.cn/simple/',
+        host: 'pypi.tuna.tsinghua.edu.cn',
+        name: '清华大学镜像源'
+      },
+      {
+        url: 'https://mirrors.aliyun.com/pypi/simple/',
+        host: 'mirrors.aliyun.com',
+        name: '阿里云镜像源'
+      },
+      {
+        url: 'https://pypi.douban.com/simple/',
+        host: 'pypi.douban.com',
+        name: '豆瓣镜像源'
       }
-    })
+    ]
     
-    installProcess.on('error', (error) => {
-      logger.warn(`启动pip进程失败: ${error.message}，将尝试直接运行脚本`)
-      resolve() // 即使pip不可用也继续
-    })
+    let currentMirrorIndex = 0
+    
+    function tryInstallWithMirror() {
+      if (currentMirrorIndex >= mirrors.length) {
+        logger.warn('所有镜像源都尝试失败，将尝试直接运行脚本')
+        resolve() // 即使安装失败也继续，可能依赖已经存在
+        return
+      }
+      
+      const mirror = mirrors[currentMirrorIndex]
+      logger.info(`尝试使用${mirror.name}安装Python依赖`)
+      
+      const installProcess = spawn('pip', [
+        'install', 
+        '-r', 
+        requirementsPath,
+        '-i', 
+        mirror.url,
+        '--trusted-host',
+        mirror.host,
+        '--timeout',
+        '60'
+      ], {
+        stdio: ['pipe', 'pipe', 'pipe']
+      })
+      
+      let stderr = ''
+      installProcess.stderr.on('data', (data) => {
+        stderr += data.toString()
+      })
+      
+      installProcess.on('close', (code) => {
+        if (code === 0) {
+          pythonDepsInstalled = true
+          logger.info(`Python依赖安装成功，使用${mirror.name}`)
+          resolve()
+        } else {
+          logger.warn(`${mirror.name}安装失败: ${stderr}`)
+          currentMirrorIndex++
+          tryInstallWithMirror() // 尝试下一个镜像源
+        }
+      })
+      
+      installProcess.on('error', (error) => {
+        logger.warn(`${mirror.name}启动失败: ${error.message}`)
+        currentMirrorIndex++
+        tryInstallWithMirror() // 尝试下一个镜像源
+      })
+    }
+    
+    tryInstallWithMirror()
   })
 }
 

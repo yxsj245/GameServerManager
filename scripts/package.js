@@ -122,7 +122,7 @@ cd server
     const installPythonDepsScript = `@echo off
 echo 正在安装Python依赖...
 cd server\Python
-pip install -r requirements.txt
+pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple/ --trusted-host pypi.tuna.tsinghua.edu.cn
 echo Python依赖安装完成！
 pause`
     
@@ -135,7 +135,7 @@ pause`
     const installPythonDepsShScript = `#!/bin/bash
 echo "正在安装Python依赖..."
 cd server/Python
-pip install -r requirements.txt
+pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple/ --trusted-host pypi.tuna.tsinghua.edu.cn
 echo "Python依赖安装完成！"`
     
     await fs.writeFile(
@@ -167,7 +167,7 @@ echo "Python依赖安装完成！"`
    - 方式二: 手动安装
      \`\`\`bash
      cd server/Python
-     pip install -r requirements.txt
+     pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple/ --trusted-host pypi.tuna.tsinghua.edu.cn
      \`\`\`
 5. (可选) 配置端口和其他参数:
    - 复制 .env.example 为 .env 并修改 SERVER_PORT 等配置
