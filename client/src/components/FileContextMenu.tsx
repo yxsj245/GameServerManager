@@ -11,7 +11,8 @@ import {
   SnippetsOutlined,
   FileZipOutlined,
   FolderOutlined,
-  ConsoleSqlOutlined
+  ConsoleSqlOutlined,
+  SoundOutlined
 } from '@ant-design/icons'
 import { FileItem } from '@/types/file'
 
@@ -34,6 +35,7 @@ interface FileContextMenuProps {
   onCompress: (files: FileItem[]) => void
   onExtract: (file: FileItem) => void
   onOpenTerminal: (file: FileItem) => void
+  onAddToPlaylist?: (files: FileItem[]) => void
 }
 
 export const FileContextMenu: React.FC<FileContextMenuProps> = ({
@@ -51,7 +53,8 @@ export const FileContextMenu: React.FC<FileContextMenuProps> = ({
   onView,
   onCompress,
   onExtract,
-  onOpenTerminal
+  onOpenTerminal,
+  onAddToPlaylist
 }) => {
   const isSelected = selectedFiles.has(file.path)
   const selectedCount = selectedFiles.size
@@ -67,6 +70,20 @@ export const FileContextMenu: React.FC<FileContextMenuProps> = ({
       // 否则只操作当前文件
       return [file]
     }
+  }
+
+  // 检查是否为音频文件
+  const isAudioFile = (fileName: string): boolean => {
+    const supportedFormats = ['.mp3', '.wav', '.ogg', '.m4a', '.aac', '.flac']
+    return supportedFormats.some(format => 
+      fileName.toLowerCase().endsWith(format)
+    )
+  }
+
+  // 检查选中的文件中是否有音频文件
+  const hasAudioFiles = (): boolean => {
+    const files = getSelectedFiles()
+    return files.some(f => f.type === 'file' && isAudioFile(f.name))
   }
 
   const handleContextMenu = (event: React.MouseEvent) => {
@@ -138,6 +155,17 @@ export const FileContextMenu: React.FC<FileContextMenuProps> = ({
             >
               <ConsoleSqlOutlined className="mr-2" />
               从此文件夹处打开终端
+            </div>
+          )}
+          
+          {/* 添加到播放列表（仅音频文件） */}
+          {onAddToPlaylist && hasAudioFiles() && (
+            <div
+              className="px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer flex items-center"
+              onClick={() => onAddToPlaylist(getSelectedFiles())}
+            >
+              <SoundOutlined className="mr-2" />
+              {isMultipleSelected ? `添加 ${selectedCount} 项到播放列表` : '添加到播放列表'}
             </div>
           )}
           

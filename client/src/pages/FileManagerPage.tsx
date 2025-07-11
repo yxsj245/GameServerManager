@@ -44,6 +44,7 @@ import {
 } from '@ant-design/icons'
 import { useFileStore } from '@/stores/fileStore'
 import { useNotificationStore } from '@/stores/notificationStore'
+import { useMusicStore } from '@/stores/musicStore'
 import { FileGridItem } from '@/components/FileGridItem'
 import { FileListItem } from '@/components/FileListItem'
 import { FileContextMenu } from '@/components/FileContextMenu'
@@ -106,6 +107,7 @@ const FileManagerPage: React.FC = () => {
   } = useFileStore()
   
   const { addNotification } = useNotificationStore()
+  const { addToPlaylist } = useMusicStore()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   
@@ -464,6 +466,16 @@ const FileManagerPage: React.FC = () => {
         message: `已在 "${file.name}" 文件夹中打开终端`
       })
     }
+  }
+
+  // 添加到播放列表
+  const handleAddToPlaylist = (files: FileItem[]) => {
+    addToPlaylist(files)
+    addNotification({
+      type: 'success',
+      title: '添加成功',
+      message: `已添加 ${files.length} 个文件到播放列表`
+    })
   }
   
   // 对话框处理
@@ -893,7 +905,8 @@ const FileManagerPage: React.FC = () => {
                       onView={handleContextMenuView}
                       onCompress={handleContextMenuCompress}
                       onExtract={handleContextMenuExtract}
-                      onOpenTerminal={handleContextMenuOpenTerminal}
+                       onOpenTerminal={handleContextMenuOpenTerminal}
+                       onAddToPlaylist={handleAddToPlaylist}
                     >
                       <FileGridItem
                         file={file}
@@ -939,8 +952,9 @@ const FileManagerPage: React.FC = () => {
                       onView={handleContextMenuView}
                       onCompress={handleContextMenuCompress}
                       onExtract={handleContextMenuExtract}
-                      onOpenTerminal={handleContextMenuOpenTerminal}
-                    >
+                        onOpenTerminal={handleContextMenuOpenTerminal}
+                        onAddToPlaylist={handleAddToPlaylist}
+                      >
                       <FileListItem
                         file={file}
                         isSelected={selectedFiles.has(file.path)}

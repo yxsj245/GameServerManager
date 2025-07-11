@@ -14,6 +14,7 @@ import {
   Terminal,
   ArrowRight
 } from 'lucide-react'
+import MusicPlayer from '@/components/MusicPlayer'
 
 // 城市代码映射
 const cityOptions = [
@@ -395,48 +396,54 @@ const HomePage: React.FC = () => {
         </div>
       )}
       
-      {/* 终端占用模块 */}
-      <div className="card-game p-6">
-        <div className="flex items-center space-x-3 mb-4">
-          <Terminal className="w-6 h-6 text-orange-500" />
-          <h3 className="text-lg font-semibold text-black dark:text-white">终端占用</h3>
-          <span className="text-sm text-gray-600 dark:text-gray-400">({processList.length} 个进程)</span>
+      {/* 终端占用和音乐播放器 */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* 终端占用模块 */}
+        <div className="card-game p-6">
+          <div className="flex items-center space-x-3 mb-4">
+            <Terminal className="w-6 h-6 text-orange-500" />
+            <h3 className="text-lg font-semibold text-black dark:text-white">终端占用</h3>
+            <span className="text-sm text-gray-600 dark:text-gray-400">({processList.length} 个进程)</span>
+          </div>
+          
+          {processList.length > 0 ? (
+            <div className="space-y-3">
+              <div className="grid grid-cols-3 gap-4 text-sm font-medium text-gray-600 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700 pb-2">
+                <span>终端名称</span>
+                <span>PID</span>
+                <span>操作</span>
+              </div>
+              
+              <div className="max-h-64 overflow-y-auto space-y-2">
+                {processList.map((process, index) => (
+                  <div key={`${process.id}-${index}`} className="grid grid-cols-3 gap-4 text-sm py-2 hover:bg-gray-50 dark:hover:bg-gray-800 rounded">
+                    <span className="text-black dark:text-white font-medium truncate" title={process.name}>
+                      {process.name}
+                    </span>
+                    <span className="text-blue-600 dark:text-blue-400 font-mono">
+                      {process.pid}
+                    </span>
+                    <button
+                      onClick={() => navigate(`/terminal?sessionId=${process.id}`)}
+                      className="flex items-center space-x-1 text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors"
+                    >
+                      <span>前往终端</span>
+                      <ArrowRight className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+              <Terminal className="w-12 h-12 mx-auto mb-3 opacity-50" />
+              <p>暂无终端进程运行</p>
+            </div>
+          )}
         </div>
         
-        {processList.length > 0 ? (
-          <div className="space-y-3">
-            <div className="grid grid-cols-3 gap-4 text-sm font-medium text-gray-600 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700 pb-2">
-              <span>终端名称</span>
-              <span>PID</span>
-              <span>操作</span>
-            </div>
-            
-            <div className="max-h-64 overflow-y-auto space-y-2">
-              {processList.map((process, index) => (
-                <div key={`${process.id}-${index}`} className="grid grid-cols-3 gap-4 text-sm py-2 hover:bg-gray-50 dark:hover:bg-gray-800 rounded">
-                  <span className="text-black dark:text-white font-medium truncate" title={process.name}>
-                    {process.name}
-                  </span>
-                  <span className="text-blue-600 dark:text-blue-400 font-mono">
-                    {process.pid}
-                  </span>
-                  <button
-                    onClick={() => navigate(`/terminal?sessionId=${process.id}`)}
-                    className="flex items-center space-x-1 text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors"
-                  >
-                    <span>前往终端</span>
-                    <ArrowRight className="w-4 h-4" />
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-        ) : (
-          <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-            <Terminal className="w-12 h-12 mx-auto mb-3 opacity-50" />
-            <p>暂无终端进程运行</p>
-          </div>
-        )}
+        {/* 音乐播放器 */}
+        <MusicPlayer />
       </div>
 
     </div>

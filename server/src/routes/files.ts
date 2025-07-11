@@ -6,6 +6,7 @@ import multer from 'multer'
 import { createReadStream, createWriteStream } from 'fs'
 import archiver from 'archiver'
 import unzipper from 'unzipper'
+import mime from 'mime-types'
 import { authenticateToken } from '../middleware/auth.js'
 import { taskManager } from '../modules/task/taskManager.js'
 import { compressionWorker } from '../modules/task/compressionWorker.js'
@@ -155,8 +156,8 @@ router.get('/list', authenticateToken, async (req: Request, res: Response) => {
 // 读取文件内容
 router.get('/read', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const { path: filePath, encoding = 'utf-8' } = req.query
-    
+    const { path: filePath } = req.query
+
     if (!isValidPath(filePath as string)) {
       return res.status(400).json({
         status: 'error',
@@ -172,18 +173,18 @@ router.get('/read', authenticateToken, async (req: Request, res: Response) => {
       })
     }
 
-    const content = await fs.readFile(filePath as string, encoding as BufferEncoding)
-    
-    res.json({
-      status: 'success',
-      data: {
-        content,
-        encoding,
-        size: stats.size,
-        modified: stats.mtime.toISOString()
-      }
-    })
+    // 使用 mime-types 获取 Content-Type
+    const contentType = mime.lookup(filePath as string) || 'application/octet-stream'
+    res.setHeader('Content-Type', contentType)
+    res.setHeader('Content-Length', stats.size.toString())
+
+    // 创建文件流并 pipe 到响应
+    const stream = createReadStream(filePath as string)
+    stream.pipe(res)
   } catch (error: any) {
+    if (error.code === 'ENOENT') {
+      return res.status(404).json({ status: 'error', message: '文件未找到' })
+    }
     res.status(500).json({
       status: 'error',
       message: error.message
