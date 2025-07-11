@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { persist, createJSONStorage } from 'zustand/middleware'
 import { FileItem } from '@/types/file'
 
 interface MusicFile extends FileItem {
@@ -36,7 +37,7 @@ interface MusicState {
   previousTrack: () => void
 }
 
-export const useMusicStore = create<MusicState>((set, get) => ({
+export const useMusicStore = create<MusicState>()(persist((set, get) => ({
   playlist: [],
   currentTrack: null,
   currentIndex: 0,
@@ -200,4 +201,20 @@ export const useMusicStore = create<MusicState>((set, get) => ({
       isPlaying: false // 让组件重新开始播放
     })
   }
+}), {
+  name: 'gsm3-music-store',
+  storage: createJSONStorage(() => localStorage),
+  partialize: (state) => ({
+    playlist: state.playlist,
+    currentTrack: state.currentTrack,
+    currentIndex: state.currentIndex,
+    volume: state.volume,
+    isMuted: state.isMuted,
+    isShuffled: state.isShuffled,
+    repeatMode: state.repeatMode,
+    // 不持久化播放状态和时间相关的数据
+    // isPlaying: false,
+    // currentTime: 0,
+    // duration: 0,
+  })
 }))

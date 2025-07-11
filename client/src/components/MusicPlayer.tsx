@@ -117,6 +117,13 @@ const MusicPlayer: React.FC<MusicPlayerProps> = ({ className = '' }) => {
     }
   }, [currentTrack])
   
+  // 组件初始化时，如果有持久化的currentTrack，确保音频已加载
+  useEffect(() => {
+    if (currentTrack && audioRef.current && !audioRef.current.src) {
+      loadAudioFile(currentTrack)
+    }
+  }, [])
+  
   // 加载音频文件
   const loadAudioFile = async (track: any) => {
     if (!audioRef.current) return
@@ -147,7 +154,39 @@ const MusicPlayer: React.FC<MusicPlayerProps> = ({ className = '' }) => {
         throw new Error('音频文件为空')
       }
       
-      const blobUrl = URL.createObjectURL(blob)
+      // 根据文件扩展名强制设置正确的MIME类型
+      const extension = track.path.split('.').pop()?.toLowerCase()
+      let mimeType = 'audio/mpeg' // 默认
+      
+      switch (extension) {
+        case 'mp3':
+          mimeType = 'audio/mpeg'
+          break
+        case 'wav':
+          mimeType = 'audio/wav'
+          break
+        case 'ogg':
+          mimeType = 'audio/ogg'
+          break
+        case 'm4a':
+          mimeType = 'audio/mp4'
+          break
+        case 'aac':
+          mimeType = 'audio/aac'
+          break
+        case 'wma':
+          mimeType = 'audio/x-ms-wma'
+          break
+        case 'flac':
+          mimeType = 'audio/flac'
+          break
+      }
+      
+      console.log('设置MIME类型:', mimeType)
+      
+      // 创建具有正确MIME类型的新blob
+      const audioBlob = new Blob([blob], { type: mimeType })
+      const blobUrl = URL.createObjectURL(audioBlob)
 
       if (audioRef.current) {
         audioRef.current.src = blobUrl
