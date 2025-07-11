@@ -18,6 +18,17 @@ import LoadingSpinner from '@/components/LoadingSpinner'
 import NotificationContainer from '@/components/NotificationContainer'
 import GlobalMusicPlayer from '@/components/GlobalMusicPlayer'
 
+// GlobalMusicPlayer包装器组件 - 只在已登录时显示
+const GlobalMusicPlayerWrapper: React.FC = () => {
+  const { isAuthenticated } = useAuthStore()
+  
+  if (!isAuthenticated) {
+    return null
+  }
+  
+  return <GlobalMusicPlayer />
+}
+
 // 受保护的路由组件
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated, loading } = useAuthStore()
@@ -137,8 +148,8 @@ function App() {
           {/* 全局通知容器 */}
           <NotificationContainer />
           
-          {/* 全局音乐播放器 */}
-          <GlobalMusicPlayer />
+          {/* 全局音乐播放器 - 只在已登录时显示 */}
+          <GlobalMusicPlayerWrapper />
         </div>
       </AntdApp>
     </ConfigProvider>

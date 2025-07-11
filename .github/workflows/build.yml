@@ -61,34 +61,6 @@ jobs:
         with:
           node-version: '22.16.0'
           cache: 'npm'
-      - name: Download Windows Node.js
-        shell: pwsh
-        run: |
-          $nodeVersion = "22.16.0"
-          $nodeUrl = "https://nodejs.org/dist/v$nodeVersion/node-v$nodeVersion-win-x64.zip"
-          Write-Host "Downloading Node.js for Windows..."
-          Invoke-WebRequest -Uri $nodeUrl -OutFile "node-windows.zip"
-          
-          # 解压到临时目录
-          Write-Host "Extracting Node.js..."
-          Expand-Archive -Path "node-windows.zip" -DestinationPath "temp-node" -Force
-          
-          # 移动到server目录
-          if (Test-Path "temp-node/node-v$nodeVersion-win-x64") {
-            if (Test-Path "server/node") {
-              Remove-Item "server/node" -Recurse -Force
-            }
-            Move-Item "temp-node/node-v$nodeVersion-win-x64" "server/node"
-            Remove-Item "temp-node" -Recurse -Force
-          }
-          
-          # 验证文件结构
-          if (Test-Path "server/node/node.exe") {
-            Write-Host "Node.js for Windows downloaded and placed in server directory successfully"
-          } else {
-            Write-Error "Failed to place Node.js in server directory"
-            exit 1
-          }
       - name: Install dependencies
         run: |
           npm install

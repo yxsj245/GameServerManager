@@ -487,10 +487,29 @@ const __dirname = path.dirname(__filename)
 // Python脚本路径
 const PYTHON_SCRIPT_PATH = path.join(__dirname, '..', 'Python', 'game_config_manager.py')
 
-// Python依赖安装状态
+// Python依赖是否已安装的标志
 let pythonDepsInstalled = false
 
-// 安装Python依赖
+// 获取正确的Python命令
+function getPythonCommand(): string {
+  const platform = os.platform()
+  if (platform === 'win32') {
+    return 'python'
+  } else {
+    return 'python3'
+  }
+}
+
+// 获取正确的pip命令
+function getPipCommand(): string {
+  const platform = os.platform()
+  if (platform === 'win32') {
+    return 'pip'
+  } else {
+    return 'pip3'
+  }
+}
+
 function installPythonDependencies(): Promise<void> {
   return new Promise((resolve, reject) => {
     if (pythonDepsInstalled) {
@@ -531,7 +550,7 @@ function installPythonDependencies(): Promise<void> {
       const mirror = mirrors[currentMirrorIndex]
       logger.info(`尝试使用${mirror.name}安装Python依赖`)
       
-      const installProcess = spawn('pip', [
+      const installProcess = spawn(getPipCommand(), [
         'install', 
         '-r', 
         requirementsPath,
@@ -581,7 +600,7 @@ function callPythonScript(method: string, args: any[] = []): Promise<any> {
       await installPythonDependencies()
       
       const pythonArgs = [PYTHON_SCRIPT_PATH, method, ...args.map(arg => JSON.stringify(arg))]
-      const pythonProcess = spawn('python', pythonArgs, {
+      const pythonProcess = spawn(getPythonCommand(), pythonArgs, {
         stdio: ['pipe', 'pipe', 'pipe'],
         env: {
           ...process.env,
@@ -808,12 +827,7 @@ router.post('/:instanceId/configs/:configId', authenticateToken, async (req: Req
 router.get('/python/check', authenticateToken, async (req: Request, res: Response) => {
   try {
     const platform = os.platform()
-    let pythonCommand = 'python'
-    
-    // Linux和macOS系统优先使用python3
-    if (platform === 'linux' || platform === 'darwin') {
-      pythonCommand = 'python3'
-    }
+    const pythonCommand = getPythonCommand()
     
     logger.info(`检测Python环境，平台: ${platform}，使用命令: ${pythonCommand}`)
     
