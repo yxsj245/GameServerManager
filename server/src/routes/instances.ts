@@ -505,6 +505,49 @@ function getPythonCommand(): string {
   }
 }
 
+// 检查Python命令是否可用
+function checkPythonCommand(command: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    const { spawn } = require('child_process')
+    const testProcess = spawn(command, ['--version'], { stdio: 'ignore' })
+    
+    testProcess.on('close', (code) => {
+      resolve(code === 0)
+    })
+    
+    testProcess.on('error', () => {
+      resolve(false)
+    })
+  })
+}
+
+// 获取可用的Python命令
+async function getAvailablePythonCommand(): Promise<string> {
+  const platform = os.platform()
+  
+  if (platform === 'win32') {
+    // Windows平台优先尝试python，然后尝试python3
+    const commands = ['python', 'python3']
+    for (const cmd of commands) {
+      if (await checkPythonCommand(cmd)) {
+        logger.info(`Windows平台使用Python命令: ${cmd}`)
+        return cmd
+      }
+    }
+  } else {
+    // Linux/macOS平台优先尝试python3，然后尝试python
+    const commands = ['python3', 'python']
+    for (const cmd of commands) {
+      if (await checkPythonCommand(cmd)) {
+        logger.info(`${platform}平台使用Python命令: ${cmd}`)
+        return cmd
+      }
+    }
+  }
+  
+  throw new Error('未找到可用的Python命令')
+}
+
 // 获取正确的pip命令
 function getPipCommand(): string {
   const platform = os.platform()
@@ -512,6 +555,18 @@ function getPipCommand(): string {
     return 'pip'
   } else {
     return 'pip3'
+  }
+}
+
+// 根据Python命令获取对应的pip命令
+function getPipCommandForPython(pythonCommand: string): string {
+  if (pythonCommand === 'python3') {
+    return 'pip3'
+  } else if (pythonCommand === 'python') {
+    return 'pip'
+  } else {
+    // 默认情况
+    return getPipCommand()
   }
 }
 
@@ -523,60 +578,66 @@ function resetPythonEnvironmentStatus(): void {
 }
 
 function installPythonDependencies(): Promise<void> {
-  return new Promise((resolve, reject) => {
+  return new Promise(async (resolve, reject) => {
     if (pythonDepsInstalled) {
       resolve()
       return
     }
     
-    const requirementsPath = path.join(__dirname, '..', 'Python', 'requirements.txt')
-    
-    // 国内镜像源列表，按优先级排序
-    const mirrors = [
-      {
-        url: 'https://pypi.tuna.tsinghua.edu.cn/simple/',
-        host: 'pypi.tuna.tsinghua.edu.cn',
-        name: '清华大学镜像源'
-      },
-      {
-        url: 'https://mirrors.aliyun.com/pypi/simple/',
-        host: 'mirrors.aliyun.com',
-        name: '阿里云镜像源'
-      },
-      {
-        url: 'https://pypi.douban.com/simple/',
-        host: 'pypi.douban.com',
-        name: '豆瓣镜像源'
-      }
-    ]
-    
-    let currentMirrorIndex = 0
-    
-    function tryInstallWithMirror() {
-      if (currentMirrorIndex >= mirrors.length) {
-        pythonFailureCount++
-        pythonEnvironmentFailed = true
-        logger.error(`所有镜像源都尝试失败，Python依赖安装失败 (第${pythonFailureCount}次)`)
-        reject(new Error('Python依赖安装失败：所有镜像源都不可用'))
-        return
-      }
+    try {
+      // 动态获取可用的Python命令
+      const pythonCommand = await getAvailablePythonCommand()
+      const pipCommand = getPipCommandForPython(pythonCommand)
+      logger.info(`使用pip命令: ${pipCommand} (对应Python命令: ${pythonCommand})`)
       
-      const mirror = mirrors[currentMirrorIndex]
-      logger.info(`尝试使用${mirror.name}安装Python依赖`)
+      const requirementsPath = path.join(__dirname, '..', 'Python', 'requirements.txt')
       
-      const installProcess = spawn(getPipCommand(), [
-        'install', 
-        '-r', 
-        requirementsPath,
-        '-i', 
-        mirror.url,
-        '--trusted-host',
-        mirror.host,
-        '--timeout',
-        '60'
-      ], {
-        stdio: ['pipe', 'pipe', 'pipe']
-      })
+      // 国内镜像源列表，按优先级排序
+      const mirrors = [
+        {
+          url: 'https://pypi.tuna.tsinghua.edu.cn/simple/',
+          host: 'pypi.tuna.tsinghua.edu.cn',
+          name: '清华大学镜像源'
+        },
+        {
+          url: 'https://mirrors.aliyun.com/pypi/simple/',
+          host: 'mirrors.aliyun.com',
+          name: '阿里云镜像源'
+        },
+        {
+          url: 'https://pypi.douban.com/simple/',
+          host: 'pypi.douban.com',
+          name: '豆瓣镜像源'
+        }
+      ]
+      
+      let currentMirrorIndex = 0
+      
+      function tryInstallWithMirror() {
+        if (currentMirrorIndex >= mirrors.length) {
+          pythonFailureCount++
+          pythonEnvironmentFailed = true
+          logger.error(`所有镜像源都尝试失败，Python依赖安装失败 (第${pythonFailureCount}次)`)
+          reject(new Error('Python依赖安装失败：所有镜像源都不可用'))
+          return
+        }
+        
+        const mirror = mirrors[currentMirrorIndex]
+        logger.info(`尝试使用${mirror.name}安装Python依赖`)
+        
+        const installProcess = spawn(pipCommand, [
+          'install', 
+          '-r', 
+          requirementsPath,
+          '-i', 
+          mirror.url,
+          '--trusted-host',
+          mirror.host,
+          '--timeout',
+          '60'
+        ], {
+          stdio: ['pipe', 'pipe', 'pipe']
+        })
       
       let stderr = ''
       installProcess.stderr.on('data', (data) => {
@@ -611,6 +672,12 @@ function installPythonDependencies(): Promise<void> {
     }
     
     tryInstallWithMirror()
+    } catch (error: any) {
+      pythonFailureCount++
+      pythonEnvironmentFailed = true
+      logger.error(`Python环境检测失败 (第${pythonFailureCount}次): ${error.message}`)
+      reject(new Error(`Python环境检测失败: ${error.message}`))
+    }
   })
 }
 
@@ -628,8 +695,12 @@ function callPythonScript(method: string, args: any[] = []): Promise<any> {
       // 确保Python依赖已安装
       await installPythonDependencies()
       
+      // 动态获取可用的Python命令
+      const pythonCommand = await getAvailablePythonCommand()
+      logger.info(`使用Python命令: ${pythonCommand}`)
+      
       const pythonArgs = [PYTHON_SCRIPT_PATH, method, ...args.map(arg => JSON.stringify(arg))]
-      const pythonProcess = spawn(getPythonCommand(), pythonArgs, {
+      const pythonProcess = spawn(pythonCommand, pythonArgs, {
         stdio: ['pipe', 'pipe', 'pipe'],
         env: {
           ...process.env,
@@ -882,7 +953,11 @@ router.post('/python/reset', authenticateToken, async (req: Request, res: Respon
 router.get('/python/check', authenticateToken, async (req: Request, res: Response) => {
   try {
     const platform = os.platform()
-    const pythonCommand = getPythonCommand()
+    
+    logger.info(`检测Python环境，平台: ${platform}`)
+    
+    // 使用动态检测获取可用的Python命令
+    const pythonCommand = await getAvailablePythonCommand()
     
     logger.info(`检测Python环境，平台: ${platform}，使用命令: ${pythonCommand}`)
     
