@@ -474,6 +474,23 @@ class ApiClient {
   async getMoreGameVersion(gameId: string) {
     return this.get(`/more-games/version/${gameId}`)
   }
+
+  // 游戏配置文件API
+  async getAvailableConfigs() {
+    return this.get('/instances/configs/available')
+  }
+
+  async getConfigSchema(configId: string) {
+    return this.get(`/instances/configs/schema/${encodeURIComponent(configId)}`)
+  }
+
+  async readGameConfig(instanceId: string, configId: string) {
+    return this.get(`/instances/${instanceId}/configs/${encodeURIComponent(configId)}`)
+  }
+
+  async saveGameConfig(instanceId: string, configId: string, configData: any) {
+    return this.post(`/instances/${instanceId}/configs/${encodeURIComponent(configId)}`, { configData })
+  }
 }
 
 // 创建单例实例

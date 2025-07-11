@@ -5,6 +5,9 @@ import logger from '../utils/logger.js'
 import os from 'os'
 import https from 'https'
 import http from 'http'
+import { spawn } from 'child_process'
+import path from 'path'
+import { fileURLToPath } from 'url'
 
 const router = Router()
 
@@ -469,6 +472,269 @@ router.post('/:id/input', authenticateToken, (req: Request, res: Response) => {
     res.status(500).json({
       success: false,
       error: '发送输入失败',
+      message: error.message
+    })
+  }
+})
+
+// 获取当前文件的目录
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
+
+// Python脚本路径
+const PYTHON_SCRIPT_PATH = path.join(__dirname, '..', 'Python', 'game_config_manager.py')
+
+// Python依赖安装状态
+let pythonDepsInstalled = false
+
+// 安装Python依赖
+function installPythonDependencies(): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (pythonDepsInstalled) {
+      resolve()
+      return
+    }
+    
+    const requirementsPath = path.join(__dirname, '..', 'Python', 'requirements.txt')
+    const installProcess = spawn('pip', ['install', '-r', requirementsPath], {
+      stdio: ['pipe', 'pipe', 'pipe']
+    })
+    
+    let stderr = ''
+    installProcess.stderr.on('data', (data) => {
+      stderr += data.toString()
+    })
+    
+    installProcess.on('close', (code) => {
+      if (code === 0) {
+        pythonDepsInstalled = true
+        logger.info('Python依赖安装成功')
+        resolve()
+      } else {
+        logger.warn(`Python依赖安装失败: ${stderr}，将尝试直接运行脚本`)
+        resolve() // 即使安装失败也继续，可能依赖已经存在
+      }
+    })
+    
+    installProcess.on('error', (error) => {
+      logger.warn(`启动pip进程失败: ${error.message}，将尝试直接运行脚本`)
+      resolve() // 即使pip不可用也继续
+    })
+  })
+}
+
+// 调用Python脚本的辅助函数
+function callPythonScript(method: string, args: any[] = []): Promise<any> {
+  return new Promise(async (resolve, reject) => {
+    try {
+      // 确保Python依赖已安装
+      await installPythonDependencies()
+      
+      const pythonArgs = [PYTHON_SCRIPT_PATH, method, ...args.map(arg => JSON.stringify(arg))]
+      const pythonProcess = spawn('python', pythonArgs, {
+        stdio: ['pipe', 'pipe', 'pipe'],
+        env: {
+          ...process.env,
+          PYTHONIOENCODING: 'utf-8'
+        }
+      })
+
+      let stdout = ''
+      let stderr = ''
+
+      pythonProcess.stdout.on('data', (data) => {
+        stdout += data.toString('utf8')
+      })
+
+      pythonProcess.stderr.on('data', (data) => {
+        stderr += data.toString('utf8')
+      })
+
+      pythonProcess.on('close', (code) => {
+        if (code === 0) {
+          try {
+            const result = JSON.parse(stdout)
+            resolve(result)
+          } catch (error) {
+            reject(new Error(`JSON解析失败: ${error}`))
+          }
+        } else {
+          reject(new Error(`Python脚本执行失败: ${stderr}`))
+        }
+      })
+
+      pythonProcess.on('error', (error) => {
+         reject(new Error(`启动Python进程失败: ${error.message}`))
+       })
+     } catch (error) {
+       reject(error)
+     }
+   })
+ }
+
+// 获取可用的游戏配置文件列表
+router.get('/configs/available', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const result = await callPythonScript('get_available_configs')
+    res.json({
+      success: true,
+      data: result
+    })
+  } catch (error: any) {
+    logger.error('获取游戏配置列表失败:', error)
+    res.status(500).json({
+      success: false,
+      error: '获取游戏配置列表失败',
+      message: error.message
+    })
+  }
+})
+
+// 获取指定游戏配置的模板结构
+router.get('/configs/schema/:configId', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const { configId } = req.params
+    const decodedConfigId = decodeURIComponent(configId)
+    const result = await callPythonScript('get_config_schema', [decodedConfigId])
+    
+    if (!result) {
+      return res.status(404).json({
+        success: false,
+        error: '配置模板不存在'
+      })
+    }
+    
+    res.json({
+      success: true,
+      data: result
+    })
+  } catch (error: any) {
+    logger.error('获取配置模板失败:', error)
+    res.status(500).json({
+      success: false,
+      error: '获取配置模板失败',
+      message: error.message
+    })
+  }
+})
+
+// 读取实例的游戏配置文件
+router.get('/:instanceId/configs/:configId', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    if (!instanceManager) {
+      return res.status(500).json({ 
+        success: false, 
+        error: '实例管理器未初始化' 
+      })
+    }
+    
+    const { instanceId, configId } = req.params
+    const { parser = 'configobj' } = req.query
+    const decodedConfigId = decodeURIComponent(configId)
+    
+    // 获取实例信息
+    const instance = instanceManager.getInstance(instanceId)
+    if (!instance) {
+      return res.status(404).json({
+        success: false,
+        error: '实例不存在'
+      })
+    }
+    
+    // 获取配置模板
+    const schema = await callPythonScript('get_config_schema', [decodedConfigId])
+    if (!schema) {
+      return res.status(404).json({
+        success: false,
+        error: '配置模板不存在'
+      })
+    }
+    
+    // 读取配置文件
+    const result = await callPythonScript('read_game_config', [
+      instance.workingDirectory,
+      schema,
+      parser
+    ])
+    
+    res.json({
+      success: true,
+      data: result
+    })
+  } catch (error: any) {
+    logger.error('读取游戏配置失败:', error)
+    res.status(500).json({
+      success: false,
+      error: '读取游戏配置失败',
+      message: error.message
+    })
+  }
+})
+
+// 保存实例的游戏配置文件
+router.post('/:instanceId/configs/:configId', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    if (!instanceManager) {
+      return res.status(500).json({ 
+        success: false, 
+        error: '实例管理器未初始化' 
+      })
+    }
+    
+    const { instanceId, configId } = req.params
+    const { configData, parser = 'configobj' } = req.body
+    const decodedConfigId = decodeURIComponent(configId)
+    
+    if (!configData) {
+      return res.status(400).json({
+        success: false,
+        error: '缺少配置数据'
+      })
+    }
+    
+    // 获取实例信息
+    const instance = instanceManager.getInstance(instanceId)
+    if (!instance) {
+      return res.status(404).json({
+        success: false,
+        error: '实例不存在'
+      })
+    }
+    
+    // 获取配置模板
+    const schema = await callPythonScript('get_config_schema', [decodedConfigId])
+    if (!schema) {
+      return res.status(404).json({
+        success: false,
+        error: '配置模板不存在'
+      })
+    }
+    
+    // 保存配置文件
+    const result = await callPythonScript('save_game_config', [
+      instance.workingDirectory,
+      schema,
+      configData,
+      parser
+    ])
+    
+    if (result) {
+      logger.info(`用户保存游戏配置: 实例=${instanceId}, 配置=${decodedConfigId}`)
+      res.json({
+        success: true,
+        message: '配置保存成功'
+      })
+    } else {
+      res.status(500).json({
+        success: false,
+        error: '配置保存失败'
+      })
+    }
+  } catch (error: any) {
+    logger.error('保存游戏配置失败:', error)
+    res.status(500).json({
+      success: false,
+      error: '保存游戏配置失败',
       message: error.message
     })
   }

@@ -23,6 +23,20 @@ import { useNotificationStore } from '@/stores/notificationStore'
 import apiClient from '@/utils/api'
 import { ConfirmDeleteDialog } from '@/components/ConfirmDeleteDialog'
 
+// 获取嵌套对象值的工具函数
+const getNestedValue = (obj: any, path: string): any => {
+  if (!obj || !path) return undefined
+  const keys = path.split('.')
+  let current = obj
+  for (const key of keys) {
+    if (current === null || current === undefined || typeof current !== 'object') {
+      return undefined
+    }
+    current = current[key]
+  }
+  return current
+}
+
 // 实例市场相关类型
 interface MarketInstance {
   name: string
@@ -44,7 +58,7 @@ interface InstallInstanceRequest {
 const InstanceManagerPage: React.FC = () => {
   const navigate = useNavigate()
   const { addNotification } = useNotificationStore()
-  const [activeTab, setActiveTab] = useState<'instances' | 'market'>('instances')
+  const [activeTab, setActiveTab] = useState<'instances' | 'market' | 'gameConfig'>('instances')
   const [instances, setInstances] = useState<Instance[]>([])
   const [marketInstances, setMarketInstances] = useState<MarketInstance[]>([])
   const [loading, setLoading] = useState(true)
@@ -67,6 +81,15 @@ const InstanceManagerPage: React.FC = () => {
     stopCommand: 'ctrl+c'
   })
 
+  // 游戏配置相关状态
+  const [availableConfigs, setAvailableConfigs] = useState<any[]>([])
+  const [selectedInstance, setSelectedInstance] = useState<string>('')
+  const [selectedConfigId, setSelectedConfigId] = useState<string>('')
+  const [configSchema, setConfigSchema] = useState<any>(null)
+  const [configData, setConfigData] = useState<any>({})
+  const [isConfigLoading, setIsConfigLoading] = useState(false)
+  const [isSavingConfig, setIsSavingConfig] = useState(false)
+
   // 获取实例列表
   const fetchInstances = async () => {
     try {
@@ -85,6 +108,159 @@ const InstanceManagerPage: React.FC = () => {
     } finally {
       setLoading(false)
     }
+  }
+
+  // 获取可用配置列表
+  const fetchAvailableConfigs = async () => {
+    try {
+      const response = await apiClient.getAvailableConfigs()
+      setAvailableConfigs(response.data)
+    } catch (error) {
+      console.error('获取配置列表失败:', error)
+      addNotification({
+        type: 'error',
+        title: '获取失败',
+        message: '获取配置列表失败'
+      })
+    }
+  }
+
+  // 获取配置模板
+  const fetchConfigSchema = async (configId: string) => {
+    try {
+      setIsConfigLoading(true)
+      const response = await apiClient.getConfigSchema(configId)
+      setConfigSchema(response.data)
+      return response.data // 返回获取到的配置模式数据
+    } catch (error) {
+      console.error('获取配置模板失败:', error)
+      addNotification({
+        type: 'error',
+        title: '获取失败',
+        message: '获取配置模板失败'
+      })
+      return null
+    } finally {
+      setIsConfigLoading(false)
+    }
+  }
+
+  // 读取游戏配置
+  const loadGameConfig = async (instanceId: string, configId: string, schema?: any) => {
+    try {
+      setIsConfigLoading(true)
+      const response = await apiClient.readGameConfig(instanceId, configId)
+      // 使用传入的配置模式或当前的配置模式填充默认值
+      const currentSchema = schema || configSchema
+      const filledData = fillDefaultValues(currentSchema, response.data)
+      setConfigData(filledData)
+    } catch (error) {
+      console.error('读取配置失败:', error)
+      addNotification({
+        type: 'error',
+        title: '读取失败',
+        message: '读取配置失败'
+      })
+      // 即使读取失败，也尝试使用默认值创建配置
+      const currentSchema = schema || configSchema
+      const defaultData = fillDefaultValues(currentSchema, {})
+      setConfigData(defaultData)
+    } finally {
+      setIsConfigLoading(false)
+    }
+  }
+
+  // 保存游戏配置
+  const saveGameConfig = async () => {
+    if (!selectedInstance || !selectedConfigId) {
+      addNotification({
+        type: 'warning',
+        title: '提示',
+        message: '请选择实例和配置文件'
+      })
+      return
+    }
+
+    try {
+      setIsSavingConfig(true)
+      await apiClient.saveGameConfig(selectedInstance, selectedConfigId, configData)
+      addNotification({
+        type: 'success',
+        title: '保存成功',
+        message: '配置保存成功'
+      })
+    } catch (error) {
+      console.error('保存配置失败:', error)
+      addNotification({
+        type: 'error',
+        title: '保存失败',
+        message: '保存配置失败'
+      })
+    } finally {
+      setIsSavingConfig(false)
+    }
+  }
+
+  // 处理配置选择变化
+  const handleConfigSelection = async (instanceId: string, configId: string) => {
+    setSelectedInstance(instanceId)
+    setSelectedConfigId(configId)
+    
+    if (instanceId && configId) {
+      // 先获取配置模式
+      const schemaResponse = await fetchConfigSchema(configId)
+      // 直接传递获取到的配置模式给loadGameConfig
+      if (schemaResponse) {
+        await loadGameConfig(instanceId, configId, schemaResponse)
+      } else {
+        await loadGameConfig(instanceId, configId)
+      }
+    } else {
+      setConfigSchema(null)
+      setConfigData({})
+    }
+  }
+
+  // 填充默认值到配置数据
+  const fillDefaultValues = (schema: any, currentData: any = {}) => {
+    if (!schema || !schema.sections) return currentData
+    
+    const filledData = { ...currentData }
+    
+    Object.entries(schema.sections).forEach(([sectionKey, section]: [string, any]) => {
+      if (!filledData[sectionKey]) {
+        filledData[sectionKey] = {}
+      }
+      
+      if (section.fields && Array.isArray(section.fields)) {
+        section.fields.forEach((field: any) => {
+          if (filledData[sectionKey][field.name] === undefined && field.default !== undefined) {
+            filledData[sectionKey][field.name] = field.default
+          }
+        })
+      }
+    })
+    
+    return filledData
+  }
+
+  // 处理配置数据变化
+  const handleConfigDataChange = (path: string, value: any) => {
+    setConfigData(prev => {
+      const newData = { ...prev }
+      const keys = path.split('.')
+      let current = newData
+      
+      for (let i = 0; i < keys.length - 1; i++) {
+        if (!current[keys[i]]) {
+          current[keys[i]] = {}
+        }
+        current = current[keys[i]]
+      }
+      
+      current[keys[keys.length - 1]] = value
+      return newData
+    })
   }
 
   // 获取实例市场列表
@@ -109,6 +285,7 @@ const InstanceManagerPage: React.FC = () => {
 
   useEffect(() => {
     fetchInstances()
+    fetchAvailableConfigs()
   }, [])
 
   useEffect(() => {
@@ -547,6 +724,19 @@ const InstanceManagerPage: React.FC = () => {
               <span>实例市场</span>
             </div>
           </button>
+          <button
+            onClick={() => setActiveTab('gameConfig')}
+            className={`py-2 px-1 border-b-2 font-medium text-sm transition-colors ${
+              activeTab === 'gameConfig'
+                ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
+            }`}
+          >
+            <div className="flex items-center space-x-2">
+              <Settings className="w-4 h-4" />
+              <span>游戏配置文件</span>
+            </div>
+          </button>
         </nav>
       </div>
 
@@ -684,7 +874,7 @@ const InstanceManagerPage: React.FC = () => {
           ))}
         </div>
         )
-      ) : (
+      ) : activeTab === 'market' ? (
         /* 实例市场 */
         <div className="space-y-6">
           {marketLoading ? (
@@ -757,6 +947,267 @@ const InstanceManagerPage: React.FC = () => {
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+        </div>
+      ) : (
+        /* 游戏配置文件 */
+        <div className="space-y-6">
+          {/* 选择区域 */}
+          <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+              选择实例和配置文件
+            </h3>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* 选择实例 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  选择实例
+                </label>
+                <select
+                  value={selectedInstance}
+                  onChange={(e) => handleConfigSelection(e.target.value, selectedConfigId)}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="">请选择实例</option>
+                  {instances.map((instance) => (
+                    <option key={instance.id} value={instance.id}>
+                      {instance.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              
+              {/* 选择配置文件 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  选择配置文件
+                </label>
+                <select
+                  value={selectedConfigId}
+                  onChange={(e) => handleConfigSelection(selectedInstance, e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  disabled={!selectedInstance}
+                >
+                  <option value="">请选择配置文件</option>
+                  {availableConfigs.map((config) => (
+                    <option key={config.id} value={config.id}>
+                      {config.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
+          
+          {/* 配置编辑区域 */}
+          {selectedInstance && selectedConfigId && (
+            <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  配置编辑
+                </h3>
+                <button
+                  onClick={saveGameConfig}
+                  disabled={isSavingConfig || isConfigLoading}
+                  className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  {isSavingConfig ? (
+                    <Loader className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Settings className="w-4 h-4" />
+                  )}
+                  <span>{isSavingConfig ? '保存中...' : '保存配置'}</span>
+                </button>
+              </div>
+              
+              {isConfigLoading ? (
+                <div className="flex items-center justify-center h-32">
+                  <Loader className="w-8 h-8 animate-spin text-blue-500" />
+                  <span className="ml-2 text-gray-600 dark:text-gray-400">加载配置中...</span>
+                </div>
+              ) : configSchema ? (
+                <div className="space-y-6">
+                  {/* 动态渲染配置表单 - 按sections分组 */}
+                  {Object.entries(configSchema.sections || {}).map(([sectionKey, section]: [string, any], sectionIndex: number) => (
+                    <div key={sectionKey || sectionIndex} className="space-y-4">
+                      {/* Section标题 */}
+                      {sectionKey && (
+                        <div className="border-b border-gray-200 dark:border-gray-700 pb-2">
+                          <h4 className="text-md font-medium text-gray-900 dark:text-white">
+                            {section.display_name || sectionKey}
+                          </h4>
+                          {section.description && (
+                            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                              {section.description}
+                            </p>
+                          )}
+                        </div>
+                      )}
+                      
+                      {/* Section字段 */}
+                      <div className="space-y-4 pl-4">
+                        {section.fields?.map((field: any, fieldIndex: number) => {
+                          const fieldPath = sectionKey ? `${sectionKey}.${field.name}` : field.name
+                          const fieldValue = getNestedValue(configData, fieldPath)
+                          
+                          return (
+                            <div key={field.name || fieldIndex} className="space-y-2">
+                              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                {field.display || field.name}
+                                {field.required && <span className="text-red-500 ml-1">*</span>}
+                              </label>
+                              
+                              {field.description && (
+                                <p className="text-xs text-gray-500 dark:text-gray-400">
+                                  {field.description}
+                                </p>
+                              )}
+                              
+                              {field.type === 'string' && (
+                                <input
+                                  type="text"
+                                  value={fieldValue !== undefined && fieldValue !== null ? fieldValue : (field.default || '')}
+                                  onChange={(e) => handleConfigDataChange(fieldPath, e.target.value)}
+                                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                  placeholder="请输入值"
+                                />
+                              )}
+                              
+                              {(field.type === 'integer' || field.type === 'number') && (
+                                <input
+                                  type="number"
+                                  value={fieldValue !== undefined && fieldValue !== null ? fieldValue.toString() : (field.default !== undefined ? field.default.toString() : '')}
+                                  onChange={(e) => {
+                                    const value = e.target.value
+                                    if (value === '') {
+                                      handleConfigDataChange(fieldPath, field.default !== undefined ? field.default : (field.type === 'integer' ? 0 : 0.0))
+                                    } else {
+                                      const numValue = field.type === 'integer' ? parseInt(value) : parseFloat(value)
+                                      handleConfigDataChange(fieldPath, isNaN(numValue) ? (field.default !== undefined ? field.default : (field.type === 'integer' ? 0 : 0.0)) : numValue)
+                                    }
+                                  }}
+                                  step={field.type === 'integer' ? '1' : 'any'}
+                                  min={field.min}
+                                  max={field.max}
+                                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                  placeholder="请输入数值"
+                                />
+                              )}
+                              
+                              {field.type === 'boolean' && (
+                                <div className="flex items-center space-x-3">
+                                  <label className="flex items-center cursor-pointer">
+                                    <input
+                                      type="checkbox"
+                                      checked={fieldValue !== undefined ? Boolean(fieldValue) : Boolean(field.default)}
+                                      onChange={(e) => {
+                                        handleConfigDataChange(fieldPath, e.target.checked)
+                                      }}
+                                      className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
+                                    />
+                                    <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
+                                      {fieldValue !== undefined ? Boolean(fieldValue) : Boolean(field.default) ? '启用' : '禁用'}
+                                    </span>
+                                  </label>
+                                  <span className="text-xs text-gray-500 dark:text-gray-400">
+                                    当前值: {fieldValue !== undefined ? (Boolean(fieldValue) ? 'true' : 'false') : (Boolean(field.default) ? 'true' : 'false')}
+                                  </span>
+                                </div>
+                              )}
+                              
+                              {(field.type === 'enum' || field.type === 'select') && (
+                                <select
+                                  value={fieldValue !== undefined && fieldValue !== null ? fieldValue : (field.default || '')}
+                                  onChange={(e) => handleConfigDataChange(fieldPath, e.target.value)}
+                                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                >
+                                  <option value="">请选择</option>
+                                  {field.options?.map((option: any) => {
+                                    // 支持两种格式：字符串数组和对象数组
+                                    if (typeof option === 'string') {
+                                      return (
+                                        <option key={option} value={option}>
+                                          {option}
+                                        </option>
+                                      )
+                                    } else if (option && typeof option === 'object' && option.value) {
+                                      return (
+                                        <option key={option.value} value={option.value}>
+                                          {option.label || option.value}
+                                        </option>
+                                      )
+                                    }
+                                    return null
+                                  })}
+                                </select>
+                              )}
+                              
+                              {(field.type === 'float' || field.type === 'double') && (
+                                <input
+                                  type="number"
+                                  value={fieldValue !== undefined && fieldValue !== null ? fieldValue.toString() : (field.default !== undefined ? field.default.toString() : '')}
+                                  onChange={(e) => {
+                                    const value = e.target.value
+                                    if (value === '') {
+                                      handleConfigDataChange(fieldPath, field.default !== undefined ? field.default : 0.0)
+                                    } else {
+                                      const numValue = parseFloat(value)
+                                      handleConfigDataChange(fieldPath, isNaN(numValue) ? (field.default !== undefined ? field.default : 0.0) : numValue)
+                                    }
+                                  }}
+                                  step="any"
+                                  min={field.min}
+                                  max={field.max}
+                                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                  placeholder="请输入小数值"
+                                />
+                              )}
+                              
+                              {/* 默认处理未知类型为文本输入 */}
+                               {!['string', 'integer', 'number', 'boolean', 'enum', 'select', 'float', 'double'].includes(field.type) && (
+                                <div className="space-y-2">
+                                  <input
+                                    type="text"
+                                    value={fieldValue !== undefined && fieldValue !== null ? fieldValue.toString() : (field.default !== undefined ? field.default.toString() : '')}
+                                    onChange={(e) => handleConfigDataChange(fieldPath, e.target.value)}
+                                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                    placeholder="请输入值"
+                                  />
+                                  <p className="text-xs text-yellow-600 dark:text-yellow-400">
+                                    未知类型 '{field.type}' - 作为文本处理
+                                  </p>
+                                </div>
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8">
+                  <Settings className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                  <p className="text-gray-600 dark:text-gray-400">
+                    请选择实例和配置文件开始编辑
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+          
+          {/* 空状态 */}
+          {(!selectedInstance || !selectedConfigId) && (
+            <div className="text-center py-12">
+              <Settings className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
+                游戏配置文件管理
+              </h3>
+              <p className="text-gray-600 dark:text-gray-400 mb-4">
+                选择实例和配置文件来开始可视化编辑游戏配置
+              </p>
             </div>
           )}
         </div>

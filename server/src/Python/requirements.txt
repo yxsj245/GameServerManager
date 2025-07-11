@@ -1,0 +1,6 @@
+# Python dependencies for game config manager
+ruamel.yaml>=0.17.0
+pyhocon>=0.3.59
+toml>=0.10.2
+configobj>=5.0.6
+Flask>=2.0.0
