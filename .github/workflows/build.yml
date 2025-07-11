@@ -1,0 +1,113 @@
+name: Build Package
+
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: "选择构建平台"
+        required: true
+        type: choice
+        options:
+          - all
+          - linux
+          - windows
+        default: "all"
+  push:
+    tags:
+      - 'v*'
+  release:
+    types: [published]
+
+jobs:
+  build_linux:
+    if: github.event.inputs.platform == 'all' || github.event.inputs.platform == 'linux' || github.event_name == 'push' || github.event_name == 'release'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.16.0'
+          cache: 'npm'
+      - name: Install dependencies
+        run: |
+          npm install
+          cd client && npm install
+          cd ../server && npm install
+      - name: Build package
+        run: npm run package
+        env:
+          CI: true
+          NODE_ENV: production
+      - name: Archive build files
+        run: |
+          cd dist
+          tar czf ../gsm3-management-panel-linux.tar.gz package/
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: gsm3-management-panel-linux-build
+          path: gsm3-management-panel-linux.tar.gz
+          retention-days: 30
+
+  build_windows:
+    if: github.event.inputs.platform == 'all' || github.event.inputs.platform == 'windows' || github.event_name == 'push' || github.event_name == 'release'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.16.0'
+          cache: 'npm'
+      - name: Install dependencies
+        run: |
+          npm install
+          cd client
+          npm install
+          cd ..
+          cd server
+          npm install
+          cd ..
+      - name: Build package
+        run: npm run package
+        env:
+          CI: true
+          NODE_ENV: production
+      - name: Archive build files
+        shell: pwsh
+        run: |
+          cd dist
+          Compress-Archive -Path "package" -DestinationPath "../gsm3-management-panel-windows.zip" -Force
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: gsm3-management-panel-windows-build
+          path: gsm3-management-panel-windows.zip
+          retention-days: 30
+
+  # 创建发布版本（仅在推送标签时触发）
+  create_release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [build_linux, build_windows]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download Linux artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: gsm3-management-panel-linux-build
+      - name: Download Windows artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: gsm3-management-panel-windows-build
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            gsm3-management-panel-linux.tar.gz
+            gsm3-management-panel-windows.zip
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
