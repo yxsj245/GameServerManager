@@ -17,7 +17,6 @@ interface MusicState {
   currentTime: number
   duration: number
   isShuffled: boolean
-  repeatMode: 'none' | 'one' | 'all'
   seekTime: number | null // 用于通知GlobalMusicPlayer进行seek操作
   
   // Actions
@@ -32,7 +31,6 @@ interface MusicState {
   setCurrentTime: (time: number) => void
   setDuration: (duration: number) => void
   setIsShuffled: (shuffled: boolean) => void
-  setRepeatMode: (mode: 'none' | 'one' | 'all') => void
   seekTo: (time: number) => void
   clearSeek: () => void
   playTrack: (index: number) => void
@@ -50,7 +48,6 @@ export const useMusicStore = create<MusicState>()(persist((set, get) => ({
   currentTime: 0,
   duration: 0,
   isShuffled: false,
-  repeatMode: 'none',
   seekTime: null,
   
   addToPlaylist: (files: MusicFile[]) => {
@@ -142,9 +139,7 @@ export const useMusicStore = create<MusicState>()(persist((set, get) => ({
     set({ isShuffled: shuffled })
   },
   
-  setRepeatMode: (mode: 'none' | 'one' | 'all') => {
-    set({ repeatMode: mode })
-  },
+
   
   seekTo: (time: number) => {
     set({ seekTime: time, currentTime: time })
@@ -166,7 +161,7 @@ export const useMusicStore = create<MusicState>()(persist((set, get) => ({
   },
   
   nextTrack: () => {
-    const { playlist, currentIndex, isShuffled, repeatMode } = get()
+    const { playlist, currentIndex, isShuffled } = get()
     
     if (playlist.length === 0) return
     
@@ -181,13 +176,8 @@ export const useMusicStore = create<MusicState>()(persist((set, get) => ({
         } while (newIndex === currentIndex)
       }
     } else {
+      // 非随机播放使用循环播放
       newIndex = currentIndex < playlist.length - 1 ? currentIndex + 1 : 0
-    }
-    
-    // 如果是无循环模式且到了最后一首
-    if (repeatMode === 'none' && currentIndex === playlist.length - 1 && !isShuffled) {
-      set({ isPlaying: false })
-      return
     }
     
     set({ 
@@ -232,7 +222,6 @@ export const useMusicStore = create<MusicState>()(persist((set, get) => ({
     volume: state.volume,
     isMuted: state.isMuted,
     isShuffled: state.isShuffled,
-    repeatMode: state.repeatMode,
     // 不持久化播放状态和时间相关的数据
     // isPlaying: false,
     // currentTime: 0,

@@ -10,8 +10,7 @@ import {
   Plus,
   X,
   List,
-  Shuffle,
-  Repeat
+  Shuffle
 } from 'lucide-react'
 import { Button, Slider, Modal, Empty, message } from 'antd'
 import { useMusicStore } from '@/stores/musicStore'
@@ -32,14 +31,12 @@ const MusicPlayer: React.FC<MusicPlayerProps> = ({ className = '' }) => {
     currentTime,
     duration,
     isShuffled,
-    repeatMode,
     setIsPlaying,
     setVolume,
     setIsMuted,
     setCurrentTime,
     setDuration,
     setIsShuffled,
-    setRepeatMode,
     removeFromPlaylist,
     clearPlaylist,
     playTrack,
@@ -132,25 +129,7 @@ const MusicPlayer: React.FC<MusicPlayerProps> = ({ className = '' }) => {
     setIsShuffled(!isShuffled)
   }
   
-  // 切换循环模式
-  const toggleRepeat = () => {
-    const modes: Array<'none' | 'one' | 'all'> = ['none', 'one', 'all']
-    const currentModeIndex = modes.indexOf(repeatMode)
-    const nextMode = modes[(currentModeIndex + 1) % modes.length]
-    setRepeatMode(nextMode)
-  }
-  
-  // 获取循环模式图标
-  const getRepeatIcon = () => {
-    switch (repeatMode) {
-      case 'one':
-        return <Repeat className="w-4 h-4" />
-      case 'all':
-        return <Repeat className="w-4 h-4" />
-      default:
-        return <Repeat className="w-4 h-4 opacity-50" />
-    }
-  }
+
   
   return (
     <div className={`card-game p-6 ${className}`}>
@@ -252,16 +231,7 @@ const MusicPlayer: React.FC<MusicPlayerProps> = ({ className = '' }) => {
               className="text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400"
             />
             
-            {/* 循环模式 */}
-            <Button
-              type="text"
-              size="small"
-              icon={getRepeatIcon()}
-              onClick={toggleRepeat}
-              className={`text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 ${
-                repeatMode !== 'none' ? 'text-blue-500' : ''
-              }`}
-            />
+
           </div>
           
           {/* 音量控制 */}

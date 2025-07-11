@@ -13,7 +13,6 @@ const GlobalMusicPlayer: React.FC = () => {
     isMuted,
     currentTime,
     duration,
-    repeatMode,
     setIsPlaying,
     setVolume,
     setIsMuted,
@@ -52,21 +51,8 @@ const GlobalMusicPlayer: React.FC = () => {
     }
     
     const handleEnded = () => {
-      console.log('音频播放结束，当前循环模式:', repeatMode)
-      if (repeatMode === 'one') {
-        // 单曲循环，重新播放当前歌曲
-        console.log('单曲循环模式 - 重新播放当前歌曲')
-        if (audioRef.current) {
-          audioRef.current.currentTime = 0
-          audioRef.current.play().catch(error => {
-            console.error('单曲循环播放失败:', error)
-          })
-        }
-      } else {
-        // 其他模式，跳到下一首
-        console.log('非单曲循环模式 - 调用nextTrack')
-        nextTrack()
-      }
+      console.log('音频播放结束，自动播放下一首')
+      nextTrack()
     }
     
     const handleLoadedMetadata = () => {
@@ -84,7 +70,7 @@ const GlobalMusicPlayer: React.FC = () => {
       audio.removeEventListener('ended', handleEnded)
       audio.removeEventListener('loadedmetadata', handleLoadedMetadata)
     }
-  }, [currentTrack, repeatMode, nextTrack])
+  }, [currentTrack, nextTrack])
   
   // 监听音量变化
   useEffect(() => {
