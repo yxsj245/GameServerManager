@@ -170,19 +170,21 @@ export const useMusicStore = create<MusicState>()(persist((set, get) => ({
     
     if (playlist.length === 0) return
     
-    if (repeatMode === 'one') {
-      // 单曲循环，重新播放当前歌曲
-      return
-    }
-    
     let newIndex
     if (isShuffled) {
-      newIndex = Math.floor(Math.random() * playlist.length)
+      // 随机播放：确保不会选择当前正在播放的歌曲（除非只有一首歌）
+      if (playlist.length === 1) {
+        newIndex = 0
+      } else {
+        do {
+          newIndex = Math.floor(Math.random() * playlist.length)
+        } while (newIndex === currentIndex)
+      }
     } else {
       newIndex = currentIndex < playlist.length - 1 ? currentIndex + 1 : 0
     }
     
-    // 如果是列表循环模式且到了最后一首
+    // 如果是无循环模式且到了最后一首
     if (repeatMode === 'none' && currentIndex === playlist.length - 1 && !isShuffled) {
       set({ isPlaying: false })
       return
@@ -202,7 +204,14 @@ export const useMusicStore = create<MusicState>()(persist((set, get) => ({
     
     let newIndex
     if (isShuffled) {
-      newIndex = Math.floor(Math.random() * playlist.length)
+      // 随机播放：确保不会选择当前正在播放的歌曲（除非只有一首歌）
+      if (playlist.length === 1) {
+        newIndex = 0
+      } else {
+        do {
+          newIndex = Math.floor(Math.random() * playlist.length)
+        } while (newIndex === currentIndex)
+      }
     } else {
       newIndex = currentIndex > 0 ? currentIndex - 1 : playlist.length - 1
     }
