@@ -480,7 +480,7 @@ router.post('/:id/input', authenticateToken, (req: Request, res: Response) => {
   }
 })
 
-// 获取当前文件的目录
+// 获取当前文件的目录路径（ES模块兼容）
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
@@ -508,7 +508,6 @@ function getPythonCommand(): string {
 // 检查Python命令是否可用
 function checkPythonCommand(command: string): Promise<boolean> {
   return new Promise((resolve) => {
-    const { spawn } = require('child_process')
     const testProcess = spawn(command, ['--version'], { stdio: 'ignore' })
     
     testProcess.on('close', (code) => {
