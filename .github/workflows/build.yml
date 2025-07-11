@@ -21,14 +21,38 @@ on:
 jobs:
   build_linux:
     if: github.event.inputs.platform == 'all' || github.event.inputs.platform == 'linux' || github.event_name == 'push' || github.event_name == 'release'
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Setup Node.js
+      - name: Setup Node.js for build
         uses: actions/setup-node@v4
         with:
           node-version: '22.16.0'
           cache: 'npm'
+      - name: Download Linux Node.js
+        shell: pwsh
+        run: |
+          $nodeVersion = "22.16.0"
+          $nodeUrl = "https://nodejs.org/dist/v$nodeVersion/node-v$nodeVersion-linux-x64.tar.xz"
+          Write-Host "Downloading Node.js for Linux..."
+          Invoke-WebRequest -Uri $nodeUrl -OutFile "node-linux.tar.xz"
+          
+          # 解压文件
+          Write-Host "Extracting Node.js..."
+          tar -xf node-linux.tar.xz
+          
+          # 重命名为node文件夹
+          if (Test-Path "node-v$nodeVersion-linux-x64") {
+            Rename-Item "node-v$nodeVersion-linux-x64" "node"
+          }
+          
+          # 验证文件结构
+          if (Test-Path "node/bin/node") {
+            Write-Host "Node.js for Linux downloaded and extracted successfully"
+          } else {
+            Write-Error "Failed to extract Node.js properly"
+            exit 1
+          }
       - name: Install dependencies
         run: |
           npm install
@@ -39,15 +63,17 @@ jobs:
         env:
           CI: true
           NODE_ENV: production
+          BUILD_TARGET: linux
       - name: Archive build files
+        shell: pwsh
         run: |
           cd dist
-          tar czf ../gsm3-management-panel-linux.tar.gz package/
+          Compress-Archive -Path "package" -DestinationPath "../gsm3-management-panel-linux.zip" -Force
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: gsm3-management-panel-linux-build
-          path: gsm3-management-panel-linux.tar.gz
+          path: gsm3-management-panel-linux.zip
           retention-days: 30
 
   build_windows:
@@ -60,6 +86,34 @@ jobs:
         with:
           node-version: '22.16.0'
           cache: 'npm'
+      - name: Download Windows Node.js
+        shell: pwsh
+        run: |
+          $nodeVersion = "22.16.0"
+          $nodeUrl = "https://nodejs.org/dist/v$nodeVersion/node-v$nodeVersion-win-x64.zip"
+          Write-Host "Downloading Node.js for Windows..."
+          Invoke-WebRequest -Uri $nodeUrl -OutFile "node-windows.zip"
+          
+          # 解压到临时目录
+          Write-Host "Extracting Node.js..."
+          Expand-Archive -Path "node-windows.zip" -DestinationPath "temp-node" -Force
+          
+          # 移动到server目录
+          if (Test-Path "temp-node/node-v$nodeVersion-win-x64") {
+            if (Test-Path "server/node") {
+              Remove-Item "server/node" -Recurse -Force
+            }
+            Move-Item "temp-node/node-v$nodeVersion-win-x64" "server/node"
+            Remove-Item "temp-node" -Recurse -Force
+          }
+          
+          # 验证文件结构
+          if (Test-Path "server/node/node.exe") {
+            Write-Host "Node.js for Windows downloaded and placed in server directory successfully"
+          } else {
+            Write-Error "Failed to place Node.js in server directory"
+            exit 1
+          }
       - name: Install dependencies
         run: |
           npm install
@@ -74,6 +128,7 @@ jobs:
         env:
           CI: true
           NODE_ENV: production
+          BUILD_TARGET: windows
       - name: Archive build files
         shell: pwsh
         run: |
@@ -104,7 +159,7 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           files: |
-            gsm3-management-panel-linux.tar.gz
+            gsm3-management-panel-linux.zip
             gsm3-management-panel-windows.zip
           generate_release_notes: true
           draft: false

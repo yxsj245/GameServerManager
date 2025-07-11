@@ -109,8 +109,7 @@ pause`
     const startShScript = `#!/bin/bash
 echo "正在启动GSM3管理面板..."
 chmod +x server/PTY/pty_linux_x64
-cd server
-/opt/node-v22.17.0-linux-x64/bin/node index.js`
+./node/bin/node server/index.js`
     
     await fs.writeFile(
       path.join(packageDir, 'start.sh'),
