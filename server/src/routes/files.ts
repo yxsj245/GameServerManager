@@ -153,7 +153,7 @@ router.get('/list', authenticateToken, async (req: Request, res: Response) => {
   }
 })
 
-// 读取文件内容
+// 读取文件内容（流式传输）
 router.get('/read', authenticateToken, async (req: Request, res: Response) => {
   try {
     const { path: filePath } = req.query
@@ -181,6 +181,49 @@ router.get('/read', authenticateToken, async (req: Request, res: Response) => {
     // 创建文件流并 pipe 到响应
     const stream = createReadStream(filePath as string)
     stream.pipe(res)
+  } catch (error: any) {
+    if (error.code === 'ENOENT') {
+      return res.status(404).json({ status: 'error', message: '文件未找到' })
+    }
+    res.status(500).json({
+      status: 'error',
+      message: error.message
+    })
+  }
+})
+
+// 读取文本文件内容（JSON格式）
+router.get('/read-content', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const { path: filePath } = req.query
+
+    if (!isValidPath(filePath as string)) {
+      return res.status(400).json({
+        status: 'error',
+        message: '无效的路径'
+      })
+    }
+
+    const stats = await fs.stat(filePath as string)
+    if (!stats.isFile()) {
+      return res.status(400).json({
+        status: 'error',
+        message: '指定路径不是文件'
+      })
+    }
+
+    // 读取文件内容
+    const content = await fs.readFile(filePath as string, 'utf-8')
+    
+    res.json({
+      status: 'success',
+      data: {
+        content: content,
+        encoding: 'utf-8',
+        size: stats.size,
+        modified: stats.mtime
+      }
+    })
   } catch (error: any) {
     if (error.code === 'ENOENT') {
       return res.status(404).json({ status: 'error', message: '文件未找到' })

@@ -554,8 +554,10 @@ function installPythonDependencies(): Promise<void> {
     
     function tryInstallWithMirror() {
       if (currentMirrorIndex >= mirrors.length) {
-        logger.warn('所有镜像源都尝试失败，将尝试直接运行脚本')
-        resolve() // 即使安装失败也继续，可能依赖已经存在
+        pythonFailureCount++
+        pythonEnvironmentFailed = true
+        logger.error(`所有镜像源都尝试失败，Python依赖安装失败 (第${pythonFailureCount}次)`)
+        reject(new Error('Python依赖安装失败：所有镜像源都不可用'))
         return
       }
       
@@ -595,6 +597,14 @@ function installPythonDependencies(): Promise<void> {
       
       installProcess.on('error', (error) => {
         logger.warn(`${mirror.name}启动失败: ${error.message}`)
+        // 如果是最后一个镜像源，更新失败状态
+        if (currentMirrorIndex === mirrors.length - 1) {
+          pythonFailureCount++
+          pythonEnvironmentFailed = true
+          logger.error(`pip命令启动失败 (第${pythonFailureCount}次): ${error.message}`)
+          reject(new Error(`pip命令启动失败: ${error.message}`))
+          return
+        }
         currentMirrorIndex++
         tryInstallWithMirror() // 尝试下一个镜像源
       })

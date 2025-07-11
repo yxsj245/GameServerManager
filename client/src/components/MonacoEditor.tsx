@@ -3,6 +3,7 @@ import { Editor } from '@monaco-editor/react'
 import { useThemeStore } from '@/stores/themeStore'
 import { getFileExtension } from '@/utils/format'
 import type { editor } from 'monaco-editor'
+import '@/utils/monaco' // 确保monaco配置被加载
 
 interface MonacoEditorProps {
   value: string

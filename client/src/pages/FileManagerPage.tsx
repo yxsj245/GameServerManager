@@ -62,7 +62,7 @@ import { fileApiClient } from '@/utils/fileApi'
 import { isTextFile, isImageFile } from '@/utils/format'
 import { normalizePath, getDirectoryPath, getBasename } from '@/utils/pathUtils'
 
-const { TabPane } = Tabs
+
 
 const FileManagerPage: React.FC = () => {
   const {
@@ -1046,35 +1046,33 @@ const FileManagerPage: React.FC = () => {
               }
             }}
             className="h-full"
-          >
-            {Array.from(openFiles.entries()).map(([filePath, content]) => (
-              <TabPane
-                key={filePath}
-                tab={
-                  <span className="flex items-center">
-                    <FileTextOutlined className="mr-1" />
-                    {getBasename(filePath)}
-                    {isFileModified(filePath) && (
-                      <span 
-                        className="ml-1 w-2 h-2 bg-orange-500 rounded-full" 
-                        title="文件已修改"
-                      />
-                    )}
-                  </span>
-                }
-                closable
-              >
+            items={Array.from(openFiles.entries()).map(([filePath, content]) => ({
+              key: filePath,
+              label: (
+                <span className="flex items-center">
+                  <FileTextOutlined className="mr-1" />
+                  {getBasename(filePath)}
+                  {isFileModified(filePath) && (
+                    <span 
+                      className="ml-1 w-2 h-2 bg-orange-500 rounded-full" 
+                      title="文件已修改"
+                    />
+                  )}
+                </span>
+              ),
+              closable: true,
+              children: (
                 <div style={{ height: 'calc(80vh - 100px)' }}>
                   <MonacoEditor
-                    value={content}
+                    value={content || ''}
                     onChange={(value) => handleEditorChange(filePath, value)}
                     fileName={getBasename(filePath)}
                     onSave={(value) => handleSaveFile(value)}
                   />
                 </div>
-              </TabPane>
-            ))}
-          </Tabs>
+              )
+            }))}
+          />
         )}
       </Modal>
       

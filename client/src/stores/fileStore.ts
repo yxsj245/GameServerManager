@@ -255,10 +255,16 @@ export const useFileStore = create<FileStore>((set, get) => ({
     
     try {
       const fileContent = await fileApiClient.readFile(path)
+      
+      // 检查返回的数据是否有效
+      if (!fileContent || typeof fileContent.content === 'undefined') {
+        throw new Error('文件内容为空或格式错误')
+      }
+      
       const newOpenFiles = new Map(openFiles)
       const newOriginalFiles = new Map(originalFiles)
-      newOpenFiles.set(path, fileContent.content)
-      newOriginalFiles.set(path, fileContent.content)
+      newOpenFiles.set(path, fileContent.content || '')
+      newOriginalFiles.set(path, fileContent.content || '')
       
       set({ 
         openFiles: newOpenFiles,
@@ -267,6 +273,7 @@ export const useFileStore = create<FileStore>((set, get) => ({
       })
     } catch (error: any) {
       set({ error: error.message || '打开文件失败' })
+      console.error('打开文件失败:', error)
     }
   },
 

@@ -39,7 +39,7 @@ export class FileApiClient {
 
   // 读取文件内容
   async readFile(path: string, encoding: string = 'utf-8'): Promise<FileContent> {
-    const response = await this.client.get(`${API_BASE}/read`, {
+    const response = await this.client.get(`${API_BASE}/read-content`, {
       params: { path, encoding }
     })
     return response.data.data
