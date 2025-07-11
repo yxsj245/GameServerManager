@@ -21,7 +21,7 @@ on:
 jobs:
   build_linux:
     if: github.event.inputs.platform == 'all' || github.event.inputs.platform == 'linux' || github.event_name == 'push' || github.event_name == 'release'
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: Setup Node.js for build
@@ -29,46 +29,21 @@ jobs:
         with:
           node-version: '22.16.0'
           cache: 'npm'
-      - name: Download Linux Node.js
-        shell: pwsh
-        run: |
-          $nodeVersion = "22.16.0"
-          $nodeUrl = "https://nodejs.org/dist/v$nodeVersion/node-v$nodeVersion-linux-x64.tar.xz"
-          Write-Host "Downloading Node.js for Linux..."
-          Invoke-WebRequest -Uri $nodeUrl -OutFile "node-linux.tar.xz"
-          
-          # 解压文件
-          Write-Host "Extracting Node.js..."
-          tar -xf node-linux.tar.xz
-          
-          # 重命名为node文件夹
-          if (Test-Path "node-v$nodeVersion-linux-x64") {
-            Rename-Item "node-v$nodeVersion-linux-x64" "node"
-          }
-          
-          # 验证文件结构
-          if (Test-Path "node/bin/node") {
-            Write-Host "Node.js for Linux downloaded and extracted successfully"
-          } else {
-            Write-Error "Failed to extract Node.js properly"
-            exit 1
-          }
+
       - name: Install dependencies
         run: |
           npm install
           cd client && npm install
           cd ../server && npm install
       - name: Build package
-        run: npm run package
+        run: npm run package:linux
         env:
           CI: true
           NODE_ENV: production
-          BUILD_TARGET: linux
       - name: Archive build files
-        shell: pwsh
         run: |
           cd dist
-          Compress-Archive -Path "package" -DestinationPath "../gsm3-management-panel-linux.zip" -Force
+          zip -r ../gsm3-management-panel-linux.zip package/
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -124,11 +99,10 @@ jobs:
           npm install
           cd ..
       - name: Build package
-        run: npm run package
+        run: npm run package:windows
         env:
           CI: true
           NODE_ENV: production
-          BUILD_TARGET: windows
       - name: Archive build files
         shell: pwsh
         run: |

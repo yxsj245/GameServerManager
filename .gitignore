@@ -7,7 +7,15 @@ yarn-error.log*
 lerna-debug.log*
 panel/public/
 *.code-workspace
-data/
+
+config.json
+instances.json
+login_attempts.json
+scheduled-tasks.json
+steamcmd-config.json
+terminal-sessions.json
+users.json
+
 dist/
 out/
 lib/

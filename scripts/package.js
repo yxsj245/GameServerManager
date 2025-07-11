@@ -2,16 +2,108 @@ const fs = require('fs-extra')
 const path = require('path')
 const archiver = require('archiver')
 const { execSync } = require('child_process')
+const https = require('https')
+const { pipeline } = require('stream')
+const { promisify } = require('util')
+const pipelineAsync = promisify(pipeline)
 
 const packageName = 'gsm3-management-panel'
 const version = require('../package.json').version
 const distDir = path.join(__dirname, '..', 'dist')
 const packageDir = path.join(distDir, 'package')
-const outputFile = path.join(distDir, `${packageName}-v${version}.zip`)
+
+// 获取命令行参数
+const args = process.argv.slice(2)
+const buildTarget = args.find(arg => arg.startsWith('--target='))?.split('=')[1]
+const outputFile = buildTarget 
+  ? path.join(distDir, `${packageName}-${buildTarget}-v${version}.zip`)
+  : path.join(distDir, `${packageName}-v${version}.zip`)
+
+const nodeVersion = '22.16.0'
+
+// 下载Node.js函数
+async function downloadNodejs(platform) {
+  const nodeUrls = {
+    linux: `https://nodejs.org/dist/v${nodeVersion}/node-v${nodeVersion}-linux-x64.tar.xz`,
+    windows: `https://nodejs.org/dist/v${nodeVersion}/node-v${nodeVersion}-win-x64.zip`
+  }
+  
+  const url = nodeUrls[platform]
+  if (!url) {
+    throw new Error(`不支持的平台: ${platform}`)
+  }
+  
+  const fileName = url.split('/').pop()
+  const filePath = path.join(__dirname, '..', fileName)
+  
+  console.log(`📥 正在下载 Node.js ${nodeVersion} for ${platform}...`)
+  
+  return new Promise((resolve, reject) => {
+    const file = fs.createWriteStream(filePath)
+    https.get(url, (response) => {
+      if (response.statusCode !== 200) {
+        reject(new Error(`下载失败: ${response.statusCode}`))
+        return
+      }
+      
+      response.pipe(file)
+      file.on('finish', () => {
+        file.close()
+        console.log(`✅ Node.js 下载完成: ${fileName}`)
+        resolve(filePath)
+      })
+    }).on('error', (err) => {
+      fs.unlink(filePath, () => {}) // 删除不完整的文件
+      reject(err)
+    })
+  })
+}
+
+// 解压和部署Node.js
+async function deployNodejs(platform, downloadedFile) {
+  const projectRoot = path.join(__dirname, '..')
+  
+  if (platform === 'linux') {
+    console.log('📦 正在解压 Linux Node.js...')
+    // 解压到临时目录
+    execSync(`tar -xf "${downloadedFile}"`, { cwd: projectRoot })
+    
+    // 重命名为node文件夹
+    const extractedDir = path.join(projectRoot, `node-v${nodeVersion}-linux-x64`)
+    const targetDir = path.join(packageDir, '..', 'node')
+    
+    if (await fs.pathExists(extractedDir)) {
+      await fs.move(extractedDir, targetDir)
+      console.log('✅ Linux Node.js 部署到项目根目录/node')
+    } else {
+      throw new Error('Linux Node.js 解压失败')
+    }
+  } else if (platform === 'windows') {
+    console.log('📦 正在解压 Windows Node.js...')
+    // 解压到临时目录
+    execSync(`powershell -Command "Expand-Archive -Path '${downloadedFile}' -DestinationPath '${projectRoot}/temp-node' -Force"`, { cwd: projectRoot })
+    
+    // 移动到server目录
+    const extractedDir = path.join(projectRoot, 'temp-node', `node-v${nodeVersion}-win-x64`)
+    const targetDir = path.join(packageDir, 'server', 'node')
+    
+    if (await fs.pathExists(extractedDir)) {
+      await fs.ensureDir(path.dirname(targetDir))
+      await fs.move(extractedDir, targetDir)
+      await fs.remove(path.join(projectRoot, 'temp-node'))
+      console.log('✅ Windows Node.js 部署到 server/node')
+    } else {
+      throw new Error('Windows Node.js 解压失败')
+    }
+  }
+  
+  // 清理下载的文件
+  await fs.remove(downloadedFile)
+}
 
 async function createPackage() {
   try {
-    console.log('🚀 开始创建生产包...')
+    console.log(`🚀 开始创建生产包${buildTarget ? ` (目标平台: ${buildTarget})` : ''}...`)
     
     // 清理并创建目录
     await fs.remove(distDir)
@@ -92,29 +184,74 @@ async function createPackage() {
       path.join(packageDir, 'public')
     )
     
+    // 根据目标平台下载和部署Node.js
+    if (buildTarget) {
+      const downloadedNodeFile = await downloadNodejs(buildTarget)
+      await deployNodejs(buildTarget, downloadedNodeFile)
+    } else {
+      console.log('ℹ️  未指定目标平台，跳过Node.js下载')
+    }
+    
     console.log('📝 创建启动脚本...')
-    // 创建启动脚本
-    const startScript = `@echo off
+    // 根据目标平台创建启动脚本
+    if (buildTarget === 'windows') {
+      const startScript = `@echo off
 echo 正在启动GSM3管理面板...
 cd server
-node_app.exe index.js
+node\node.exe index.js
 pause`
-    
-    await fs.writeFile(
-      path.join(packageDir, 'start.bat'),
-      startScript
-    )
-    
-    // 创建Linux启动脚本
-    const startShScript = `#!/bin/bash
+      
+      await fs.writeFile(
+        path.join(packageDir, 'start.bat'),
+        startScript
+      )
+    } else if (buildTarget === 'linux') {
+      const startShScript = `#!/bin/bash
 echo "正在启动GSM3管理面板..."
 chmod +x server/PTY/pty_linux_x64
 ./node/bin/node server/index.js`
-    
-    await fs.writeFile(
-      path.join(packageDir, 'start.sh'),
-      startShScript
-    )
+      
+      await fs.writeFile(
+        path.join(packageDir, 'start.sh'),
+        startShScript
+      )
+      
+      // 设置执行权限
+      try {
+        execSync(`chmod +x "${path.join(packageDir, 'start.sh')}"`)
+      } catch (e) {
+        console.log('⚠️  无法设置执行权限，请在Linux系统中手动设置')
+      }
+    } else {
+      // 默认创建通用启动脚本（需要系统已安装Node.js）
+      const startScript = `@echo off
+echo 正在启动GSM3管理面板...
+cd server
+node index.js
+pause`
+      
+      await fs.writeFile(
+        path.join(packageDir, 'start.bat'),
+        startScript
+      )
+      
+      const startShScript = `#!/bin/bash
+echo "正在启动GSM3管理面板..."
+chmod +x server/PTY/pty_linux_x64
+node server/index.js`
+      
+      await fs.writeFile(
+        path.join(packageDir, 'start.sh'),
+        startShScript
+      )
+      
+      // 设置执行权限
+      try {
+        execSync(`chmod +x "${path.join(packageDir, 'start.sh')}"`)
+      } catch (e) {
+        console.log('⚠️  无法设置执行权限，请在Linux系统中手动设置')
+      }
+    }
     
     console.log('🐍 创建Python依赖安装脚本...')
     // 创建Python依赖安装脚本
@@ -142,12 +279,11 @@ echo "Python依赖安装完成！"`
       installPythonDepsShScript
     )
     
-    // 设置执行权限
+    // 设置Python脚本执行权限
     try {
-      execSync(`chmod +x "${path.join(packageDir, 'start.sh')}"`)
       execSync(`chmod +x "${path.join(packageDir, 'install-python-deps.sh')}"`)
     } catch (e) {
-      // Windows环境下忽略chmod错误
+      console.log('⚠️  无法设置Python脚本执行权限，请在Linux系统中手动设置')
     }
     
     console.log('📋 创建说明文件...')
@@ -156,7 +292,7 @@ echo "Python依赖安装完成！"`
 
 ## 安装说明
 
-1. 确保已安装 Node.js (版本 >= 18)
+1. ${buildTarget ? `本包已内置 Node.js ${nodeVersion}，无需单独安装` : '确保已安装 Node.js (版本 >= 18)'}
 2. 确保已安装 Python (版本 >= 3.8) 和 pip
 3. 解压缩包到目标目录
 4. 安装Python依赖:
@@ -195,7 +331,7 @@ http://localhost:3001
 
 ## 注意事项
 
-- Node.js依赖已预装，但需要手动安装Python依赖
+- ${buildTarget ? `本包已内置 Node.js ${nodeVersion} 和所有依赖` : 'Node.js依赖已预装'}，但需要手动安装Python依赖
 - 首次运行会自动创建默认管理员账户 (admin/admin123)
 - 请立即登录并修改默认密码
 - 确保防火墙允许相关端口访问
