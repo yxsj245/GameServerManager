@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '@/stores/authStore'
-import { SystemStats, SystemInfo, ProcessInfo } from '@/types'
+import { SystemStats, SystemInfo, ProcessInfo, WeatherData } from '@/types'
 import socketClient from '@/utils/socket'
 import apiClient from '@/utils/api'
 import {
@@ -15,6 +15,44 @@ import {
   ArrowRight
 } from 'lucide-react'
 
+// 城市代码映射
+const cityOptions = [
+  { value: '101010100', label: '北京市' },
+  { value: '101020100', label: '上海市' },
+  { value: '101280101', label: '广州市' },
+  { value: '101280601', label: '深圳市' },
+  { value: '101210101', label: '杭州市' },
+  { value: '101030100', label: '天津市' },
+  { value: '101200101', label: '武汉市' },
+  { value: '101270101', label: '成都市' },
+  { value: '101110101', label: '西安市' },
+  { value: '101190401', label: '苏州市' },
+  { value: '101230101', label: '福州市' },
+  { value: '101040100', label: '重庆市' },
+  { value: '101250101', label: '长沙市' },
+  { value: '101230201', label: '厦门市' },
+  { value: '101180101', label: '郑州市' },
+  { value: '101120101', label: '济南市' },
+  { value: '101190101', label: '南京市' },
+  { value: '101260101', label: '合肥市' },
+  { value: '101300101', label: '南宁市' },
+  { value: '101310101', label: '海口市' },
+  { value: '101320101', label: '石家庄市' },
+  { value: '101330101', label: '太原市' },
+  { value: '101340101', label: '沈阳市' },
+  { value: '101050101', label: '哈尔滨市' },
+  { value: '101060101', label: '长春市' },
+  { value: '101070101', label: '呼和浩特市' },
+  { value: '101080101', label: '乌鲁木齐市' },
+  { value: '101090101', label: '银川市' },
+  { value: '101100101', label: '西宁市' },
+  { value: '101150101', label: '兰州市' },
+  { value: '101160101', label: '拉萨市' },
+  { value: '101240101', label: '南昌市' },
+  { value: '101290101', label: '昆明市' },
+  { value: '101170101', label: '贵阳市' }
+]
+
 const HomePage: React.FC = () => {
   const { user } = useAuthStore()
   const navigate = useNavigate()
@@ -22,6 +60,9 @@ const HomePage: React.FC = () => {
   const [systemInfo, setSystemInfo] = useState<SystemInfo | null>(null)
   const [processList, setProcessList] = useState<ProcessInfo[]>([])
   const [connected, setConnected] = useState(socketClient.isConnected())
+  const [currentDateTime, setCurrentDateTime] = useState(new Date())
+  const [weatherData, setWeatherData] = useState<WeatherData | null>(null)
+  const [weatherLoading, setWeatherLoading] = useState(false)
   
   useEffect(() => {
     // 获取系统信息
@@ -54,6 +95,58 @@ const HomePage: React.FC = () => {
     // 设置定时刷新终端进程列表
     const processInterval = setInterval(fetchTerminalProcesses, 5000) // 每5秒刷新一次
     
+    // 设置定时更新日期时间
+    const dateTimeInterval = setInterval(() => {
+      setCurrentDateTime(new Date())
+    }, 1000) // 每秒更新一次
+    
+
+
+    // 获取天气信息
+    const fetchWeatherData = async () => {
+      try {
+        setWeatherLoading(true)
+        
+        // 从localStorage获取天气城市设置
+        let weatherCity = '101010100' // 默认北京
+        try {
+          const webSettings = localStorage.getItem('webSettings')
+          if (webSettings) {
+            const settings = JSON.parse(webSettings)
+            if (settings.weatherCity) {
+              weatherCity = settings.weatherCity
+            }
+          }
+        } catch (error) {
+          console.warn('读取天气城市设置失败:', error)
+        }
+        
+        const response = await fetch(`/api/weather/current?city=${weatherCity}`)
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`)
+        }
+        
+        const result = await response.json()
+        
+        if (result.success && result.data) {
+          // 添加选择的城市代码到天气数据中
+          setWeatherData({ ...result.data, selectedCityCode: weatherCity })
+        } else {
+          throw new Error('天气API返回错误数据')
+        }
+      } catch (error) {
+        console.error('获取天气信息失败:', error)
+        setWeatherData(null)
+      } finally {
+        setWeatherLoading(false)
+      }
+    }
+    
+    fetchWeatherData()
+    // 每30分钟更新一次天气信息
+    const weatherInterval = setInterval(fetchWeatherData, 30 * 60 * 1000)
+    
     // 设置初始连接状态
     setConnected(socketClient.isConnected())
     
@@ -75,6 +168,8 @@ const HomePage: React.FC = () => {
       socketClient.off('system-stats')
       socketClient.emit('unsubscribe-system-stats')
       clearInterval(processInterval)
+      clearInterval(dateTimeInterval)
+      clearInterval(weatherInterval)
     }
   }, [])
   
@@ -100,8 +195,72 @@ const HomePage: React.FC = () => {
     return 'bg-green-500'
   }
   
+  const formatDateTime = (date: Date) => {
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const day = String(date.getDate()).padStart(2, '0')
+    const hours = String(date.getHours()).padStart(2, '0')
+    const minutes = String(date.getMinutes()).padStart(2, '0')
+    const seconds = String(date.getSeconds()).padStart(2, '0')
+    
+    return {
+      date: `${year}年${month}月${day}日`,
+      time: `${hours}:${minutes}:${seconds}`
+    }
+  }
+
   return (
     <div className="space-y-6">
+      {/* 日期时间和天气显示 */}
+      <div className="card-game p-6">
+        <div className="flex items-center justify-center space-x-8">
+          {/* 日期时间 */}
+          <div className="text-center">
+            <div className="text-3xl font-bold text-black dark:text-white mb-2">
+              {formatDateTime(currentDateTime).date}
+            </div>
+            <div className="text-4xl font-mono font-bold text-blue-600 dark:text-blue-400">
+              {formatDateTime(currentDateTime).time}
+            </div>
+          </div>
+          
+          {/* 分隔线 */}
+          <div className="h-20 w-px bg-gray-300 dark:bg-gray-600"></div>
+          
+          {/* 天气信息 */}
+          <div className="text-center">
+            {weatherLoading ? (
+              <div className="text-gray-500 dark:text-gray-400">加载中...</div>
+            ) : weatherData ? (
+               <div>
+                 <div className="text-2xl font-bold text-black dark:text-white mb-1">
+                   {cityOptions.find(city => city.value === weatherData.selectedCityCode)?.label || weatherData.cityInfo?.city || '北京'}
+                 </div>
+                 <div className="flex items-center justify-center space-x-2 mb-2">
+                   <span className="text-3xl font-bold text-orange-500">
+                     {weatherData.wendu}°C
+                   </span>
+                   <span className="text-lg text-gray-600 dark:text-gray-400">
+                     {weatherData.forecast?.[0]?.type || '晴'}
+                   </span>
+                 </div>
+                 <div className="text-sm text-gray-500 dark:text-gray-400">
+                   {weatherData.forecast?.[0]?.low?.replace('低温 ', '')} ~ {weatherData.forecast?.[0]?.high?.replace('高温 ', '')}
+                 </div>
+                 <div className="text-sm text-gray-500 dark:text-gray-400">
+                   {weatherData.forecast?.[0]?.fx} {weatherData.forecast?.[0]?.fl}
+                 </div>
+                 <div className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                   湿度: {weatherData.shidu} | 空气质量: {weatherData.quality}
+                 </div>
+               </div>
+            ) : (
+              <div className="text-gray-500 dark:text-gray-400">天气信息获取失败</div>
+            )}
+          </div>
+        </div>
+      </div>
+      
       {/* 欢迎信息 */}
       <div className="card-game p-6">
         <div className="flex items-center justify-between">

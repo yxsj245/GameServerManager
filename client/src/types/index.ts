@@ -176,6 +176,51 @@ export interface NotificationState {
   clearNotifications: () => void
 }
 
+// 天气相关类型
+export interface WeatherData {
+  cityInfo: {
+    city: string
+    cityId: string
+    parent: string
+    updateTime: string
+  }
+  wendu: string
+  shidu: string
+  pm25: number
+  pm10: number
+  quality: string
+  ganmao: string
+  forecast: Array<{
+    date: string
+    ymd: string
+    week: string
+    sunrise: string
+    high: string
+    low: string
+    sunset: string
+    aqi: number
+    fx: string
+    fl: string
+    type: string
+    notice: string
+  }>
+  yesterday: {
+    date: string
+    ymd: string
+    week: string
+    sunrise: string
+    high: string
+    low: string
+    sunset: string
+    aqi: number
+    fx: string
+    fl: string
+    type: string
+    notice: string
+  }
+  selectedCityCode?: string // 用户选择的城市代码
+}
+
 // 设置相关类型
 export interface AppSettings {
   theme: Theme

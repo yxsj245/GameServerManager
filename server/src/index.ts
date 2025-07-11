@@ -30,6 +30,7 @@ import steamcmdRouter, { setSteamCMDManager } from './routes/steamcmd.js'
 import gameDeploymentRouter, { setGameDeploymentManagers } from './routes/gameDeployment.js'
 import minecraftRouter from './routes/minecraft.js'
 import moreGamesRouter from './routes/moreGames.js'
+import weatherRouter from './routes/weather.js'
 
 // 获取当前文件目录
 const __filename = fileURLToPath(import.meta.url)
@@ -485,6 +486,9 @@ async function startServer() {
     const { setMoreGamesDependencies } = await import('./routes/moreGames.js')
     setMoreGamesDependencies(io)
     app.use('/api/more-games', moreGamesRouter)
+    
+    // 设置天气路由
+    app.use('/api/weather', weatherRouter)
 
     // 前端路由处理（SPA支持）
     app.get('*', (req, res) => {

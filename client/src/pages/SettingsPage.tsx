@@ -18,14 +18,53 @@ import {
   CheckCircle,
   XCircle,
   Loader2,
-  Battery,
-  Moon
+              Battery,
+  Moon,
+  MapPin
 } from 'lucide-react'
 
 const SettingsPage: React.FC = () => {
   const { theme, toggleTheme } = useThemeStore()
   const { user, changePassword, changeUsername } = useAuthStore()
   const { addNotification } = useNotificationStore()
+  
+  // 城市选项数据
+  const cityOptions = [
+    { value: '101010100', label: '北京市' },
+    { value: '101020100', label: '上海市' },
+    { value: '101280101', label: '广州市' },
+    { value: '101280601', label: '深圳市' },
+    { value: '101210101', label: '杭州市' },
+    { value: '101030100', label: '天津市' },
+    { value: '101200101', label: '武汉市' },
+    { value: '101270101', label: '成都市' },
+    { value: '101110101', label: '西安市' },
+    { value: '101190401', label: '苏州市' },
+    { value: '101230101', label: '福州市' },
+    { value: '101040100', label: '重庆市' },
+    { value: '101250101', label: '长沙市' },
+    { value: '101230201', label: '厦门市' },
+    { value: '101180101', label: '郑州市' },
+    { value: '101120101', label: '济南市' },
+    { value: '101190101', label: '南京市' },
+    { value: '101260101', label: '合肥市' },
+    { value: '101300101', label: '南宁市' },
+    { value: '101310101', label: '海口市' },
+    { value: '101320101', label: '石家庄市' },
+    { value: '101330101', label: '太原市' },
+    { value: '101340101', label: '沈阳市' },
+    { value: '101050101', label: '哈尔滨市' },
+    { value: '101060101', label: '长春市' },
+    { value: '101070101', label: '呼和浩特市' },
+    { value: '101080101', label: '乌鲁木齐市' },
+    { value: '101090101', label: '银川市' },
+    { value: '101100101', label: '西宁市' },
+    { value: '101150101', label: '兰州市' },
+    { value: '101160101', label: '拉萨市' },
+    { value: '101240101', label: '南昌市' },
+    { value: '101290101', label: '昆明市' },
+    { value: '101170101', label: '贵阳市' }
+  ]
   
   // 密码修改状态
   const [passwordForm, setPasswordForm] = useState({
@@ -50,7 +89,8 @@ const SettingsPage: React.FC = () => {
     enableLowPowerMode: true,
     lowPowerModeTimeout: 60, // 秒
     enableDeepSleep: true,
-    deepSleepTimeout: 10 // 秒
+    deepSleepTimeout: 10, // 秒
+    weatherCity: '101010100' // 默认北京
   })
 
   // SteamCMD设置状态
@@ -447,7 +487,8 @@ const SettingsPage: React.FC = () => {
       enableLowPowerMode: true,
       lowPowerModeTimeout: 60,
       enableDeepSleep: true,
-      deepSleepTimeout: 10
+      deepSleepTimeout: 10,
+      weatherCity: '101010100'
     }
     
     setWebSettings(defaultWebSettings)
@@ -604,6 +645,33 @@ const SettingsPage: React.FC = () => {
                   </p>
                 </div>
               )}
+            </div>
+            
+            {/* 天气地理位置 */}
+            <div className="space-y-3">
+              <div className="flex items-center space-x-2">
+                <MapPin className="w-4 h-4 text-orange-500" />
+                <div>
+                  <label className="text-sm font-medium text-gray-800 dark:text-gray-200">天气地理位置</label>
+                  <p className="text-xs text-gray-600 dark:text-gray-400">选择首页显示的天气城市</p>
+                </div>
+              </div>
+              
+              <select
+                value={webSettings.weatherCity}
+                onChange={(e) => setWebSettings(prev => ({ ...prev, weatherCity: e.target.value }))}
+                className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-black dark:text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
+              >
+                {cityOptions.map((city) => (
+                  <option key={city.value} value={city.value} className="bg-white dark:bg-gray-800">
+                    {city.label}
+                  </option>
+                ))}
+              </select>
+              
+              <p className="text-xs text-gray-600 dark:text-gray-400">
+                当前选择: {cityOptions.find(city => city.value === webSettings.weatherCity)?.label || '未知城市'}
+              </p>
             </div>
             
             <div className="pt-4 border-t border-gray-700">
