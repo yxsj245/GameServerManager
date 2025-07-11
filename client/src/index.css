@@ -264,6 +264,48 @@
   font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
 }
 
+/* 移动端优化 */
+@media (max-width: 768px) {
+  /* 防止移动端页面缩放 */
+  html {
+    -webkit-text-size-adjust: 100%;
+    -ms-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+  
+  /* 优化触摸滚动 */
+  * {
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  /* 移动端终端优化 */
+  .xterm-viewport {
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  /* 移动端按钮优化 */
+  button {
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+  
+  /* 移动端输入框优化 */
+  input, textarea {
+    -webkit-appearance: none;
+    border-radius: 0;
+  }
+  
+  /* 移动端侧边栏动画 */
+  .mobile-sidebar {
+    transition: transform 0.3s ease-in-out;
+  }
+  
+  .mobile-sidebar.collapsed {
+    transform: translateX(-100%);
+  }
+}
+
 /* 通知动画 */
 @keyframes slideInRight {
   0% {

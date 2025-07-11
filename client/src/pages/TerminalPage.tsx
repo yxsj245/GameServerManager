@@ -37,6 +37,7 @@ const TerminalPage: React.FC = () => {
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [sidebarHovered, setSidebarHovered] = useState(false)
+  const [isMobile, setIsMobile] = useState(false)
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null)
   const [editingName, setEditingName] = useState('')
   const [isFullscreen, setIsFullscreen] = useState(false)
@@ -48,30 +49,51 @@ const TerminalPage: React.FC = () => {
   const urlParamProcessed = useRef(false)
   const { addNotification } = useNotificationStore()
   
+  // 检测移动端设备
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768)
+      // 在移动端默认折叠侧边栏
+      if (window.innerWidth < 768) {
+        setSidebarCollapsed(true)
+      }
+    }
+    
+    checkMobile()
+    window.addEventListener('resize', checkMobile)
+    
+    return () => {
+      window.removeEventListener('resize', checkMobile)
+    }
+  }, [])
+  
   // 计算合适的终端大小
   const calculateTerminalSize = useCallback(() => {
     if (terminalContainerRef.current) {
       const container = terminalContainerRef.current
-      const containerWidth = container.clientWidth || 800
-      const containerHeight = container.clientHeight || 600
+      const containerWidth = container.clientWidth || (isMobile ? 360 : 800)
+      const containerHeight = container.clientHeight || (isMobile ? 400 : 600)
       
       // 基于实际字体大小计算字符尺寸
-      // 字体大小为14px，行高为1.2，所以行高约为16.8px
-      // 等宽字体的字符宽度通常约为字体大小的0.6倍
-      const fontSize = 14
+      // 移动端使用较小的字体
+      const fontSize = isMobile ? 12 : 14
       const lineHeight = 1.2
-      const charWidth = fontSize * 0.6 // 约8.4px
-      const charHeight = fontSize * lineHeight // 约16.8px
+      const charWidth = fontSize * 0.6
+      const charHeight = fontSize * lineHeight
       
       const cols = Math.floor(containerWidth / charWidth)
       const rows = Math.floor(containerHeight / charHeight)
       
       console.log(`容器大小: ${containerWidth}x${containerHeight}, 计算终端大小: ${cols}x${rows}`)
       
-      return { cols: Math.max(cols, 80), rows: Math.max(rows, 24) }
+      // 移动端使用更小的最小值
+      const minCols = isMobile ? 40 : 80
+      const minRows = isMobile ? 20 : 24
+      
+      return { cols: Math.max(cols, minCols), rows: Math.max(rows, minRows) }
     }
-    return { cols: 100, rows: 30 } // 默认更大的尺寸
-  }, [])
+    return { cols: isMobile ? 50 : 100, rows: isMobile ? 25 : 30 }
+  }, [isMobile])
   
   // 创建新的终端会话
   const createTerminalSession = useCallback((cwd?: string) => {
@@ -109,13 +131,16 @@ const TerminalPage: React.FC = () => {
         brightWhite: '#ffffff'
       },
       fontFamily: 'JetBrains Mono, Fira Code, Consolas, Monaco, monospace',
-      fontSize: 14,
+      fontSize: isMobile ? 12 : 14,
       lineHeight: 1.2,
       cursorBlink: true,
       cursorStyle: 'block',
-      scrollback: 1000,
+      scrollback: isMobile ? 500 : 1000,
       tabStopWidth: 4,
-      allowTransparency: true
+      allowTransparency: true,
+      // 移动端优化
+      disableStdin: false,
+      convertEol: true
     })
     
     const fitAddon = new FitAddon()
@@ -886,22 +911,23 @@ const TerminalPage: React.FC = () => {
   }, [activeSessionId, sessions, isFullscreen, addNotification])
   
   // 计算是否应该显示侧边栏内容
-  const shouldShowSidebar = !sidebarCollapsed || sidebarHovered
+  const shouldShowSidebar = (!sidebarCollapsed || sidebarHovered) && !isMobile
   
   // 全屏模式下的渲染
   if (isFullscreen) {
     return (
       <div className="fixed inset-0 z-50 bg-gray-900 flex">
-         {/* 左侧边栏 */}
-         <div className={`
-           ${sidebarCollapsed && !sidebarHovered ? 'w-16' : 'w-80'}
-           transition-all duration-300 ease-in-out
-           bg-gray-800/50 backdrop-blur-sm border-r border-gray-700/50
-           flex flex-col
-         `}
-         onMouseEnter={() => setSidebarHovered(true)}
-         onMouseLeave={() => setSidebarHovered(false)}
-         >
+         {/* 移动端全屏时隐藏侧边栏，桌面端保持原有逻辑 */}
+         {!isMobile && (
+           <div className={`
+             ${sidebarCollapsed && !sidebarHovered ? 'w-16' : 'w-80'}
+             transition-all duration-300 ease-in-out
+             bg-gray-800/50 backdrop-blur-sm border-r border-gray-700/50
+             flex flex-col
+           `}
+           onMouseEnter={() => setSidebarHovered(true)}
+           onMouseLeave={() => setSidebarHovered(false)}
+           >
             {/* 侧边栏头部 */}
             <div className="flex items-center justify-between p-4 border-b border-gray-700/50">
               {shouldShowSidebar && (
@@ -1094,6 +1120,29 @@ const TerminalPage: React.FC = () => {
               </div>
              )}
            </div>
+        )}
+        
+        {/* 移动端浮动控制按钮 */}
+        {isMobile && (
+          <div className="absolute top-20 left-4 z-10 flex space-x-2">
+            <button
+              onClick={() => createTerminalSession()}
+              className="bg-blue-600 hover:bg-blue-700 text-white p-3 rounded-full shadow-lg transition-colors"
+              title="新建终端"
+            >
+              <Plus className="w-5 h-5" />
+            </button>
+            {activeSessionId && (
+              <button
+                onClick={toggleFullscreen}
+                className="bg-gray-600 hover:bg-gray-700 text-white p-3 rounded-full shadow-lg transition-colors"
+                title="退出全屏"
+              >
+                <Minimize2 className="w-5 h-5" />
+              </button>
+            )}
+          </div>
+        )}
         
         {/* 右侧终端显示区域 */}
         <div className="flex-1 flex flex-col min-w-0">
@@ -1155,17 +1204,31 @@ const TerminalPage: React.FC = () => {
 
   // 普通模式下的渲染
   return (
-    <div className="h-screen flex">
+    <div className="h-screen flex relative">
+      {/* 移动端浮动菜单按钮 */}
+      {isMobile && (
+        <button
+          onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+          className="fixed top-20 left-4 z-50 bg-blue-600 hover:bg-blue-700 text-white p-3 rounded-full shadow-lg transition-colors"
+          title="菜单"
+        >
+          {sidebarCollapsed ? <ChevronRight className="w-5 h-5" /> : <ChevronLeft className="w-5 h-5" />}
+        </button>
+      )}
+      
       {/* 左侧终端标签页侧边栏 */}
-      <div 
-        className={`
-          relative bg-gray-800/50 backdrop-blur-sm border-r border-gray-700/50 transition-all duration-300 ease-in-out
-          ${shouldShowSidebar ? 'w-80' : 'w-12'}
-          ${sidebarHovered ? 'shadow-xl' : ''}
-        `}
-        onMouseEnter={() => setSidebarHovered(true)}
-        onMouseLeave={() => setSidebarHovered(false)}
-      >
+      {(!isMobile || !sidebarCollapsed) && (
+        <div 
+          className={`
+            ${isMobile ? 'fixed inset-y-0 left-0 z-40 w-80' : 'relative'}
+            ${!isMobile && shouldShowSidebar ? 'w-80' : !isMobile ? 'w-12' : ''}
+            bg-gray-800/50 backdrop-blur-sm border-r border-gray-700/50 transition-all duration-300 ease-in-out
+            ${sidebarHovered ? 'shadow-xl' : ''}
+            ${isMobile ? 'shadow-2xl' : ''}
+          `}
+          onMouseEnter={() => setSidebarHovered(true)}
+          onMouseLeave={() => setSidebarHovered(false)}
+        >
         {/* 侧边栏头部 */}
         <div className="flex items-center justify-between p-4 border-b border-gray-700/50">
           {shouldShowSidebar && (
@@ -1358,6 +1421,15 @@ const TerminalPage: React.FC = () => {
           </div>
         )}
         </div>
+      )}
+      
+      {/* 移动端遮罩层 */}
+      {isMobile && !sidebarCollapsed && (
+        <div 
+          className="fixed inset-0 bg-black/50 z-30"
+          onClick={() => setSidebarCollapsed(true)}
+        />
+      )}
       
       {/* 右侧终端显示区域 */}
       <div className="flex-1 flex flex-col min-w-0">
@@ -1385,15 +1457,26 @@ const TerminalPage: React.FC = () => {
                     <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
                     <div className="w-3 h-3 bg-green-500 rounded-full"></div>
                   </div>
-                  <div className="text-sm font-medium text-white">
+                  <div className="text-sm font-medium text-white truncate">
                     {sessions.find(s => s.active)?.name || '终端'}
                   </div>
                 </div>
                 
-                <div className="flex items-center space-x-3">
-                  <div className="text-xs text-gray-400 font-mono">
-                    {activeSessionId}
-                  </div>
+                <div className="flex items-center space-x-2">
+                  {!isMobile && (
+                    <div className="text-xs text-gray-400 font-mono">
+                      {activeSessionId}
+                    </div>
+                  )}
+                  {isMobile && (
+                    <button
+                      onClick={toggleFullscreen}
+                      className="p-2 text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+                      title="全屏模式"
+                    >
+                      <Maximize2 className="w-4 h-4" />
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
@@ -1401,7 +1484,13 @@ const TerminalPage: React.FC = () => {
             {/* 终端内容 */}
             <div
               ref={terminalContainerRef}
-              className="flex-1 bg-gray-900 min-h-0"
+              className={`flex-1 bg-gray-900 min-h-0 ${isMobile ? 'touch-manipulation' : ''}`}
+              style={{
+                // 移动端优化触摸滚动
+                WebkitOverflowScrolling: 'touch',
+                // 防止移动端缩放
+                touchAction: 'manipulation'
+              }}
             />
           </>
         )}
