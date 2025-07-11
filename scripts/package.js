@@ -19,13 +19,12 @@ const outputFile = buildTarget
   ? path.join(distDir, `${packageName}-${buildTarget}-v${version}.zip`)
   : path.join(distDir, `${packageName}-v${version}.zip`)
 
-const nodeVersion = '22.16.0'
+const nodeVersion = '22.17.0'
 
-// 下载Node.js函数
 async function downloadNodejs(platform) {
   const nodeUrls = {
     linux: `https://nodejs.org/dist/v${nodeVersion}/node-v${nodeVersion}-linux-x64.tar.xz`,
-    windows: `https://nodejs.org/dist/v${nodeVersion}/node-v${nodeVersion}-win-x64.zip`
+    windows: `https://nodejs.org/download/release/latest-v22.x/win-x64/node.exe`
   }
   
   const url = nodeUrls[platform]
@@ -70,7 +69,7 @@ async function deployNodejs(platform, downloadedFile) {
     
     // 重命名为node文件夹
     const extractedDir = path.join(projectRoot, `node-v${nodeVersion}-linux-x64`)
-    const targetDir = path.join(packageDir, '..', 'node')
+    const targetDir = path.join(packageDir, 'node')
     
     if (await fs.pathExists(extractedDir)) {
       await fs.move(extractedDir, targetDir)
@@ -79,22 +78,14 @@ async function deployNodejs(platform, downloadedFile) {
       throw new Error('Linux Node.js 解压失败')
     }
   } else if (platform === 'windows') {
-    console.log('📦 正在解压 Windows Node.js...')
-    // 解压到临时目录
-    execSync(`powershell -Command "Expand-Archive -Path '${downloadedFile}' -DestinationPath '${projectRoot}/temp-node' -Force"`, { cwd: projectRoot })
+    console.log('📦 正在部署 Windows Node.js...')
+    // 直接复制node.exe到server目录
+    const targetDir = path.join(packageDir, 'server')
+    const targetFile = path.join(targetDir, 'node.exe')
     
-    // 移动到server目录
-    const extractedDir = path.join(projectRoot, 'temp-node', `node-v${nodeVersion}-win-x64`)
-    const targetDir = path.join(packageDir, 'server', 'node')
-    
-    if (await fs.pathExists(extractedDir)) {
-      await fs.ensureDir(path.dirname(targetDir))
-      await fs.move(extractedDir, targetDir)
-      await fs.remove(path.join(projectRoot, 'temp-node'))
-      console.log('✅ Windows Node.js 部署到 server/node')
-    } else {
-      throw new Error('Windows Node.js 解压失败')
-    }
+    await fs.ensureDir(targetDir)
+    await fs.copy(downloadedFile, targetFile)
+    console.log('✅ Windows Node.js 部署到 server/node.exe')
   }
   
   // 清理下载的文件
@@ -198,7 +189,7 @@ async function createPackage() {
       const startScript = `@echo off
 echo 正在启动GSM3管理面板...
 cd server
-node\node.exe index.js
+node.exe index.js
 pause`
       
       await fs.writeFile(
@@ -209,7 +200,7 @@ pause`
       const startShScript = `#!/bin/bash
 echo "正在启动GSM3管理面板..."
 chmod +x server/PTY/pty_linux_x64
-./node/bin/node server/index.js`
+node/bin/node server/index.js`
       
       await fs.writeFile(
         path.join(packageDir, 'start.sh'),
