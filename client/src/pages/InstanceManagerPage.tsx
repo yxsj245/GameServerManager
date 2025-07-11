@@ -26,15 +26,28 @@ import { ConfirmDeleteDialog } from '@/components/ConfirmDeleteDialog'
 // 获取嵌套对象值的工具函数
 const getNestedValue = (obj: any, path: string): any => {
   if (!obj || !path) return undefined
-  const keys = path.split('.')
-  let current = obj
-  for (const key of keys) {
-    if (current === null || current === undefined || typeof current !== 'object') {
-      return undefined
-    }
-    current = current[key]
+
+  // 1. 尝试将路径作为单个键直接访问，处理 'server.properties' 这样的顶级键
+  if (Object.prototype.hasOwnProperty.call(obj, path)) {
+    return obj[path]
   }
-  return current
+
+  // 2. 如果直接访问不到，假定路径是 'section.field' 格式
+  const lastDotIndex = path.lastIndexOf('.')
+  if (lastDotIndex === -1) {
+    // 如果没有点，并且在第1步中也找不到，说明这个键不存在
+    return undefined
+  }
+
+  const sectionKey = path.substring(0, lastDotIndex)
+  const fieldKey = path.substring(lastDotIndex + 1)
+
+  // 3. 检查节是否存在，并且是一个对象
+  if (Object.prototype.hasOwnProperty.call(obj, sectionKey) && obj[sectionKey] && typeof obj[sectionKey] === 'object') {
+    return obj[sectionKey][fieldKey]
+  }
+
+  return undefined
 }
 
 // 实例市场相关类型
@@ -150,9 +163,11 @@ const InstanceManagerPage: React.FC = () => {
     try {
       setIsConfigLoading(true)
       const response = await apiClient.readGameConfig(instanceId, configId)
+      console.log('从服务器读取的配置数据:', response.data)
       // 使用传入的配置模式或当前的配置模式填充默认值
       const currentSchema = schema || configSchema
       const filledData = fillDefaultValues(currentSchema, response.data)
+      console.log('填充默认值后的配置数据:', filledData)
       setConfigData(filledData)
     } catch (error) {
       console.error('读取配置失败:', error)
@@ -164,6 +179,7 @@ const InstanceManagerPage: React.FC = () => {
       // 即使读取失败，也尝试使用默认值创建配置
       const currentSchema = schema || configSchema
       const defaultData = fillDefaultValues(currentSchema, {})
+      console.log('使用默认值的配置数据:', defaultData)
       setConfigData(defaultData)
     } finally {
       setIsConfigLoading(false)
@@ -180,6 +196,12 @@ const InstanceManagerPage: React.FC = () => {
       })
       return
     }
+
+    console.log('准备保存配置:', {
+      selectedInstance,
+      selectedConfigId,
+      configData: JSON.stringify(configData, null, 2)
+    })
 
     try {
       setIsSavingConfig(true)
@@ -227,38 +249,67 @@ const InstanceManagerPage: React.FC = () => {
     
     const filledData = { ...currentData }
     
-    Object.entries(schema.sections).forEach(([sectionKey, section]: [string, any]) => {
-      if (!filledData[sectionKey]) {
-        filledData[sectionKey] = {}
-      }
-      
-      if (section.fields && Array.isArray(section.fields)) {
-        section.fields.forEach((field: any) => {
-          if (filledData[sectionKey][field.name] === undefined && field.default !== undefined) {
-            filledData[sectionKey][field.name] = field.default
-          }
-        })
-      }
-    })
+    // 处理sections数组
+    if (Array.isArray(schema.sections)) {
+      schema.sections.forEach((section: any) => {
+        const sectionKey = section.key || 'default'
+        if (!filledData[sectionKey]) {
+          filledData[sectionKey] = {}
+        }
+        
+        if (section.fields && Array.isArray(section.fields)) {
+          section.fields.forEach((field: any) => {
+            if (filledData[sectionKey][field.name] === undefined && field.default !== undefined) {
+              filledData[sectionKey][field.name] = field.default
+            }
+          })
+        }
+      })
+    } else {
+      // 兼容旧格式：sections是对象
+      Object.entries(schema.sections).forEach(([sectionKey, section]: [string, any]) => {
+        if (!filledData[sectionKey]) {
+          filledData[sectionKey] = {}
+        }
+        
+        if (section.fields && Array.isArray(section.fields)) {
+          section.fields.forEach((field: any) => {
+            if (filledData[sectionKey][field.name] === undefined && field.default !== undefined) {
+              filledData[sectionKey][field.name] = field.default
+            }
+          })
+        }
+      })
+    }
     
     return filledData
   }
 
   // 处理配置数据变化
   const handleConfigDataChange = (path: string, value: any) => {
-    setConfigData(prev => {
+    console.log('配置数据变化:', { path, value, currentConfigData: configData })
+    setConfigData((prev) => {
       const newData = { ...prev }
-      const keys = path.split('.')
-      let current = newData
-      
-      for (let i = 0; i < keys.length - 1; i++) {
-        if (!current[keys[i]]) {
-          current[keys[i]] = {}
-        }
-        current = current[keys[i]]
+      const lastDotIndex = path.lastIndexOf('.')
+
+      if (lastDotIndex === -1) {
+        // 如果没有点，直接更新顶级属性
+        newData[path] = value
+        console.log('更新后的配置数据:', newData)
+        return newData
       }
-      
-      current[keys[keys.length - 1]] = value
+
+      const sectionKey = path.substring(0, lastDotIndex)
+      const fieldKey = path.substring(lastDotIndex + 1)
+
+      const oldSection = prev[sectionKey]
+      // 确保我们总是基于一个对象进行扩展，如果原始节不是对象，则创建一个新对象
+      const newSection = oldSection && typeof oldSection === 'object' ? { ...oldSection } : {}
+
+      newSection[fieldKey] = value
+      newData[sectionKey] = newSection
+
+      console.log('更新后的配置数据:', newData)
       return newData
     })
   }
@@ -293,6 +344,11 @@ const InstanceManagerPage: React.FC = () => {
       fetchMarketInstances()
     }
   }, [activeTab])
+
+  // 监听configData变化
+  useEffect(() => {
+    console.log('configData状态已更新:', configData)
+  }, [configData])
 
   // 创建实例
   const handleCreateInstance = async () => {
@@ -1028,9 +1084,14 @@ const InstanceManagerPage: React.FC = () => {
                   <span className="ml-2 text-gray-600 dark:text-gray-400">加载配置中...</span>
                 </div>
               ) : configSchema ? (
-                <div className="space-y-6">
+                <div className="space-y-6" key={`config-form-${selectedInstance}-${selectedConfigId}`}>
                   {/* 动态渲染配置表单 - 按sections分组 */}
-                  {Object.entries(configSchema.sections || {}).map(([sectionKey, section]: [string, any], sectionIndex: number) => (
+                  {(Array.isArray(configSchema.sections) ? configSchema.sections : Object.entries(configSchema.sections || {})).map((sectionData: any, sectionIndex: number) => {
+                    // 处理数组格式和对象格式的sections
+                    const section = Array.isArray(configSchema.sections) ? sectionData : sectionData[1]
+                    const sectionKey = Array.isArray(configSchema.sections) ? (section.key || 'default') : sectionData[0]
+                    
+                    return (
                     <div key={sectionKey || sectionIndex} className="space-y-4">
                       {/* Section标题 */}
                       {sectionKey && (
@@ -1185,7 +1246,8 @@ const InstanceManagerPage: React.FC = () => {
                         })}
                       </div>
                     </div>
-                  ))}
+                    )
+                  })}
                 </div>
               ) : (
                 <div className="text-center py-8">

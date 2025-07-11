@@ -114,29 +114,60 @@ class GameConfigManager:
             config_file_path = config_schema['meta']['config_file']
             full_config_path = os.path.join(server_path, config_file_path)
             
+            logger.info(f"开始保存配置文件: {full_config_path}")
+            logger.info(f"使用解析器: {parser_type}")
+            logger.info(f"配置数据: {config_data}")
+            
             # 确保目录存在
-            os.makedirs(os.path.dirname(full_config_path), exist_ok=True)
+            config_dir = os.path.dirname(full_config_path)
+            logger.info(f"确保目录存在: {config_dir}")
+            os.makedirs(config_dir, exist_ok=True)
+            
+            # 检查目录权限
+            if not os.access(config_dir, os.W_OK):
+                logger.error(f"没有写入权限: {config_dir}")
+                return False
             
             # 根据解析器类型保存配置
+            result = False
             if parser_type == 'configobj':
-                return self._save_with_configobj(full_config_path, config_data, config_schema)
+                result = self._save_with_configobj(full_config_path, config_data, config_schema)
             elif parser_type == 'ruamel.yaml':
-                return self._save_with_yaml(full_config_path, config_data, config_schema)
+                result = self._save_with_yaml(full_config_path, config_data, config_schema)
             elif parser_type == 'pyhocon':
-                return self._save_with_pyhocon(full_config_path, config_data, config_schema)
-
+                result = self._save_with_pyhocon(full_config_path, config_data, config_schema)
             elif parser_type == 'properties':
-                return self._save_with_properties(full_config_path, config_data, config_schema)
+                result = self._save_with_properties(full_config_path, config_data, config_schema)
             elif parser_type == 'json':
-                return self._save_with_json(full_config_path, config_data, config_schema)
+                result = self._save_with_json(full_config_path, config_data, config_schema)
             elif parser_type == 'toml':
-                return self._save_with_toml(full_config_path, config_data, config_schema)
+                result = self._save_with_toml(full_config_path, config_data, config_schema)
             else:
                 logger.error(f"不支持的解析器类型: {parser_type}")
                 return False
+            
+            if result:
+                logger.info(f"配置文件保存成功: {full_config_path}")
+                # 验证文件是否真的被写入
+                if os.path.exists(full_config_path):
+                    file_size = os.path.getsize(full_config_path)
+                    logger.info(f"文件大小: {file_size} 字节")
+                    # 读取文件内容进行验证
+                    with open(full_config_path, 'r', encoding='utf-8') as f:
+                        content = f.read()
+                        logger.info(f"文件内容预览: {content[:200]}...")
+                else:
+                    logger.error(f"保存后文件不存在: {full_config_path}")
+                    return False
+            else:
+                logger.error(f"配置文件保存失败: {full_config_path}")
+            
+            return result
                 
         except Exception as e:
             logger.error(f"保存游戏配置失败: {e}")
+            import traceback
+            logger.error(f"错误堆栈: {traceback.format_exc()}")
             return False
     
     def _get_default_values(self, config_schema: Dict[str, Any]) -> Dict[str, Any]:
@@ -362,22 +393,39 @@ class GameConfigManager:
                 return self._save_with_raw_write(config_path, config_data, config_schema, nested_fields_data)
             else:
                 # 对于普通字段，使用configobj
+                logger.info(f"使用configobj保存普通字段到: {config_path}")
                 if os.path.exists(config_path):
+                    logger.info(f"配置文件已存在，读取现有配置")
                     config = configobj.ConfigObj(config_path, encoding='utf-8')
                 else:
+                    logger.info(f"配置文件不存在，创建新配置")
                     config = configobj.ConfigObj(encoding='utf-8')
                 
                 # 更新配置
+                logger.info(f"开始更新配置数据")
                 for section_key, section_data in config_data.items():
+                    logger.info(f"处理section: {section_key}")
                     if section_key not in config:
                         config[section_key] = {}
+                        logger.info(f"创建新section: {section_key}")
                     for field_name, field_value in section_data.items():
+                        logger.info(f"设置字段 {field_name} = {field_value}")
                         config[section_key][field_name] = str(field_value)
                 
                 # 保存文件
+                logger.info(f"开始写入文件: {config_path}")
                 config.filename = config_path
                 config.write()
-                return True
+                logger.info(f"configobj写入完成")
+                
+                # 验证写入结果
+                if os.path.exists(config_path):
+                    file_size = os.path.getsize(config_path)
+                    logger.info(f"写入后文件大小: {file_size} 字节")
+                    return True
+                else:
+                    logger.error(f"写入后文件不存在: {config_path}")
+                    return False
                 
         except ImportError:
             logger.error("configobj库未安装")
@@ -875,6 +923,15 @@ game_config_manager = GameConfigManager()
 if __name__ == '__main__':
     import sys
     import json
+    
+    # 配置日志记录
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.StreamHandler(sys.stderr)  # 输出到stderr，避免与JSON结果混淆
+        ]
+    )
     
     if len(sys.argv) < 2:
         print(json.dumps({"error": "缺少方法参数"}))

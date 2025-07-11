@@ -551,14 +551,21 @@ function callPythonScript(method: string, args: any[] = []): Promise<any> {
       })
 
       pythonProcess.on('close', (code) => {
+        // 记录Python脚本的stderr输出（包含日志信息）
+        if (stderr) {
+          logger.info(`Python脚本日志: ${stderr}`)
+        }
+        
         if (code === 0) {
           try {
             const result = JSON.parse(stdout)
             resolve(result)
           } catch (error) {
+            logger.error(`JSON解析失败: ${error}, stdout: ${stdout}`)
             reject(new Error(`JSON解析失败: ${error}`))
           }
         } else {
+          logger.error(`Python脚本执行失败，退出码: ${code}, stderr: ${stderr}, stdout: ${stdout}`)
           reject(new Error(`Python脚本执行失败: ${stderr}`))
         }
       })
@@ -629,7 +636,6 @@ router.get('/:instanceId/configs/:configId', authenticateToken, async (req: Requ
     }
     
     const { instanceId, configId } = req.params
-    const { parser = 'configobj' } = req.query
     const decodedConfigId = decodeURIComponent(configId)
     
     // 获取实例信息
@@ -649,6 +655,10 @@ router.get('/:instanceId/configs/:configId', authenticateToken, async (req: Requ
         error: '配置模板不存在'
       })
     }
+    
+    // 从配置模板中获取正确的解析器类型
+    const parser = schema.meta?.parser || 'configobj'
+    logger.info(`使用解析器: ${parser} 读取配置: ${decodedConfigId}`)
     
     // 读取配置文件
     const result = await callPythonScript('read_game_config', [
@@ -682,7 +692,7 @@ router.post('/:instanceId/configs/:configId', authenticateToken, async (req: Req
     }
     
     const { instanceId, configId } = req.params
-    const { configData, parser = 'configobj' } = req.body
+    const { configData } = req.body
     const decodedConfigId = decodeURIComponent(configId)
     
     if (!configData) {
@@ -710,6 +720,10 @@ router.post('/:instanceId/configs/:configId', authenticateToken, async (req: Req
       })
     }
     
+    // 从配置模板中获取正确的解析器类型
+    const parser = schema.meta?.parser || 'configobj'
+    logger.info(`使用解析器: ${parser} 保存配置: ${decodedConfigId}`)
+    
     // 保存配置文件
     const result = await callPythonScript('save_game_config', [
       instance.workingDirectory,
@@ -719,7 +733,7 @@ router.post('/:instanceId/configs/:configId', authenticateToken, async (req: Req
     ])
     
     if (result) {
-      logger.info(`用户保存游戏配置: 实例=${instanceId}, 配置=${decodedConfigId}`)
+      logger.info(`用户保存游戏配置: 实例=${instanceId}, 配置=${decodedConfigId}, 解析器=${parser}`)
       res.json({
         success: true,
         message: '配置保存成功'
