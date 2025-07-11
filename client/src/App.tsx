@@ -16,6 +16,7 @@ import FileManagerPage from '@/pages/FileManagerPage'
 import AboutProjectPage from '@/pages/AboutProjectPage'
 import LoadingSpinner from '@/components/LoadingSpinner'
 import NotificationContainer from '@/components/NotificationContainer'
+import GlobalMusicPlayer from '@/components/GlobalMusicPlayer'
 
 // 受保护的路由组件
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -135,6 +136,9 @@ function App() {
           
           {/* 全局通知容器 */}
           <NotificationContainer />
+          
+          {/* 全局音乐播放器 */}
+          <GlobalMusicPlayer />
         </div>
       </AntdApp>
     </ConfigProvider>

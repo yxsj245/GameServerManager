@@ -18,6 +18,7 @@ interface MusicState {
   duration: number
   isShuffled: boolean
   repeatMode: 'none' | 'one' | 'all'
+  seekTime: number | null // 用于通知GlobalMusicPlayer进行seek操作
   
   // Actions
   addToPlaylist: (files: MusicFile[]) => void
@@ -32,6 +33,8 @@ interface MusicState {
   setDuration: (duration: number) => void
   setIsShuffled: (shuffled: boolean) => void
   setRepeatMode: (mode: 'none' | 'one' | 'all') => void
+  seekTo: (time: number) => void
+  clearSeek: () => void
   playTrack: (index: number) => void
   nextTrack: () => void
   previousTrack: () => void
@@ -48,6 +51,7 @@ export const useMusicStore = create<MusicState>()(persist((set, get) => ({
   duration: 0,
   isShuffled: false,
   repeatMode: 'none',
+  seekTime: null,
   
   addToPlaylist: (files: MusicFile[]) => {
     const { playlist } = get()
@@ -142,13 +146,21 @@ export const useMusicStore = create<MusicState>()(persist((set, get) => ({
     set({ repeatMode: mode })
   },
   
+  seekTo: (time: number) => {
+    set({ seekTime: time, currentTime: time })
+  },
+  
+  clearSeek: () => {
+    set({ seekTime: null })
+  },
+  
   playTrack: (index: number) => {
-    const { playlist } = get()
+    const { playlist, isPlaying } = get()
     if (index >= 0 && index < playlist.length) {
       set({ 
         currentIndex: index, 
         currentTrack: playlist[index],
-        isPlaying: false // 让组件重新开始播放
+        isPlaying: true // 切换歌曲后自动播放
       })
     }
   },
@@ -179,7 +191,7 @@ export const useMusicStore = create<MusicState>()(persist((set, get) => ({
     set({ 
       currentIndex: newIndex, 
       currentTrack: playlist[newIndex],
-      isPlaying: false // 让组件重新开始播放
+      isPlaying: true // 切换歌曲后自动播放
     })
   },
   
@@ -198,7 +210,7 @@ export const useMusicStore = create<MusicState>()(persist((set, get) => ({
     set({ 
       currentIndex: newIndex, 
       currentTrack: playlist[newIndex],
-      isPlaying: false // 让组件重新开始播放
+      isPlaying: true // 切换歌曲后自动播放
     })
   }
 }), {

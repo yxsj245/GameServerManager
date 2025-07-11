@@ -44,11 +44,11 @@ const MusicPlayer: React.FC<MusicPlayerProps> = ({ className = '' }) => {
     clearPlaylist,
     playTrack,
     nextTrack,
-    previousTrack
+    previousTrack,
+    seekTo
   } = useMusicStore()
   
   const [showPlaylist, setShowPlaylist] = React.useState(false)
-  const audioRef = useRef<HTMLAudioElement>(null)
   const navigate = useNavigate()
   
   // 支持的音频格式
@@ -69,173 +69,12 @@ const MusicPlayer: React.FC<MusicPlayerProps> = ({ className = '' }) => {
     return `${minutes}:${seconds.toString().padStart(2, '0')}`
   }
   
-  // 音频事件处理
-  useEffect(() => {
-    const audio = audioRef.current
-    if (!audio) return
-    
-    const handleTimeUpdate = () => {
-      setCurrentTime(audio.currentTime)
-    }
-    
-    const handleDurationChange = () => {
-      setDuration(audio.duration)
-    }
-    
-    const handleEnded = () => {
-      nextTrack()
-    }
-    
-    const handleLoadedMetadata = () => {
-      setDuration(audio.duration)
-    }
-    
-    audio.addEventListener('timeupdate', handleTimeUpdate)
-    audio.addEventListener('durationchange', handleDurationChange)
-    audio.addEventListener('ended', handleEnded)
-    audio.addEventListener('loadedmetadata', handleLoadedMetadata)
-    
-    return () => {
-      audio.removeEventListener('timeupdate', handleTimeUpdate)
-      audio.removeEventListener('durationchange', handleDurationChange)
-      audio.removeEventListener('ended', handleEnded)
-      audio.removeEventListener('loadedmetadata', handleLoadedMetadata)
-    }
-  }, [currentTrack])
+  // 注意：音频播放逻辑现在由全局播放器(GlobalMusicPlayer)处理
+  // 这个组件只负责显示完整的播放器界面
   
-  // 监听音量变化
-  useEffect(() => {
-    if (audioRef.current) {
-      audioRef.current.volume = isMuted ? 0 : volume
-    }
-  }, [volume, isMuted])
-  
-  // 监听当前曲目变化，自动加载新音频
-  useEffect(() => {
-    if (currentTrack && audioRef.current) {
-      loadAudioFile(currentTrack)
-    }
-  }, [currentTrack])
-  
-  // 组件初始化时，如果有持久化的currentTrack，确保音频已加载
-  useEffect(() => {
-    if (currentTrack && audioRef.current && !audioRef.current.src) {
-      loadAudioFile(currentTrack)
-    }
-  }, [])
-  
-  // 加载音频文件
-  const loadAudioFile = async (track: any) => {
-    if (!audioRef.current) return
-    
-    try {
-      console.log('开始加载音频文件:', track.path)
-      
-      // 清理之前的blob URL
-      if (audioRef.current.src && audioRef.current.src.startsWith('blob:')) {
-        URL.revokeObjectURL(audioRef.current.src)
-      }
-      
-      const token = localStorage.getItem('gsm3_token')
-      const response = await fetch(`/api/files/read?path=${encodeURIComponent(track.path)}`, {
-        headers: {
-          Authorization: token ? `Bearer ${token}` : ''
-        }
-      })
-      
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
-      }
-      
-      const blob = await response.blob()
-      console.log('音频文件blob大小:', blob.size, '类型:', blob.type)
-      
-      if (blob.size === 0) {
-        throw new Error('音频文件为空')
-      }
-      
-      // 根据文件扩展名强制设置正确的MIME类型
-      const extension = track.path.split('.').pop()?.toLowerCase()
-      let mimeType = 'audio/mpeg' // 默认
-      
-      switch (extension) {
-        case 'mp3':
-          mimeType = 'audio/mpeg'
-          break
-        case 'wav':
-          mimeType = 'audio/wav'
-          break
-        case 'ogg':
-          mimeType = 'audio/ogg'
-          break
-        case 'm4a':
-          mimeType = 'audio/mp4'
-          break
-        case 'aac':
-          mimeType = 'audio/aac'
-          break
-        case 'wma':
-          mimeType = 'audio/x-ms-wma'
-          break
-        case 'flac':
-          mimeType = 'audio/flac'
-          break
-      }
-      
-      console.log('设置MIME类型:', mimeType)
-      
-      // 创建具有正确MIME类型的新blob
-      const audioBlob = new Blob([blob], { type: mimeType })
-      const blobUrl = URL.createObjectURL(audioBlob)
-
-      if (audioRef.current) {
-        audioRef.current.src = blobUrl
-        audioRef.current.load() // 强制重新加载
-        console.log('音频文件加载完成:', blobUrl)
-      }
-    } catch (error) {
-      console.error('音频加载失败:', error)
-      message.error(`音频加载失败: ${error instanceof Error ? error.message : '未知错误'}`)
-      throw error
-    }
-  }
-  
-  // 播放/暂停
-  const togglePlay = async () => {
-    if (!currentTrack || !audioRef.current) return
-    
-    try {
-      if (isPlaying) {
-        audioRef.current.pause()
-        setIsPlaying(false)
-      } else {
-        // 如果音频还没有加载，先加载
-        if (!audioRef.current.src || audioRef.current.src === '') {
-          await loadAudioFile(currentTrack)
-        }
-        
-        // 直接尝试播放，让浏览器处理加载过程
-        await audioRef.current.play()
-        setIsPlaying(true)
-        console.log('音频播放成功')
-      }
-    } catch (error) {
-      console.error('播放失败:', error)
-      setIsPlaying(false)
-      // 如果播放失败，尝试重新加载音频文件
-      if (error.name === 'NotSupportedError' || error.name === 'NotAllowedError') {
-        try {
-          console.log('尝试重新加载音频文件...')
-          await loadAudioFile(currentTrack)
-          await audioRef.current.play()
-          setIsPlaying(true)
-          console.log('重新加载后播放成功')
-        } catch (retryError) {
-          console.error('重新加载后仍然播放失败:', retryError)
-          message.error('音频播放失败，请检查文件格式是否支持')
-        }
-      }
-    }
+  // 播放/暂停 - 直接切换状态，实际播放由全局播放器处理
+  const togglePlay = () => {
+    setIsPlaying(!isPlaying)
   }
   
   // 上一首
@@ -245,24 +84,14 @@ const MusicPlayer: React.FC<MusicPlayerProps> = ({ className = '' }) => {
   
   // 下一首
   const handleNext = () => {
-    if (repeatMode === 'one') {
-      // 单曲循环
-      if (audioRef.current) {
-        audioRef.current.currentTime = 0
-        audioRef.current.play()
-      }
-      return
-    }
-    
     nextTrack()
   }
   
-  // 进度条拖拽
+  // 进度条拖拽 - 通过store通知全局播放器进行seek操作
   const handleSeek = (value: number) => {
-    if (audioRef.current && duration) {
+    if (duration) {
       const newTime = (value / 100) * duration
-      audioRef.current.currentTime = newTime
-      setCurrentTime(newTime)
+      seekTo(newTime)
     }
   }
   
@@ -325,13 +154,6 @@ const MusicPlayer: React.FC<MusicPlayerProps> = ({ className = '' }) => {
   
   return (
     <div className={`card-game p-6 ${className}`}>
-      {/* 音频元素 */}
-      {currentTrack && (
-        <audio
-          ref={audioRef}
-          onLoadStart={() => setIsPlaying(true)}
-        />
-      )}
       
       {/* 标题栏 */}
       <div className="flex items-center justify-between mb-4">

@@ -1,42 +1,60 @@
-react-dom.development.js:29895 Download the React DevTools for a better development experience: https://reactjs.org/link/react-devtools
-InstanceManagerPage.tsx:329 configData状态已更新: {}[[Prototype]]: Object
-InstanceManagerPage.tsx:329 configData状态已更新: {}
-InstanceManagerPage.tsx:329 configData状态已更新: {}
-InstanceManagerPage.tsx:329 configData状态已更新: {}
-socket.ts:54 Socket连接成功: G2JjN401iS1j9APPAAAN
-InstanceManagerPage.tsx:329 configData状态已更新: {}
-InstanceManagerPage.tsx:153 从服务器读取的配置数据: {server.properties: {…}}
-InstanceManagerPage.tsx:157 填充默认值后的配置数据: {server.properties: {…}}
-InstanceManagerPage.tsx:329 configData状态已更新: {server.properties: {…}}
-InstanceManagerPage.tsx:277 配置数据变化: {path: 'server.properties.motd', value: 'A Minecraft Server3', currentConfigData: {…}}
-InstanceManagerPage.tsx:291 更新后的配置数据: {server.properties: {…}, server: {…}}
-InstanceManagerPage.tsx:291 更新后的配置数据: {server.properties: {…}, server: {…}}server: properties: motd: "A Minecraft Server3"[[Prototype]]: Object[[Prototype]]: Objectserver.properties: {motd: 'A Minecraft Server2', server-port: 25565, server-ip: '""', max-players: 20, gamemode: 'survival', …}[[Prototype]]: Object
-InstanceManagerPage.tsx:329 configData状态已更新: {server.properties: {…}, server: {…}}server: properties: motd: "A Minecraft Server3"[[Prototype]]: Object[[Prototype]]: Objectserver.properties: {motd: 'A Minecraft Server2', server-port: 25565, server-ip: '""', max-players: 20, gamemode: 'survival', …}[[Prototype]]: Object
-InstanceManagerPage.tsx:187 准备保存配置: {selectedInstance: 'b9ea67cf-6bbf-4aae-92e5-6eab800ae22e', selectedConfigId: '我的世界_Java', configData: '{\n  "server.properties": {\n    "motd": "A Minecraf…{\n      "motd": "A Minecraft Server3"\n    }\n  }\n}'}configData: "{\n  \"server.properties\": {\n    \"motd\": \"A Minecraft Server2\",\n    \"server-port\": 25565,\n    \"server-ip\": \"\\\"\\\"\",\n    \"max-players\": 20,\n    \"gamemode\": \"survival\",\n    \"force-gamemode\": false,\n    \"difficulty\": \"easy\",\n    \"hardcore\": false,\n    \"level-name\": \"world\",\n    \"level-seed\": \"\\\"\\\"\",\n    \"level-type\": \"minecraft:normal\",\n    \"generate-structures\": true,\n    \"generator-settings\": \"{}\",\n    \"online-mode\": true,\n    \"white-list\": false,\n    \"enforce-whitelist\": false,\n    \"player-idle-timeout\": 0,\n    \"op-permission-level\": 4,\n    \"function-permission-level\": 2,\n    \"pvp\": true,\n    \"spawn-protection\": 16,\n    \"view-distance\": 10,\n    \"simulation-distance\": 10,\n    \"max-world-size\": 29999984,\n    \"max-tick-time\": 60000,\n    \"max-chained-neighbor-updates\": 1000000,\n    \"network-compression-threshold\": 256,\n    \"rate-limit\": 0,\n    \"prevent-proxy-connections\": false,\n    \"enable-query\": false,\n    \"query.port\": 25565,\n    \"enable-rcon\": false,\n    \"rcon.port\": 25575,\n    \"rcon.password\": \"\\\"\\\"\",\n    \"allow-flight\": false,\n    \"allow-nether\": true,\n    \"spawn-monsters\": true,\n    \"enable-command-block\": false,\n    \"hide-online-players\": false,\n    \"broadcast-console-to-ops\": true,\n    \"broadcast-rcon-to-ops\": true,\n    \"enable-status\": true,\n    \"entity-broadcast-range-percentage\": 100,\n    \"log-ips\": true,\n    \"sync-chunk-writes\": true,\n    \"use-native-transport\": true,\n    \"enable-jmx-monitoring\": false,\n    \"pause-when-empty-seconds\": 60,\n    \"require-resource-pack\": false,\n    \"resource-pack\": \"\\\"\\\"\",\n    \"resource-pack-prompt\": \"\\\"\\\"\",\n    \"resource-pack-sha1\": \"\\\"\\\"\",\n    \"resource-pack-id\": \"\\\"\\\"\",\n    \"enforce-secure-profile\": true,\n    \"accepts-transfers\": false,\n    \"initial-enabled-packs\": \"vanilla\",\n    \"initial-disabled-packs\": \"\\\"\\\"\",\n    \"region-file-compression\": \"deflate\",\n    \"text-filtering-config\": \"\\\"\\\"\",\n    \"text-filtering-version\": 0,\n    \"bug-report-link\": \"\\\"\\\"\"\n  },\n  \"server\": {\n    \"properties\": {\n      \"motd\": \"A Minecraft Server3\"\n    }\n  }\n}"selectedConfigId: "我的世界_Java"selectedInstance: "b9ea67cf-6bbf-4aae-92e5-6eab800ae22e"[[Prototype]]: Objectconstructor: ƒ Object()hasOwnProperty: ƒ hasOwnProperty()isPrototypeOf: ƒ isPrototypeOf()propertyIsEnumerable: ƒ propertyIsEnumerable()toLocaleString: ƒ toLocaleString()toString: ƒ toString()valueOf: ƒ valueOf()__defineGetter__: ƒ __defineGetter__()__defineSetter__: ƒ __defineSetter__()__lookupGetter__: ƒ __lookupGetter__()__lookupSetter__: ƒ __lookupSetter__()__proto__: (...)get __proto__: ƒ __proto__()set __proto__: ƒ __proto__()
-socket.ts:275 进入低功耗模式，关闭WebSocket连接并优化浏览器性能
-socket.ts:60 Socket断开连接: io client disconnect
-socket.ts:119  Socket未连接，无法发送事件: connection-status
-emit @ socket.ts:119
-(匿名) @ socket.ts:61
-Emitter.emit @ index.js:136
-onclose @ socket.js:452
-disconnect @ socket.js:658
-enterLowPowerMode @ socket.ts:288
-enterDeepSleepMode @ Layout.tsx:95
-(匿名) @ Layout.tsx:131
-setTimeout
-resetVisibilityTimer @ Layout.tsx:130
-handleVisibilityChange @ Layout.tsx:155
-socket.ts:413 暂停非必要定时器
-socket.ts:370 浏览器低功耗模式已启用，标签页进入深度睡眠状态
-[新] 使用 Edge 中的 Copilot 来解释控制台错误: 单击
-         
-         以说明错误。
-        了解更多信息
-        不再显示
-socket.ts:363 已请求浏览器调度器优化性能
-socket.ts:299 退出低功耗模式，重新建立WebSocket连接并恢复浏览器性能
-socket.ts:418 恢复非必要定时器
-socket.ts:400 浏览器低功耗模式已禁用，标签页恢复正常状态
-socket.ts:339 页面进入空闲状态优化
-socket.ts:54 Socket连接成功: 0O691CR9xNmOzCOLAAAP
+react-dom.development.js:86 
+ Warning: React has detected a change in the order of Hooks called by GlobalMusicPlayer. This will lead to bugs and errors if not fixed. For more information, read the Rules of Hooks: https://reactjs.org/link/rules-of-hooks
+
+   Previous render            Next render
+   ------------------------------------------------------
+1. useRef                     useRef
+2. useMemo                    useMemo
+3. useSyncExternalStore       useSyncExternalStore
+4. useEffect                  useEffect
+5. useDebugValue              useDebugValue
+6. useDebugValue              useDebugValue
+7. useState                   useState
+8. useState                   useState
+9. useRef                     useRef
+10. useContext                useContext
+11. useContext                useContext
+12. useContext                useContext
+13. useContext                useContext
+14. useContext                useContext
+15. useContext                useContext
+16. useContext                useContext
+17. useRef                    useRef
+18. useContext                useContext
+19. useLayoutEffect           useLayoutEffect
+20. useCallback               useCallback
+21. undefined                 useEffect
+   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+    at GlobalMusicPlayer (http://localhost:5173/src/components/GlobalMusicPlayer.tsx:40:7)
+    at div
+    at div
+    at App (http://localhost:5173/node_modules/.vite/deps/antd.js?v=41c5d98f:21124:16)
+    at MotionWrapper (http://localhost:5173/node_modules/.vite/deps/antd.js?v=41c5d98f:6541:32)
+    at ProviderChildren (http://localhost:5173/node_modules/.vite/deps/antd.js?v=41c5d98f:6649:5)
+    at ConfigProvider (http://localhost:5173/node_modules/.vite/deps/antd.js?v=41c5d98f:6938:27)
+    at App (http://localhost:5173/src/App.tsx?t=1752220576201:124:39)
+    at Router (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=41c5d98f:4501:15)
+    at BrowserRouter (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=41c5d98f:5247:5)
+2
+react-dom.development.js:15688 
+ Uncaught Error: Rendered more hooks than during the previous render.
+    at GlobalMusicPlayer (GlobalMusicPlayer.tsx:44:3)
+react-dom.development.js:18704 
+ The above error occurred in the <GlobalMusicPlayer> component:
+
+    at GlobalMusicPlayer (http://localhost:5173/src/components/GlobalMusicPlayer.tsx:40:7)
+    at div
+    at div
+    at App (http://localhost:5173/node_modules/.vite/deps/antd.js?v=41c5d98f:21124:16)
+    at MotionWrapper (http://localhost:5173/node_modules/.vite/deps/antd.js?v=41c5d98f:6541:32)
+    at ProviderChildren (http://localhost:5173/node_modules/.vite/deps/antd.js?v=41c5d98f:6649:5)
+    at ConfigProvider (http://localhost:5173/node_modules/.vite/deps/antd.js?v=41c5d98f:6938:27)
+    at App (http://localhost:5173/src/App.tsx?t=1752220576201:124:39)
+    at Router (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=41c5d98f:4501:15)
+    at BrowserRouter (http://localhost:5173/node_modules/.vite/deps/react-router-dom.js?v=41c5d98f:5247:5)
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://reactjs.org/link/error-boundaries to learn more about error boundaries.
+react-dom.development.js:12056 
+ Uncaught Error: Rendered more hooks than during the previous render.
