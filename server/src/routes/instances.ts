@@ -490,6 +490,11 @@ const PYTHON_SCRIPT_PATH = path.join(__dirname, '..', 'Python', 'game_config_man
 // Python依赖是否已安装的标志
 let pythonDepsInstalled = false
 
+// Python环境状态管理
+let pythonEnvironmentFailed = false
+let pythonFailureCount = 0
+const MAX_PYTHON_RETRY_COUNT = 3
+
 // 获取正确的Python命令
 function getPythonCommand(): string {
   const platform = os.platform()
@@ -508,6 +513,13 @@ function getPipCommand(): string {
   } else {
     return 'pip3'
   }
+}
+
+// 重置Python环境状态
+function resetPythonEnvironmentStatus(): void {
+  pythonEnvironmentFailed = false
+  pythonFailureCount = 0
+  logger.info('Python环境状态已重置')
 }
 
 function installPythonDependencies(): Promise<void> {
@@ -596,6 +608,13 @@ function installPythonDependencies(): Promise<void> {
 function callPythonScript(method: string, args: any[] = []): Promise<any> {
   return new Promise(async (resolve, reject) => {
     try {
+      // 检查Python环境是否已经失败过多次
+      if (pythonEnvironmentFailed && pythonFailureCount >= MAX_PYTHON_RETRY_COUNT) {
+        logger.error(`Python环境已失败${pythonFailureCount}次，停止尝试启动`)
+        reject(new Error('Python环境不可用，已停止重试'))
+        return
+      }
+      
       // 确保Python依赖已安装
       await installPythonDependencies()
       
@@ -628,20 +647,28 @@ function callPythonScript(method: string, args: any[] = []): Promise<any> {
         if (code === 0) {
           try {
             const result = JSON.parse(stdout)
+            // 成功时重置失败状态
+            pythonEnvironmentFailed = false
+            pythonFailureCount = 0
             resolve(result)
           } catch (error) {
             logger.error(`JSON解析失败: ${error}, stdout: ${stdout}`)
             reject(new Error(`JSON解析失败: ${error}`))
           }
         } else {
-          logger.error(`Python脚本执行失败，退出码: ${code}, stderr: ${stderr}, stdout: ${stdout}`)
+          pythonFailureCount++
+          pythonEnvironmentFailed = true
+          logger.error(`Python脚本执行失败 (第${pythonFailureCount}次)，退出码: ${code}, stderr: ${stderr}, stdout: ${stdout}`)
           reject(new Error(`Python脚本执行失败: ${stderr}`))
         }
       })
 
       pythonProcess.on('error', (error) => {
-         reject(new Error(`启动Python进程失败: ${error.message}`))
-       })
+        pythonFailureCount++
+        pythonEnvironmentFailed = true
+        logger.error(`Python进程启动失败 (第${pythonFailureCount}次): ${error.message}`)
+        reject(new Error(`启动Python进程失败: ${error.message}`))
+      })
      } catch (error) {
        reject(error)
      }
@@ -823,6 +850,24 @@ router.post('/:instanceId/configs/:configId', authenticateToken, async (req: Req
   }
 })
 
+// 重置Python环境状态
+router.post('/python/reset', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    resetPythonEnvironmentStatus()
+    res.json({
+      success: true,
+      message: 'Python环境状态已重置'
+    })
+  } catch (error: any) {
+    logger.error('重置Python环境状态失败:', error)
+    res.status(500).json({
+      success: false,
+      error: '重置Python环境状态失败',
+      message: error.message
+    })
+  }
+})
+
 // Python环境检测
 router.get('/python/check', authenticateToken, async (req: Request, res: Response) => {
   try {
@@ -842,7 +887,9 @@ router.get('/python/check', authenticateToken, async (req: Request, res: Respons
         available: true,
         version: version,
         command: pythonCommand,
-        platform: platform
+        platform: platform,
+        failureCount: pythonFailureCount,
+        environmentFailed: pythonEnvironmentFailed
       }
     })
   } catch (error: any) {
@@ -853,7 +900,9 @@ router.get('/python/check', authenticateToken, async (req: Request, res: Respons
       data: {
         available: false,
         error: `未检测到Python环境: ${error.message}`,
-        platform: os.platform()
+        platform: os.platform(),
+        failureCount: pythonFailureCount,
+        environmentFailed: pythonEnvironmentFailed
       }
     })
   }
