@@ -45,6 +45,7 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     sourcemap: true,
+    assetsDir: 'assets',
     rollupOptions: {
       output: {
         manualChunks: {
@@ -53,6 +54,7 @@ export default defineConfig({
       },
     },
   },
+  publicDir: 'public',
   optimizeDeps: {
     include: ['monaco-editor'],
   },
