@@ -344,16 +344,14 @@ const FileManagerPage: React.FC = () => {
   const handleFileDoubleClick = (file: FileItem) => {
     if (file.type === 'directory') {
       navigateToPath(file.path)
-    } else if (isTextFile(file.name)) {
-      openFile(file.path)
-      setEditorModalVisible(true)
     } else if (isImageFile(file.name)) {
       setPreviewImagePath(file.path)
       setPreviewImageName(file.name)
       setImagePreviewVisible(true)
     } else {
-      // 非文本文件，提示下载
-      message.info('该文件类型不支持在线编辑，请下载查看')
+      // 默认使用文本编辑器打开所有非图片文件（包括无后缀文件和非标准后缀文件）
+      openFile(file.path)
+      setEditorModalVisible(true)
     }
   }
   
