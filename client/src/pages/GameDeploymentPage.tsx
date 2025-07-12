@@ -1301,7 +1301,7 @@ const GameDeploymentPage: React.FC = () => {
                       href={gameInfo.url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="bg-black/50 text-white p-1 rounded hover:bg-black/70 transition-colors"
+                      className="text-white p-1 rounded transition-colors"
                       title="查看Steam商店页面"
                     >
                       <ExternalLink className="w-4 h-4" />
