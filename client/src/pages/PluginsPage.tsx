@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
 import { ApiClient } from '@/utils/api'
 import { useNotificationStore } from '@/stores/notificationStore'
+import ConfirmDialog from '@/components/ConfirmDialog'
 import {
   Plus,
   Settings,
@@ -50,6 +52,8 @@ const PluginsPage: React.FC = () => {
   const [showPluginModal, setShowPluginModal] = useState(false)
   const [currentPluginContent, setCurrentPluginContent] = useState<string>('')
   const [currentPluginName, setCurrentPluginName] = useState<string>('')
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [pluginToDelete, setPluginToDelete] = useState<Plugin | null>(null)
   const [createForm, setCreateForm] = useState<CreatePluginForm>({
     name: '',
     displayName: '',
@@ -179,13 +183,16 @@ const PluginsPage: React.FC = () => {
     }
   }
 
-  const handleDeletePlugin = async (plugin: Plugin) => {
-    if (!confirm(`确定要删除插件 "${plugin.displayName}" 吗？此操作不可撤销。`)) {
-      return
-    }
+  const handleDeletePlugin = (plugin: Plugin) => {
+    setPluginToDelete(plugin)
+    setShowDeleteConfirm(true)
+  }
+
+  const confirmDeletePlugin = async () => {
+    if (!pluginToDelete) return
 
     try {
-      const response = await apiClient.delete(`/plugins/${plugin.name}`)
+      const response = await apiClient.delete(`/plugins/${pluginToDelete.name}`)
       if (response.success) {
         addNotification({ type: 'success', title: '成功', message: '插件删除成功' })
         loadPlugins()
@@ -195,6 +202,9 @@ const PluginsPage: React.FC = () => {
     } catch (error) {
       console.error('删除插件失败:', error)
       addNotification({ type: 'error', title: '错误', message: '删除插件失败' })
+    } finally {
+      setShowDeleteConfirm(false)
+      setPluginToDelete(null)
     }
   }
 
@@ -397,38 +407,81 @@ const PluginsPage: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
-      </div>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        className="flex items-center justify-center h-64"
+      >
+        <motion.div
+          animate={{ rotate: 360 }}
+          transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+          className="rounded-full h-12 w-12 border-b-2 border-blue-500"
+        />
+        <motion.p
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.5 }}
+          className="ml-4 text-gray-600 dark:text-gray-400"
+        >
+          加载插件中...
+        </motion.p>
+      </motion.div>
     )
   }
 
   return (
     <div className="p-6 space-y-6">
       {/* 页面标题和操作 */}
-      <div className="flex items-center justify-between">
+      <motion.div
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5 }}
+        className="flex items-center justify-between"
+      >
         <div>
-          <h1 className="text-2xl font-bold text-black dark:text-white">插件管理</h1>
-          <p className="text-gray-600 dark:text-gray-400 mt-1">
+          <motion.h1
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.5, delay: 0.1 }}
+            className="text-2xl font-bold text-black dark:text-white"
+          >
+            插件管理
+          </motion.h1>
+          <motion.p
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.5, delay: 0.2 }}
+            className="text-gray-600 dark:text-gray-400 mt-1"
+          >
             管理和配置系统插件，扩展面板功能
-          </p>
+          </motion.p>
         </div>
-        <button
+        <motion.button
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.5, delay: 0.3 }}
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
           onClick={() => setShowCreateModal(true)}
           className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
         >
           <Plus className="w-4 h-4" />
           <span>创建插件</span>
-        </button>
-      </div>
+        </motion.button>
+      </motion.div>
 
       {/* 插件列表 */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {plugins.map((plugin) => (
-          <div
-            key={plugin.name}
-            className="glass rounded-lg p-6 border border-white/20 dark:border-gray-700/30 hover:shadow-lg transition-all duration-300"
-          >
+        <AnimatePresence>
+          {plugins.map((plugin, index) => (
+            <motion.div
+              key={plugin.name}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ duration: 0.3, delay: index * 0.1 }}
+              className="glass rounded-lg p-6 border border-white/20 dark:border-gray-700/30 hover:shadow-lg transition-all duration-300"
+            >
             {/* 插件头部 */}
             <div className="flex items-start justify-between mb-4">
               <div className="flex items-center space-x-3">
@@ -480,7 +533,9 @@ const PluginsPage: React.FC = () => {
             {/* 操作按钮 */}
             <div className="flex items-center justify-between pt-4 border-t border-white/10 dark:border-gray-700/30">
               <div className="flex items-center space-x-2">
-                <button
+                <motion.button
+                  whileHover={{ scale: 1.1 }}
+                  whileTap={{ scale: 0.9 }}
                   onClick={() => handleTogglePlugin(plugin)}
                   className={`p-2 rounded-lg transition-colors ${
                     plugin.enabled
@@ -490,89 +545,162 @@ const PluginsPage: React.FC = () => {
                   title={plugin.enabled ? '禁用插件' : '启用插件'}
                 >
                   {plugin.enabled ? <Power className="w-4 h-4" /> : <PowerOff className="w-4 h-4" />}
-                </button>
+                </motion.button>
                 {plugin.hasWebInterface && plugin.enabled && (
-                  <button
+                  <motion.button
+                    whileHover={{ scale: 1.1 }}
+                    whileTap={{ scale: 0.9 }}
                     onClick={() => handleOpenPlugin(plugin)}
                     className="p-2 bg-blue-500/20 text-blue-600 rounded-lg hover:bg-blue-500/30 transition-colors"
                     title="打开插件"
                   >
                     <ExternalLink className="w-4 h-4" />
-                  </button>
+                  </motion.button>
                 )}
               </div>
-              <button
+              <motion.button
+                whileHover={{ scale: 1.1 }}
+                whileTap={{ scale: 0.9 }}
                 onClick={() => handleDeletePlugin(plugin)}
                 className="p-2 bg-red-500/20 text-red-600 rounded-lg hover:bg-red-500/30 transition-colors"
                 title="删除插件"
               >
                 <Trash2 className="w-4 h-4" />
-              </button>
+              </motion.button>
             </div>
-          </div>
-        ))}
+            </motion.div>
+          ))}
+        </AnimatePresence>
       </div>
 
       {plugins.length === 0 && (
-        <div className="text-center py-12">
-          <Puzzle className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-600 dark:text-gray-400 mb-2">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+          className="text-center py-12"
+        >
+          <motion.div
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            transition={{ duration: 0.5, delay: 0.2 }}
+          >
+            <Puzzle className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+          </motion.div>
+          <motion.h3
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.5, delay: 0.3 }}
+            className="text-lg font-medium text-gray-600 dark:text-gray-400 mb-2"
+          >
             暂无插件
-          </h3>
-          <p className="text-gray-500 dark:text-gray-500 mb-4">
+          </motion.h3>
+          <motion.p
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.5, delay: 0.4 }}
+            className="text-gray-500 dark:text-gray-500 mb-4"
+          >
             创建您的第一个插件来扩展面板功能
-          </p>
-          <button
+          </motion.p>
+          <motion.button
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.5 }}
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
             onClick={() => setShowCreateModal(true)}
             className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
           >
             创建插件
-          </button>
-        </div>
+          </motion.button>
+        </motion.div>
       )}
 
       {/* 插件展示模态框 */}
-      {showPluginModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="glass rounded-lg w-[90vw] h-[90vh] flex flex-col mx-4 border border-white/20 dark:border-gray-700/30">
-            <div className="flex justify-between items-center p-4 border-b border-white/10 dark:border-gray-700/30">
-              <h2 className="text-xl font-bold text-black dark:text-white">{currentPluginName}</h2>
-              <button
-                onClick={() => {
-                  setShowPluginModal(false)
-                  setCurrentPluginContent('')
-                  setCurrentPluginName('')
-                }}
-                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-              >
-                <X className="w-6 h-6" />
-              </button>
-            </div>
-            <div className="flex-1 p-4">
-              <iframe
-                srcDoc={currentPluginContent}
-                className="w-full h-full border-0 rounded-lg bg-white dark:bg-gray-900"
-                sandbox="allow-scripts allow-same-origin allow-forms"
-                title={currentPluginName}
-              />
-            </div>
-          </div>
-        </div>
-      )}
+      <AnimatePresence>
+        {showPluginModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm"
+            onClick={() => {
+              setShowPluginModal(false)
+              setCurrentPluginContent('')
+              setCurrentPluginName('')
+            }}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              transition={{ duration: 0.3, ease: "easeOut" }}
+              className="glass rounded-lg w-[90vw] h-[90vh] flex flex-col mx-4 border border-white/20 dark:border-gray-700/30"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex justify-between items-center p-4 border-b border-white/10 dark:border-gray-700/30">
+                <h2 className="text-xl font-bold text-black dark:text-white">{currentPluginName}</h2>
+                <motion.button
+                  whileHover={{ scale: 1.1 }}
+                  whileTap={{ scale: 0.9 }}
+                  onClick={() => {
+                    setShowPluginModal(false)
+                    setCurrentPluginContent('')
+                    setCurrentPluginName('')
+                  }}
+                  className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                >
+                  <X className="w-6 h-6" />
+                </motion.button>
+              </div>
+              <div className="flex-1 p-4">
+                <motion.iframe
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ duration: 0.4, delay: 0.2 }}
+                  srcDoc={currentPluginContent}
+                  className="w-full h-full border-0 rounded-lg bg-white dark:bg-gray-900"
+                  sandbox="allow-scripts allow-same-origin allow-forms"
+                  title={currentPluginName}
+                />
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* 创建插件模态框 */}
-      {showCreateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="glass rounded-lg p-6 w-full max-w-md mx-4 border border-white/20 dark:border-gray-700/30">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-bold text-black dark:text-white">创建新插件</h2>
-              <button
-                onClick={() => setShowCreateModal(false)}
-                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-              >
-                <X className="w-6 h-6" />
-              </button>
-            </div>
+      <AnimatePresence>
+        {showCreateModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+            onClick={() => setShowCreateModal(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              transition={{ duration: 0.3, ease: "easeOut" }}
+              className="glass rounded-lg p-6 w-full max-w-md mx-4 border border-white/20 dark:border-gray-700/30"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-bold text-black dark:text-white">创建新插件</h2>
+                <motion.button
+                  whileHover={{ scale: 1.1 }}
+                  whileTap={{ scale: 0.9 }}
+                  onClick={() => setShowCreateModal(false)}
+                  className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                >
+                  <X className="w-6 h-6" />
+                </motion.button>
+              </div>
 
             <div className="space-y-4">
               <div>
@@ -677,23 +805,43 @@ const PluginsPage: React.FC = () => {
               </div>
             </div>
 
-            <div className="flex items-center justify-end space-x-3 mt-6">
-              <button
-                onClick={() => setShowCreateModal(false)}
-                className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors"
-              >
-                取消
-              </button>
-              <button
-                onClick={handleCreatePlugin}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                创建
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+              <div className="flex items-center justify-end space-x-3 mt-6">
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => setShowCreateModal(false)}
+                  className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors"
+                >
+                  取消
+                </motion.button>
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={handleCreatePlugin}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  创建
+                </motion.button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* 删除确认对话框 */}
+      <ConfirmDialog
+        visible={showDeleteConfirm}
+        title="删除插件"
+        message={`确定要删除插件 "${pluginToDelete?.displayName || pluginToDelete?.name}" 吗？此操作不可撤销。`}
+        confirmText="删除"
+        cancelText="取消"
+        type="danger"
+        onConfirm={confirmDeletePlugin}
+        onCancel={() => {
+          setShowDeleteConfirm(false)
+          setPluginToDelete(null)
+        }}
+      />
     </div>
   )
 }
