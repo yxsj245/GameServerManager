@@ -9,14 +9,6 @@ services:
     ports:
       # GSM3管理面板端口
       - "3001:3001"                   # GSM3 Web管理界面
-      # 默认开放的常用Steam游戏服务器端口
-      - "27015-27020:27015-27020/tcp"  # Steam 匹配和RCON
-      - "27015-27020:27015-27020/udp"  # 游戏流量
-      # 常用游戏端口范围
-      - "7777-7784:7777-7784/tcp"     # 7 Days to Die等
-      - "7777-7784:7777-7784/udp"     # 7 Days to Die等
-      - "25565:25565"                 # Minecraft
-      - "19132:19132/udp"             # Minecraft Bedrock
     volumes:
       - ./game_data:/home/steam/games  # 游戏数据
       - ./game_file:/home/steam/.config # 通用游戏存档路径1。请务必将此宿主目录权限设置为777

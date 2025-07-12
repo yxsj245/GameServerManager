@@ -143,7 +143,7 @@ WORKDIR /app
 
 # 安装依赖并构建项目
 RUN npm run install:all \
-    && npm run package:linux
+    && npm run package:linux:no-zip
 
 # 切换回root用户继续安装SteamCMD
 USER root

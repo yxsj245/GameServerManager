@@ -15,6 +15,7 @@ const packageDir = path.join(distDir, 'package')
 // 获取命令行参数
 const args = process.argv.slice(2)
 const buildTarget = args.find(arg => arg.startsWith('--target='))?.split('=')[1]
+const skipZip = args.includes('--no-zip') || args.includes('--skip-zip')
 const outputFile = buildTarget 
   ? path.join(distDir, `${packageName}-${buildTarget}-v${version}.zip`)
   : path.join(distDir, `${packageName}-v${version}.zip`)
@@ -337,13 +338,19 @@ http://localhost:3001
       readme
     )
     
-    console.log('🗜️ 创建压缩包...')
-    // 创建ZIP压缩包
-    await createZip(packageDir, outputFile)
-    
-    console.log('✅ 打包完成!')
-    console.log(`📦 输出文件: ${outputFile}`)
-    console.log(`📁 包大小: ${(await fs.stat(outputFile)).size / 1024 / 1024} MB`)
+    if (skipZip) {
+      console.log('⏭️ 跳过压缩包创建...')
+      console.log('✅ 打包完成!')
+      console.log(`📁 输出目录: ${packageDir}`)
+    } else {
+      console.log('🗜️ 创建压缩包...')
+      // 创建ZIP压缩包
+      await createZip(packageDir, outputFile)
+      
+      console.log('✅ 打包完成!')
+      console.log(`📦 输出文件: ${outputFile}`)
+      console.log(`📁 包大小: ${(await fs.stat(outputFile)).size / 1024 / 1024} MB`)
+    }
     
   } catch (error) {
     console.error('❌ 打包失败:', error)

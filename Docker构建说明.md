@@ -18,7 +18,7 @@
 
 1. **环境准备**: 安装 Node.js 22.17.0、Python 3.x 和游戏服务器依赖
 2. **项目构建**: 自动执行 `npm run install:all` 安装所有依赖
-3. **应用打包**: 自动执行 `npm run package:linux` 生成 Linux 生产包
+3. **应用打包**: 自动执行 `npm run package:linux:no-zip` 生成 Linux 生产包（不创建压缩包）
 4. **SteamCMD 安装**: 下载并配置 SteamCMD
 5. **最终部署**: 将构建好的应用部署到容器中
 
@@ -126,6 +126,26 @@ docker-compose restart gsm3-server
 # 重新构建并启动
 docker-compose up --build -d
 ```
+
+## 打包选项说明
+
+项目支持多种打包方式：
+
+```bash
+# 标准打包（创建压缩包）
+npm run package              # 通用版本
+npm run package:linux        # Linux版本
+npm run package:windows      # Windows版本
+
+# 不创建压缩包（仅生成文件夹）
+npm run package:no-zip           # 通用版本，不创建压缩包
+npm run package:linux:no-zip    # Linux版本，不创建压缩包
+npm run package:windows:no-zip  # Windows版本，不创建压缩包
+```
+
+**使用场景**：
+- `--no-zip` 参数适用于 Docker 构建，避免创建不必要的压缩包
+- 开发和测试环境可以使用不压缩版本，便于快速部署和调试
 
 ## 开发模式
 
