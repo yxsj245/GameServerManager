@@ -120,6 +120,23 @@ RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
     && npm config set registry https://registry.npmmirror.com \
     && npm install -g npm@latest
 
+# 安装Java 21（通过Adoptium仓库）
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        wget \
+        apt-transport-https \
+        gnupg \
+    && wget -qO - https://packages.adoptium.net/artifactory/api/gpg/key/public | apt-key add - \
+    && echo "deb https://packages.adoptium.net/artifactory/deb $(awk -F= '/^VERSION_CODENAME/{print$2}' /etc/os-release) main" | tee /etc/apt/sources.list.d/adoptium.list \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends \
+        temurin-21-jdk \
+    && rm -rf /var/lib/apt/lists/*
+
+# 设置Java环境变量
+ENV JAVA_HOME=/usr/lib/jvm/temurin-21-jdk-amd64 \
+    PATH="$JAVA_HOME/bin:$PATH"
+
 # 设置 locales
 RUN sed -i -e 's/# en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen \
     && sed -i -e 's/# zh_CN.UTF-8 UTF-8/zh_CN.UTF-8 UTF-8/' /etc/locale.gen \
@@ -195,6 +212,11 @@ RUN cp -r /app/dist/package/* /root/ \
 # 复制启动脚本到root目录
 COPY start.sh /root/start.sh
 RUN chmod +x /root/start.sh
+
+# 创建数据目录并复制默认数据
+RUN mkdir -p /root/server/data \
+    && cp -r /app/server/data/* /root/server/data/ \
+    && chown -R root:root /root/server/data
 
 # 创建目录用于挂载游戏数据
 VOLUME ["${GAMES_DIR}"]
