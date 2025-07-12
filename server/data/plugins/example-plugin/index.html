@@ -242,6 +242,98 @@
             <p>欢迎使用 GSM3 插件系统演示</p>
         </div>
 
+        <!-- 开发文档说明 -->
+        <div class="demo-section">
+            <h3>📚 插件开发文档</h3>
+            <p>这是一个完整的插件开发示例，展示了如何使用 GSM3 插件系统创建功能丰富的 Web 界面。</p>
+            
+            <div class="cards" style="margin-bottom: 20px;">
+                <div class="card">
+                    <h3>📖 开发指南</h3>
+                    <p>查看完整的插件开发文档，了解插件结构、API使用方法和最佳实践。</p>
+                    <div style="margin-top: 15px;">
+                        <a href="../插件开发文档.md" target="_blank" class="btn btn-info">查看开发文档</a>
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <h3>🔧 快速开始</h3>
+                    <p>复制这个示例插件作为模板，修改配置文件和界面即可创建您自己的插件。</p>
+                    <div style="margin-top: 15px;">
+                        <button class="btn btn-success" onclick="showQuickStart()">快速开始指南</button>
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <h3>🎯 核心功能</h3>
+                    <p>本示例展示了系统信息、实例管理、文件操作、终端管理等核心API的使用方法。</p>
+                    <div style="margin-top: 15px;">
+                        <button class="btn btn-warning" onclick="showApiOverview()">API概览</button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 快速开始指南 -->
+            <div id="quickStartGuide" style="display: none; margin-top: 20px; padding: 20px; background: rgba(255,255,255,0.1); border-radius: 15px;">
+                <h4>🚀 快速开始指南</h4>
+                <ol style="line-height: 1.8; padding-left: 20px;">
+                    <li>复制 <code>example-plugin</code> 目录并重命名为您的插件名称</li>
+                    <li>修改 <code>plugin.json</code> 文件中的插件信息</li>
+                    <li>编辑 <code>index.html</code> 文件，创建您的界面</li>
+                    <li>使用 <code>gsm3-api.js</code> 调用系统API</li>
+                    <li>重新加载插件页面查看效果</li>
+                </ol>
+                <div style="margin-top: 15px;">
+                    <button class="btn" onclick="hideQuickStart()">关闭</button>
+                </div>
+            </div>
+            
+            <!-- API概览 -->
+            <div id="apiOverview" style="display: none; margin-top: 20px; padding: 20px; background: rgba(255,255,255,0.1); border-radius: 15px;">
+                <h4>🎯 主要API功能</h4>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-top: 15px;">
+                    <div style="background: rgba(255,255,255,0.1); padding: 15px; border-radius: 10px;">
+                        <h5 style="color: #ffd700; margin-bottom: 10px;">系统信息</h5>
+                        <ul style="font-size: 0.9rem; line-height: 1.6;">
+                            <li>getSystemStatus()</li>
+                            <li>getSystemInfo()</li>
+                            <li>healthCheck()</li>
+                        </ul>
+                    </div>
+                    <div style="background: rgba(255,255,255,0.1); padding: 15px; border-radius: 10px;">
+                        <h5 style="color: #ffd700; margin-bottom: 10px;">实例管理</h5>
+                        <ul style="font-size: 0.9rem; line-height: 1.6;">
+                            <li>getInstances()</li>
+                            <li>createInstance()</li>
+                            <li>startInstance()</li>
+                            <li>stopInstance()</li>
+                        </ul>
+                    </div>
+                    <div style="background: rgba(255,255,255,0.1); padding: 15px; border-radius: 10px;">
+                        <h5 style="color: #ffd700; margin-bottom: 10px;">文件操作</h5>
+                        <ul style="font-size: 0.9rem; line-height: 1.6;">
+                            <li>readFile()</li>
+                            <li>writeFile()</li>
+                            <li>listDirectory()</li>
+                            <li>createDirectory()</li>
+                        </ul>
+                    </div>
+                    <div style="background: rgba(255,255,255,0.1); padding: 15px; border-radius: 10px;">
+                        <h5 style="color: #ffd700; margin-bottom: 10px;">终端管理</h5>
+                        <ul style="font-size: 0.9rem; line-height: 1.6;">
+                            <li>getTerminals()</li>
+                            <li>getTerminalStats()</li>
+                            <li>getTerminalSessions()</li>
+                            <li>updateTerminalSessionName()</li>
+                        </ul>
+                    </div>
+                </div>
+                <div style="margin-top: 15px;">
+                    <button class="btn" onclick="hideApiOverview()">关闭</button>
+                </div>
+            </div>
+        </div>
+
         <div class="cards">
             <div class="card">
                 <h3>🚀 插件功能</h3>
@@ -1362,10 +1454,40 @@
             }
         }
 
+        // 显示快速开始指南
+        function showQuickStart() {
+            const guide = document.getElementById('quickStartGuide')
+            const overview = document.getElementById('apiOverview')
+            guide.style.display = 'block'
+            overview.style.display = 'none'
+        }
+
+        // 隐藏快速开始指南
+        function hideQuickStart() {
+            const guide = document.getElementById('quickStartGuide')
+            guide.style.display = 'none'
+        }
+
+        // 显示API概览
+        function showApiOverview() {
+            const guide = document.getElementById('quickStartGuide')
+            const overview = document.getElementById('apiOverview')
+            overview.style.display = 'block'
+            guide.style.display = 'none'
+        }
+
+        // 隐藏API概览
+        function hideApiOverview() {
+            const overview = document.getElementById('apiOverview')
+            overview.style.display = 'none'
+        }
+
         // 控制台欢迎信息
         console.log('%c🧩 GSM3 插件系统', 'color: #667eea; font-size: 20px; font-weight: bold;')
         console.log('%c欢迎使用示例插件！', 'color: #764ba2; font-size: 14px;')
-        console.log('插件开发文档: https://github.com/your-repo/gsm3-docs')
+        console.log('插件开发文档: 查看 ../插件开发文档.md')
+        console.log('API使用示例: 点击页面上的按钮体验各种功能')
+        console.log('快速开始: 复制此插件目录作为模板开始开发')
         
         // 等待GSM3 API加载完成后进行健康检查
         window.addEventListener('load', async () => {

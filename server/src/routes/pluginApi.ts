@@ -204,17 +204,73 @@ router.get('/instances/:id/status', async (req: Request, res: Response) => {
 // 获取市场实例列表
 router.get('/instances/market', async (req: Request, res: Response) => {
   try {
-    if (!instanceManager) {
-      return res.status(503).json({
-        success: false,
-        message: '实例管理器未初始化'
-      })
+    const os = await import('os')
+    const http = await import('http')
+    
+    // 确定系统类型
+    const platform = os.platform()
+    let systemType = 'Linux'
+    if (platform === 'win32') {
+      systemType = 'Windows'
     }
-
-    const marketInstances = instanceManager.getMarketInstances()
+    
+    // 请求第二个服务获取实例市场数据
+    const marketUrl = `http://langlangy.server.xiaozhuhouses.asia:10002/api/instances?system_type=${systemType}`
+    
+    logger.info(`插件请求实例市场数据: ${marketUrl}`)
+    
+    // 使用Promise包装http请求
+    const marketData = await new Promise((resolve, reject) => {
+      const url = new URL(marketUrl)
+      const options = {
+        hostname: url.hostname,
+        port: url.port,
+        path: url.pathname + url.search,
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'User-Agent': 'GSM3-Plugin-API/1.0'
+        }
+      }
+      
+      const req = http.request(options, (response) => {
+        let data = ''
+        
+        response.on('data', (chunk) => {
+          data += chunk
+        })
+        
+        response.on('end', () => {
+           try {
+             if (response.statusCode && response.statusCode >= 200 && response.statusCode < 300) {
+               const jsonData = JSON.parse(data)
+               resolve(jsonData)
+             } else {
+               logger.error(`插件API请求失败 - 状态码: ${response.statusCode}, 响应内容: ${data}`)
+               reject(new Error(`HTTP error! status: ${response.statusCode}, response: ${data}`))
+             }
+           } catch (parseError) {
+             logger.error(`插件JSON解析失败: ${parseError}, 原始数据: ${data}`)
+             reject(new Error(`JSON parse error: ${parseError}`))
+           }
+         })
+      })
+      
+      req.on('error', (error) => {
+        reject(error)
+      })
+      
+      req.setTimeout(10000, () => {
+        req.destroy()
+        reject(new Error('Request timeout'))
+      })
+      
+      req.end()
+    })
+    
     res.json({
       success: true,
-      data: marketInstances
+      data: marketData
     })
   } catch (error) {
     logger.error('插件获取市场实例列表失败:', error)
