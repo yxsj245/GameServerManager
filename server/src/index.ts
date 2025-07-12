@@ -18,6 +18,7 @@ import { AuthManager } from './modules/auth/AuthManager.js'
 import { InstanceManager } from './modules/instance/InstanceManager.js'
 import { SteamCMDManager } from './modules/steamcmd/SteamCMDManager.js'
 import { SchedulerManager } from './modules/scheduler/SchedulerManager.js'
+import { PluginManager } from './modules/plugin/PluginManager.js'
 import { setupTerminalRoutes } from './routes/terminal.js'
 import { setupGameRoutes } from './routes/games.js'
 import { setupSystemRoutes } from './routes/system.js'
@@ -31,6 +32,7 @@ import gameDeploymentRouter, { setGameDeploymentManagers } from './routes/gameDe
 import minecraftRouter from './routes/minecraft.js'
 import moreGamesRouter from './routes/moreGames.js'
 import weatherRouter from './routes/weather.js'
+import pluginsRouter, { setPluginManager } from './routes/plugins.js'
 
 // 获取当前文件目录
 const __filename = fileURLToPath(import.meta.url)
@@ -111,6 +113,7 @@ let systemManager: SystemManager
 let instanceManager: InstanceManager
 let steamcmdManager: SteamCMDManager
 let schedulerManager: SchedulerManager
+let pluginManager: PluginManager
 
 // 健康检查端点
 app.get('/api/health', (req, res) => {
@@ -188,6 +191,10 @@ function gracefulShutdown(signal: string) {
     if (schedulerManager) {
       schedulerManager.destroy()
       logger.info('SchedulerManager 已清理')
+    }
+    if (pluginManager) {
+      pluginManager.cleanup()
+      logger.info('PluginManager 已清理')
     }
     logger.info('管理器清理完成。')
   } catch (cleanupErr) {
@@ -436,6 +443,7 @@ async function startServer() {
     systemManager = new SystemManager(io, logger)
     instanceManager = new InstanceManager(terminalManager, logger)
     steamcmdManager = new SteamCMDManager(logger, configManager)
+    pluginManager = new PluginManager(logger)
     
     // 确保data目录存在
     const dataDir = path.join(process.cwd(), 'data')
@@ -453,7 +461,9 @@ async function startServer() {
     await authManager.initialize()
     await terminalManager.initialize()
     await instanceManager.initialize()
+    await pluginManager.loadPlugins()
     setAuthManager(authManager)
+    setPluginManager(pluginManager)
     
     // 设置schedulerManager与gameManager、instanceManager和terminalManager的关联
     schedulerManager.setGameManager(gameManager)
@@ -489,6 +499,9 @@ async function startServer() {
     
     // 设置天气路由
     app.use('/api/weather', weatherRouter)
+    
+    // 设置插件路由
+    app.use('/api/plugins', pluginsRouter)
 
     // 前端路由处理（SPA支持）
     app.get('*', (req, res) => {

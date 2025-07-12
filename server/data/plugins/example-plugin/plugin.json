@@ -1,0 +1,12 @@
+{
+  "name": "example-plugin",
+  "displayName": "示例插件",
+  "description": "这是一个演示插件功能的示例插件，展示了如何创建自定义的Web界面。",
+  "version": "1.0.0",
+  "author": "GSM3团队",
+  "enabled": true,
+  "hasWebInterface": true,
+  "entryPoint": "index.html",
+  "icon": "puzzle",
+  "category": "工具"
+}

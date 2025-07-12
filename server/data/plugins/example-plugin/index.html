@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>示例插件 - GSM3</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .header h1 {
+            font-size: 3rem;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+            background: linear-gradient(45deg, #ffd700, #ffed4e);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .header p {
+            font-size: 1.2rem;
+            opacity: 0.9;
+        }
+
+        .cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 30px;
+            margin-bottom: 40px;
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 30px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, #ffd700, #ffed4e, #ffd700);
+            background-size: 200% 100%;
+            animation: shimmer 2s infinite;
+        }
+
+        @keyframes shimmer {
+            0% { background-position: -200% 0; }
+            100% { background-position: 200% 0; }
+        }
+
+        .card:hover {
+            transform: translateY(-10px);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+        }
+
+        .card h3 {
+            font-size: 1.5rem;
+            margin-bottom: 15px;
+            color: #ffd700;
+        }
+
+        .card p {
+            line-height: 1.6;
+            opacity: 0.9;
+        }
+
+        .features {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 40px;
+        }
+
+        .feature {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 20px;
+            border-radius: 15px;
+            text-align: center;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: all 0.3s ease;
+        }
+
+        .feature:hover {
+            background: rgba(255, 255, 255, 0.1);
+            transform: scale(1.05);
+        }
+
+        .feature-icon {
+            font-size: 2.5rem;
+            margin-bottom: 15px;
+            display: block;
+        }
+
+        .feature h4 {
+            margin-bottom: 10px;
+            color: #ffd700;
+        }
+
+        .demo-section {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 30px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            margin-bottom: 30px;
+        }
+
+        .demo-section h3 {
+            color: #ffd700;
+            margin-bottom: 20px;
+            font-size: 1.5rem;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 25px;
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+            background: linear-gradient(45deg, #764ba2, #667eea);
+        }
+
+        .btn-success {
+            background: linear-gradient(45deg, #56ab2f, #a8e6cf);
+        }
+
+        .btn-warning {
+            background: linear-gradient(45deg, #f093fb, #f5576c);
+        }
+
+        .btn-info {
+            background: linear-gradient(45deg, #4facfe, #00f2fe);
+        }
+
+        .status-display {
+            background: rgba(0, 0, 0, 0.2);
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 15px;
+            font-family: 'Courier New', monospace;
+        }
+
+        .footer {
+            text-align: center;
+            padding: 20px;
+            opacity: 0.7;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .pulse {
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.7; }
+            100% { opacity: 1; }
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: #ffd700;
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 2rem;
+            }
+            
+            .cards {
+                grid-template-columns: 1fr;
+            }
+            
+            .button-group {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🧩 示例插件</h1>
+            <p>欢迎使用 GSM3 插件系统演示</p>
+        </div>
+
+        <div class="cards">
+            <div class="card">
+                <h3>🚀 插件功能</h3>
+                <p>这个示例插件展示了 GSM3 插件系统的强大功能。您可以创建自定义的 Web 界面，集成各种工具和服务，扩展面板的功能。</p>
+            </div>
+
+            <div class="card">
+                <h3>🎨 自定义界面</h3>
+                <p>使用 HTML、CSS 和 JavaScript 创建美观的用户界面。支持响应式设计，适配各种设备屏幕。</p>
+            </div>
+
+            <div class="card">
+                <h3>🔧 易于开发</h3>
+                <p>简单的文件结构，只需要在插件目录中放置您的文件即可。支持热重载，开发体验流畅。</p>
+            </div>
+        </div>
+
+        <div class="features">
+            <div class="feature">
+                <span class="feature-icon">⚡</span>
+                <h4>高性能</h4>
+                <p>优化的加载速度</p>
+            </div>
+            <div class="feature">
+                <span class="feature-icon">🔒</span>
+                <h4>安全可靠</h4>
+                <p>沙箱环境运行</p>
+            </div>
+            <div class="feature">
+                <span class="feature-icon">🎯</span>
+                <h4>易于使用</h4>
+                <p>直观的操作界面</p>
+            </div>
+            <div class="feature">
+                <span class="feature-icon">🔄</span>
+                <h4>实时更新</h4>
+                <p>动态内容刷新</p>
+            </div>
+        </div>
+
+        <div class="demo-section">
+            <h3>🎮 交互演示</h3>
+            <p>点击下面的按钮体验插件的交互功能：</p>
+            
+            <div class="button-group">
+                <button class="btn" onclick="showMessage('info', '这是一个信息提示！')">信息提示</button>
+                <button class="btn btn-success" onclick="showMessage('success', '操作成功完成！')">成功消息</button>
+                <button class="btn btn-warning" onclick="showMessage('warning', '这是一个警告消息！')">警告消息</button>
+                <button class="btn btn-info" onclick="simulateLoading()">模拟加载</button>
+            </div>
+
+            <div id="statusDisplay" class="status-display">
+                <strong>状态:</strong> 就绪 | <strong>时间:</strong> <span id="currentTime"></span>
+            </div>
+        </div>
+
+        <div class="demo-section">
+            <h3>📊 系统信息</h3>
+            <div id="systemInfo">
+                <p><strong>插件名称:</strong> 示例插件</p>
+                <p><strong>版本:</strong> 1.0.0</p>
+                <p><strong>作者:</strong> GSM3团队</p>
+                <p><strong>加载时间:</strong> <span id="loadTime"></span></p>
+                <p><strong>浏览器:</strong> <span id="browserInfo"></span></p>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>© 2024 GSM3 插件系统 | 由 GSM3 团队开发</p>
+        </div>
+    </div>
+
+    <script>
+        // 页面加载完成时间
+        const loadTime = new Date().toLocaleString()
+        document.getElementById('loadTime').textContent = loadTime
+
+        // 浏览器信息
+        const browserInfo = navigator.userAgent.split(' ').slice(-2).join(' ')
+        document.getElementById('browserInfo').textContent = browserInfo
+
+        // 实时时间更新
+        function updateTime() {
+            const now = new Date().toLocaleTimeString()
+            document.getElementById('currentTime').textContent = now
+        }
+        
+        updateTime()
+        setInterval(updateTime, 1000)
+
+        // 显示消息
+        function showMessage(type, message) {
+            const statusDisplay = document.getElementById('statusDisplay')
+            const colors = {
+                info: '#4facfe',
+                success: '#56ab2f',
+                warning: '#f5576c',
+                error: '#ff6b6b'
+            }
+            
+            statusDisplay.style.borderLeft = `4px solid ${colors[type]}`
+            statusDisplay.innerHTML = `
+                <strong>状态:</strong> ${message} | <strong>时间:</strong> <span id="currentTime">${new Date().toLocaleTimeString()}</span>
+            `
+            
+            // 添加脉冲效果
+            statusDisplay.classList.add('pulse')
+            setTimeout(() => {
+                statusDisplay.classList.remove('pulse')
+            }, 2000)
+        }
+
+        // 模拟加载
+        function simulateLoading() {
+            const statusDisplay = document.getElementById('statusDisplay')
+            statusDisplay.innerHTML = `
+                <strong>状态:</strong> <span class="loading"></span> 正在加载... | <strong>时间:</strong> ${new Date().toLocaleTimeString()}
+            `
+            
+            setTimeout(() => {
+                showMessage('success', '加载完成！')
+            }, 3000)
+        }
+
+        // 添加一些动画效果
+        document.addEventListener('DOMContentLoaded', function() {
+            const cards = document.querySelectorAll('.card')
+            cards.forEach((card, index) => {
+                card.style.animationDelay = `${index * 0.1}s`
+                card.style.animation = 'fadeInUp 0.6s ease forwards'
+            })
+        })
+
+        // CSS动画定义
+        const style = document.createElement('style')
+        style.textContent = `
+            @keyframes fadeInUp {
+                from {
+                    opacity: 0;
+                    transform: translateY(30px);
+                }
+                to {
+                    opacity: 1;
+                    transform: translateY(0);
+                }
+            }
+        `
+        document.head.appendChild(style)
+
+        // 控制台欢迎信息
+        console.log('%c🧩 GSM3 插件系统', 'color: #667eea; font-size: 20px; font-weight: bold;')
+        console.log('%c欢迎使用示例插件！', 'color: #764ba2; font-size: 14px;')
+        console.log('插件开发文档: https://github.com/your-repo/gsm3-docs')
+    </script>
+</body>
+</html>
