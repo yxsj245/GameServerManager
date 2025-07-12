@@ -2,15 +2,10 @@ import { Router, Request, Response } from 'express'
 import { InstanceManager } from '../modules/instance/InstanceManager.js'
 import { authenticateToken } from '../middleware/auth.js'
 import logger from '../utils/logger.js'
+import PythonManager from '../utils/pythonManager.js'
 import os from 'os'
 import https from 'https'
 import http from 'http'
-import { spawn, exec } from 'child_process'
-import path from 'path'
-import { fileURLToPath } from 'url'
-import { promisify } from 'util'
-
-const execAsync = promisify(exec)
 
 const router = Router()
 
@@ -480,139 +475,14 @@ router.post('/:id/input', authenticateToken, (req: Request, res: Response) => {
   }
 })
 
-// 获取当前文件的目录路径（ES模块兼容）
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = path.dirname(__filename)
 
-// Python脚本路径
-const PYTHON_SCRIPT_PATH = path.join(__dirname, '..', 'Python', 'game_config_manager.py')
 
-// Python依赖是否已安装的标志
-let pythonDepsInstalled = false
 
-// Python环境状态管理
-let pythonEnvironmentFailed = false
-let pythonFailureCount = 0
-const MAX_PYTHON_RETRY_COUNT = 3
-
-// 获取正确的Python命令
-function getPythonCommand(): string {
-  const platform = os.platform()
-  if (platform === 'win32') {
-    return 'python'
-  } else {
-    return 'python3'
-  }
-}
-
-// 检查Python命令是否可用
-function checkPythonCommand(command: string): Promise<boolean> {
-  return new Promise((resolve) => {
-    const testProcess = spawn(command, ['--version'], { stdio: 'ignore' })
-    
-    testProcess.on('close', (code) => {
-      resolve(code === 0)
-    })
-    
-    testProcess.on('error', () => {
-      resolve(false)
-    })
-  })
-}
-
-// 获取可用的Python命令
-async function getAvailablePythonCommand(): Promise<string> {
-  const platform = os.platform()
-  
-  if (platform === 'win32') {
-    // Windows平台优先尝试python，然后尝试python3
-    const commands = ['python', 'python3']
-    for (const cmd of commands) {
-      if (await checkPythonCommand(cmd)) {
-        logger.info(`Windows平台使用Python命令: ${cmd}`)
-        return cmd
-      }
-    }
-  } else {
-    // Linux/macOS平台优先尝试python3，然后尝试python
-    const commands = ['python3', 'python']
-    for (const cmd of commands) {
-      if (await checkPythonCommand(cmd)) {
-        logger.info(`${platform}平台使用Python命令: ${cmd}`)
-        return cmd
-      }
-    }
-  }
-  
-  throw new Error('未找到可用的Python命令')
-}
-
-// pip相关函数已移除
-
-// Python依赖安装功能已移除
-
-// 调用Python脚本的辅助函数
-function callPythonScript(method: string, args: any[] = []): Promise<any> {
-  return new Promise(async (resolve, reject) => {
-    try {
-      // 动态获取可用的Python命令
-      const pythonCommand = await getAvailablePythonCommand()
-      logger.info(`使用Python命令: ${pythonCommand}`)
-      
-      const pythonArgs = [PYTHON_SCRIPT_PATH, method, ...args.map(arg => JSON.stringify(arg))]
-      const pythonProcess = spawn(pythonCommand, pythonArgs, {
-        stdio: ['pipe', 'pipe', 'pipe'],
-        env: {
-          ...process.env,
-          PYTHONIOENCODING: 'utf-8'
-        }
-      })
-
-      let stdout = ''
-      let stderr = ''
-
-      pythonProcess.stdout.on('data', (data) => {
-        stdout += data.toString('utf8')
-      })
-
-      pythonProcess.stderr.on('data', (data) => {
-        stderr += data.toString('utf8')
-      })
-
-      pythonProcess.on('close', (code) => {
-        // 记录Python脚本的stderr输出（包含日志信息）
-        if (stderr) {
-          logger.info(`Python脚本日志: ${stderr}`)
-        }
-        
-        if (code === 0) {
-          try {
-            const result = JSON.parse(stdout)
-            resolve(result)
-          } catch (error) {
-            logger.error(`JSON解析失败: ${error}, stdout: ${stdout}`)
-            reject(new Error(`JSON解析失败: ${error}`))
-          }
-        } else {
-          logger.error(`Python脚本执行失败，退出码: ${code}, stderr: ${stderr}, stdout: ${stdout}`)
-          reject(new Error(`Python脚本执行失败: ${stderr}`))
-        }
-      })
-
-      pythonProcess.on('error', (error) => {
-        logger.error(`Python进程启动失败: ${error.message}`)
-        reject(new Error(`启动Python进程失败: ${error.message}`))
-      })
-     } catch (error) {
-       reject(error)
-     }
-   })
- }
 
 // 获取可用的游戏配置文件列表
 router.get('/configs/available', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const result = await callPythonScript('get_available_configs')
+    const result = await PythonManager.getAvailableConfigs()
     res.json({
       success: true,
       data: result
@@ -632,7 +502,7 @@ router.get('/configs/schema/:configId', authenticateToken, async (req: Request, 
   try {
     const { configId } = req.params
     const decodedConfigId = decodeURIComponent(configId)
-    const result = await callPythonScript('get_config_schema', [decodedConfigId])
+    const result = await PythonManager.getConfigSchema(decodedConfigId)
     
     if (!result) {
       return res.status(404).json({
@@ -678,7 +548,7 @@ router.get('/:instanceId/configs/:configId', authenticateToken, async (req: Requ
     }
     
     // 获取配置模板
-    const schema = await callPythonScript('get_config_schema', [decodedConfigId])
+    const schema = await PythonManager.getConfigSchema(decodedConfigId)
     if (!schema) {
       return res.status(404).json({
         success: false,
@@ -691,11 +561,11 @@ router.get('/:instanceId/configs/:configId', authenticateToken, async (req: Requ
     logger.info(`使用解析器: ${parser} 读取配置: ${decodedConfigId}`)
     
     // 读取配置文件
-    const result = await callPythonScript('read_game_config', [
+    const result = await PythonManager.readGameConfig(
       instance.workingDirectory,
       schema,
       parser
-    ])
+    )
     
     res.json({
       success: true,
@@ -742,7 +612,7 @@ router.post('/:instanceId/configs/:configId', authenticateToken, async (req: Req
     }
     
     // 获取配置模板
-    const schema = await callPythonScript('get_config_schema', [decodedConfigId])
+    const schema = await PythonManager.getConfigSchema(decodedConfigId)
     if (!schema) {
       return res.status(404).json({
         success: false,
@@ -755,12 +625,12 @@ router.post('/:instanceId/configs/:configId', authenticateToken, async (req: Req
     logger.info(`使用解析器: ${parser} 保存配置: ${decodedConfigId}`)
     
     // 保存配置文件
-    const result = await callPythonScript('save_game_config', [
+    const result = await PythonManager.saveGameConfig(
       instance.workingDirectory,
       schema,
       configData,
       parser
-    ])
+    )
     
     if (result) {
       logger.info(`用户保存游戏配置: 实例=${instanceId}, 配置=${decodedConfigId}, 解析器=${parser}`)
@@ -789,28 +659,11 @@ router.post('/:instanceId/configs/:configId', authenticateToken, async (req: Req
 // Python环境检测
 router.get('/python/check', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const platform = os.platform()
-    
-    logger.info(`检测Python环境，平台: ${platform}`)
-    
-    // 使用动态检测获取可用的Python命令
-    const pythonCommand = await getAvailablePythonCommand()
-    
-    logger.info(`检测Python环境，平台: ${platform}，使用命令: ${pythonCommand}`)
-    
-    const { stdout } = await execAsync(`${pythonCommand} --version`)
-    const version = stdout.trim()
-    
-    logger.info(`Python环境检测成功: ${version}`)
+    const result = await PythonManager.checkPythonEnvironment()
     
     res.json({
       success: true,
-      data: {
-        available: true,
-        version: version,
-        command: pythonCommand,
-        platform: platform
-      }
+      data: result
     })
   } catch (error: any) {
     logger.error('Python环境检测异常:', error)
@@ -819,7 +672,7 @@ router.get('/python/check', authenticateToken, async (req: Request, res: Respons
       success: true,
       data: {
         available: false,
-        error: `未检测到Python环境: ${error.message}`,
+        error: `Python环境检测失败: ${error.message}`,
         platform: os.platform()
       }
     })
