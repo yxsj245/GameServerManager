@@ -223,7 +223,7 @@ const AboutProjectPage: React.FC = () => {
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-600 dark:text-gray-400">开发者：</span>
-                      <span className="text-black dark:text-white font-medium">yxsj245</span>
+                      <span className="text-black dark:text-white font-medium">又菜又爱玩的小朱</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-600 dark:text-gray-400">许可证：</span>
