@@ -138,11 +138,6 @@ const InstanceManagerPage: React.FC = () => {
       setAvailableConfigs(response.data)
     } catch (error) {
       console.error('获取配置列表失败:', error)
-      addNotification({
-        type: 'error',
-        title: '获取失败',
-        message: '获取配置列表失败'
-      })
     }
   }
 
