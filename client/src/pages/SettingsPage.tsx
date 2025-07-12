@@ -25,7 +25,7 @@ import {
 
 const SettingsPage: React.FC = () => {
   const { theme, toggleTheme } = useThemeStore()
-  const { user, changePassword, changeUsername } = useAuthStore()
+  const { user, changePassword, changeUsername, logout } = useAuthStore()
   const { addNotification } = useNotificationStore()
   
   // 城市选项数据
@@ -138,7 +138,7 @@ const SettingsPage: React.FC = () => {
         addNotification({
           type: 'success',
           title: '密码修改成功',
-          message: '您的密码已成功更新'
+          message: '密码已更新，即将退出登录'
         })
         
         setPasswordForm({
@@ -149,6 +149,11 @@ const SettingsPage: React.FC = () => {
           showNewPassword: false,
           showConfirmPassword: false
         })
+        
+        // 密码修改成功后自动退出登录
+        setTimeout(async () => {
+          await logout()
+        }, 1500)
       } else {
         addNotification({
           type: 'error',
@@ -205,13 +210,18 @@ const SettingsPage: React.FC = () => {
         addNotification({
           type: 'success',
           title: '用户名修改成功',
-          message: '您的用户名已成功更新'
+          message: '用户名已更新，即将退出登录'
         })
         
         setUsernameForm({
           newUsername: '',
           isEditing: false
         })
+        
+        // 用户名修改成功后自动退出登录
+        setTimeout(async () => {
+          await logout()
+        }, 1500)
       } else {
         addNotification({
           type: 'error',
