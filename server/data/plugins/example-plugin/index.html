@@ -308,6 +308,31 @@
                 <button class="btn btn-warning" onclick="getSystemInfo()">获取系统信息</button>
                 <button class="btn btn-info" onclick="getApiVersion()">获取API版本</button>
             </div>
+        </div>
+
+        <div class="demo-section">
+            <h3>📁 文件操作演示</h3>
+            <p>体验插件文件操作API的功能：</p>
+            
+            <div class="button-group">
+                <button class="btn" onclick="listRootDirectory()">列出根目录</button>
+                <button class="btn btn-success" onclick="createTestFile()">创建测试文件</button>
+                <button class="btn btn-warning" onclick="readTestFile()">读取测试文件</button>
+                <button class="btn btn-info" onclick="deleteTestFile()">删除测试文件</button>
+            </div>
+            
+            <div class="button-group">
+                <button class="btn" onclick="createTestDirectory()">创建测试目录</button>
+                <button class="btn btn-success" onclick="copyTestFile()">复制文件</button>
+                <button class="btn btn-warning" onclick="moveTestFile()">移动文件</button>
+                <button class="btn btn-info" onclick="searchFiles()">搜索文件</button>
+            </div>
+            
+            <div class="button-group">
+                <input type="text" id="filePathInput" placeholder="输入文件路径" value="test.txt" style="padding: 12px; border-radius: 25px; border: 1px solid rgba(255,255,255,0.3); background: rgba(255,255,255,0.1); color: white; margin-right: 10px;">
+                <button class="btn" onclick="checkFileExists()">检查文件是否存在</button>
+                <button class="btn btn-info" onclick="getFileInfo()">获取文件信息</button>
+            </div>
 
             <div id="apiResult" class="status-display" style="max-height: 300px; overflow-y: auto; white-space: pre-wrap; font-family: 'Courier New', monospace;">
                 <strong>API调用结果:</strong> 点击上方按钮查看API响应
@@ -515,6 +540,275 @@
             const apiResult = document.getElementById('apiResult')
             apiResult.innerHTML = `<strong>API调用错误 - ${title}:</strong>\n${error.message || error}`
             apiResult.style.borderLeft = '4px solid #ff6b6b'
+        }
+
+        // ==================== 文件操作函数 ====================
+
+        // 列出根目录
+        async function listRootDirectory() {
+            try {
+                if (!window.gsm3) {
+                    throw new Error('GSM3 API对象未找到')
+                }
+                
+                showApiLoading('正在初始化API...')
+                await window.gsm3.initialize()
+                
+                showApiLoading('正在列出根目录...')
+                const result = await window.gsm3.listDirectory()
+                showApiResult('根目录内容', result)
+                if (window.gsm3.showNotification) {
+                    window.gsm3.showNotification('success', '目录列表获取成功')
+                }
+            } catch (error) {
+                showApiError('列出目录失败', error)
+                if (window.gsm3 && window.gsm3.showNotification) {
+                    window.gsm3.showNotification('error', '列出目录失败: ' + error.message)
+                }
+            }
+        }
+
+        // 创建测试文件
+        async function createTestFile() {
+            try {
+                if (!window.gsm3) {
+                    throw new Error('GSM3 API对象未找到')
+                }
+                
+                showApiLoading('正在初始化API...')
+                await window.gsm3.initialize()
+                
+                showApiLoading('正在创建测试文件...')
+                const content = `这是一个测试文件\n创建时间: ${new Date().toLocaleString()}\n随机数: ${Math.random()}`
+                const result = await window.gsm3.writeFile('test.txt', content)
+                showApiResult('创建测试文件', result)
+                if (window.gsm3.showNotification) {
+                    window.gsm3.showNotification('success', '测试文件创建成功')
+                }
+            } catch (error) {
+                showApiError('创建文件失败', error)
+                if (window.gsm3 && window.gsm3.showNotification) {
+                    window.gsm3.showNotification('error', '创建文件失败: ' + error.message)
+                }
+            }
+        }
+
+        // 读取测试文件
+        async function readTestFile() {
+            try {
+                if (!window.gsm3) {
+                    throw new Error('GSM3 API对象未找到')
+                }
+                
+                showApiLoading('正在初始化API...')
+                await window.gsm3.initialize()
+                
+                showApiLoading('正在读取测试文件...')
+                const result = await window.gsm3.readFile('test.txt')
+                showApiResult('读取测试文件', result)
+                if (window.gsm3.showNotification) {
+                    window.gsm3.showNotification('success', '文件读取成功')
+                }
+            } catch (error) {
+                showApiError('读取文件失败', error)
+                if (window.gsm3 && window.gsm3.showNotification) {
+                    window.gsm3.showNotification('error', '读取文件失败: ' + error.message)
+                }
+            }
+        }
+
+        // 删除测试文件
+        async function deleteTestFile() {
+            try {
+                if (!window.gsm3) {
+                    throw new Error('GSM3 API对象未找到')
+                }
+                
+                showApiLoading('正在初始化API...')
+                await window.gsm3.initialize()
+                
+                showApiLoading('正在删除测试文件...')
+                const result = await window.gsm3.deleteFile('test.txt')
+                showApiResult('删除测试文件', result)
+                if (window.gsm3.showNotification) {
+                    window.gsm3.showNotification('success', '文件删除成功')
+                }
+            } catch (error) {
+                showApiError('删除文件失败', error)
+                if (window.gsm3 && window.gsm3.showNotification) {
+                    window.gsm3.showNotification('error', '删除文件失败: ' + error.message)
+                }
+            }
+        }
+
+        // 创建测试目录
+        async function createTestDirectory() {
+            try {
+                if (!window.gsm3) {
+                    throw new Error('GSM3 API对象未找到')
+                }
+                
+                showApiLoading('正在初始化API...')
+                await window.gsm3.initialize()
+                
+                showApiLoading('正在创建测试目录...')
+                const result = await window.gsm3.createDirectory('test-dir')
+                showApiResult('创建测试目录', result)
+                if (window.gsm3.showNotification) {
+                    window.gsm3.showNotification('success', '目录创建成功')
+                }
+            } catch (error) {
+                showApiError('创建目录失败', error)
+                if (window.gsm3 && window.gsm3.showNotification) {
+                    window.gsm3.showNotification('error', '创建目录失败: ' + error.message)
+                }
+            }
+        }
+
+        // 复制文件
+        async function copyTestFile() {
+            try {
+                if (!window.gsm3) {
+                    throw new Error('GSM3 API对象未找到')
+                }
+                
+                showApiLoading('正在初始化API...')
+                await window.gsm3.initialize()
+                
+                showApiLoading('正在检查源文件...')
+                const exists = await window.gsm3.exists('test.txt')
+                if (!exists.exists) {
+                    showApiError('复制文件失败', new Error('源文件 test.txt 不存在，请先创建测试文件'))
+                    return
+                }
+                
+                showApiLoading('正在复制文件...')
+                const result = await window.gsm3.copy('test.txt', 'test-copy.txt')
+                showApiResult('复制文件', result)
+                if (window.gsm3.showNotification) {
+                    window.gsm3.showNotification('success', '文件复制成功')
+                }
+            } catch (error) {
+                showApiError('复制文件失败', error)
+                if (window.gsm3 && window.gsm3.showNotification) {
+                    window.gsm3.showNotification('error', '复制文件失败: ' + error.message)
+                }
+            }
+        }
+
+        // 移动文件
+        async function moveTestFile() {
+            try {
+                if (!window.gsm3) {
+                    throw new Error('GSM3 API对象未找到')
+                }
+                
+                showApiLoading('正在初始化API...')
+                await window.gsm3.initialize()
+                
+                showApiLoading('正在检查源文件...')
+                const exists = await window.gsm3.exists('test-copy.txt')
+                if (!exists.exists) {
+                    showApiError('移动文件失败', new Error('源文件 test-copy.txt 不存在，请先复制文件'))
+                    return
+                }
+                
+                showApiLoading('正在移动文件...')
+                const result = await window.gsm3.move('test-copy.txt', 'test-moved.txt')
+                showApiResult('移动文件', result)
+                if (window.gsm3.showNotification) {
+                    window.gsm3.showNotification('success', '文件移动成功')
+                }
+            } catch (error) {
+                showApiError('移动文件失败', error)
+                if (window.gsm3 && window.gsm3.showNotification) {
+                    window.gsm3.showNotification('error', '移动文件失败: ' + error.message)
+                }
+            }
+        }
+
+        // 搜索文件
+        async function searchFiles() {
+            try {
+                if (!window.gsm3) {
+                    throw new Error('GSM3 API对象未找到')
+                }
+                
+                showApiLoading('正在初始化API...')
+                await window.gsm3.initialize()
+                
+                showApiLoading('正在搜索文件...')
+                const result = await window.gsm3.searchFiles('*.txt')
+                showApiResult('搜索文件 (*.txt)', result)
+                if (window.gsm3.showNotification) {
+                    window.gsm3.showNotification('success', '文件搜索完成')
+                }
+            } catch (error) {
+                showApiError('搜索文件失败', error)
+                if (window.gsm3 && window.gsm3.showNotification) {
+                    window.gsm3.showNotification('error', '搜索文件失败: ' + error.message)
+                }
+            }
+        }
+
+        // 检查文件是否存在
+        async function checkFileExists() {
+            try {
+                if (!window.gsm3) {
+                    throw new Error('GSM3 API对象未找到')
+                }
+                
+                const filePath = document.getElementById('filePathInput').value
+                if (!filePath) {
+                    showApiError('检查文件失败', new Error('请输入文件路径'))
+                    return
+                }
+                
+                showApiLoading('正在初始化API...')
+                await window.gsm3.initialize()
+                
+                showApiLoading('正在检查文件是否存在...')
+                const result = await window.gsm3.exists(filePath)
+                showApiResult(`检查文件是否存在: ${filePath}`, result)
+                if (window.gsm3.showNotification) {
+                    window.gsm3.showNotification('info', '文件检查完成')
+                }
+            } catch (error) {
+                showApiError('检查文件失败', error)
+                if (window.gsm3 && window.gsm3.showNotification) {
+                    window.gsm3.showNotification('error', '检查文件失败: ' + error.message)
+                }
+            }
+        }
+
+        // 获取文件信息
+        async function getFileInfo() {
+            try {
+                if (!window.gsm3) {
+                    throw new Error('GSM3 API对象未找到')
+                }
+                
+                const filePath = document.getElementById('filePathInput').value
+                if (!filePath) {
+                    showApiError('获取文件信息失败', new Error('请输入文件路径'))
+                    return
+                }
+                
+                showApiLoading('正在初始化API...')
+                await window.gsm3.initialize()
+                
+                showApiLoading('正在获取文件信息...')
+                const result = await window.gsm3.getFileInfo(filePath)
+                showApiResult(`获取文件信息: ${filePath}`, result)
+                if (window.gsm3.showNotification) {
+                    window.gsm3.showNotification('success', '文件信息获取成功')
+                }
+            } catch (error) {
+                showApiError('获取文件信息失败', error)
+                if (window.gsm3 && window.gsm3.showNotification) {
+                    window.gsm3.showNotification('error', '获取文件信息失败: ' + error.message)
+                }
+            }
         }
 
         // 控制台欢迎信息

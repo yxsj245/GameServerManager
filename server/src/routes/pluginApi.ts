@@ -4,6 +4,7 @@ import type { InstanceManager } from '../modules/instance/InstanceManager.js'
 import type { SystemManager } from '../modules/system/SystemManager.js'
 import type { TerminalManager } from '../modules/terminal/TerminalManager.js'
 import type { GameManager } from '../modules/game/GameManager.js'
+import filesRouter from './files.js'
 import logger from '../utils/logger.js'
 
 const router = Router()
@@ -252,6 +253,11 @@ router.get('/games', async (req: Request, res: Response) => {
     })
   }
 })
+
+// ==================== 文件操作API ====================
+
+// 转发文件操作请求到files路由
+router.use('/files', filesRouter)
 
 // ==================== 通用API ====================
 

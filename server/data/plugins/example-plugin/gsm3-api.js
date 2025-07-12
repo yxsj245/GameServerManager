@@ -158,6 +158,141 @@ class GSM3API {
     return await this.request('/games')
   }
 
+  // ==================== 文件操作API ====================
+
+  /**
+   * 读取文件内容
+   * @param {string} filePath 文件路径（相对于服务器data目录）
+   * @param {string} encoding 文件编码，默认为'utf-8'，二进制文件使用'binary'
+   */
+  async readFile(filePath, encoding = 'utf-8') {
+    return await this.request('/files/read', {
+      method: 'POST',
+      body: { filePath, encoding }
+    })
+  }
+
+  /**
+   * 写入文件内容
+   * @param {string} filePath 文件路径（相对于服务器data目录）
+   * @param {string} content 文件内容
+   * @param {string} encoding 文件编码，默认为'utf-8'
+   */
+  async writeFile(filePath, content, encoding = 'utf-8') {
+    return await this.request('/files/write', {
+      method: 'POST',
+      body: { filePath, content, encoding }
+    })
+  }
+
+  /**
+   * 删除文件
+   * @param {string} filePath 文件路径（相对于服务器data目录）
+   */
+  async deleteFile(filePath) {
+    return await this.request('/files/delete', {
+      method: 'DELETE',
+      body: { filePath }
+    })
+  }
+
+  /**
+   * 创建目录
+   * @param {string} dirPath 目录路径（相对于服务器data目录）
+   * @param {boolean} recursive 是否递归创建父目录，默认为true
+   */
+  async createDirectory(dirPath, recursive = true) {
+    return await this.request('/files/mkdir', {
+      method: 'POST',
+      body: { dirPath, recursive }
+    })
+  }
+
+  /**
+   * 删除目录
+   * @param {string} dirPath 目录路径（相对于服务器data目录）
+   * @param {boolean} recursive 是否递归删除，默认为false
+   */
+  async deleteDirectory(dirPath, recursive = false) {
+    return await this.request('/files/rmdir', {
+      method: 'DELETE',
+      body: { dirPath, recursive }
+    })
+  }
+
+  /**
+   * 列出目录内容
+   * @param {string} dirPath 目录路径（相对于服务器data目录），默认为根目录
+   * @param {boolean} includeHidden 是否包含隐藏文件，默认为false
+   */
+  async listDirectory(dirPath = '', includeHidden = false) {
+    return await this.request('/files/list', {
+      method: 'POST',
+      body: { dirPath, includeHidden }
+    })
+  }
+
+  /**
+   * 获取文件或目录信息
+   * @param {string} path 文件或目录路径（相对于服务器data目录）
+   */
+  async getFileInfo(path) {
+    return await this.request('/files/info', {
+      method: 'POST',
+      body: { path }
+    })
+  }
+
+  /**
+   * 检查文件或目录是否存在
+   * @param {string} path 文件或目录路径（相对于服务器data目录）
+   */
+  async exists(path) {
+    return await this.request('/files/exists', {
+      method: 'POST',
+      body: { path }
+    })
+  }
+
+  /**
+   * 复制文件或目录
+   * @param {string} sourcePath 源路径（相对于服务器data目录）
+   * @param {string} destPath 目标路径（相对于服务器data目录）
+   * @param {boolean} overwrite 是否覆盖已存在的文件，默认为false
+   */
+  async copy(sourcePath, destPath, overwrite = false) {
+    return await this.request('/files/copy', {
+      method: 'POST',
+      body: { sourcePath, destPath, overwrite }
+    })
+  }
+
+  /**
+   * 移动/重命名文件或目录
+   * @param {string} sourcePath 源路径（相对于服务器data目录）
+   * @param {string} destPath 目标路径（相对于服务器data目录）
+   * @param {boolean} overwrite 是否覆盖已存在的文件，默认为false
+   */
+  async move(sourcePath, destPath, overwrite = false) {
+    return await this.request('/files/move', {
+      method: 'POST',
+      body: { sourcePath, destPath, overwrite }
+    })
+  }
+
+  /**
+   * 搜索文件
+   * @param {string} pattern 搜索模式（支持通配符）
+   * @param {string} searchPath 搜索路径（相对于服务器data目录），默认为根目录
+   * @param {boolean} recursive 是否递归搜索子目录，默认为true
+   */
+  async searchFiles(pattern, searchPath = '', recursive = true) {
+    return await this.request('/files/search', {
+      method: 'POST',
+      body: { pattern, searchPath, recursive }
+    })
+  }
+
   // ==================== 通用API ====================
 
   /**

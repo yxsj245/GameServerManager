@@ -416,30 +416,7 @@ router.post('/save', authenticateToken, async (req: Request, res: Response) => {
 })
 
 // 创建目录
-router.post('/mkdir', authenticateToken, async (req: Request, res: Response) => {
-  try {
-    const { path: dirPath } = req.body
-    
-    if (!isValidPath(dirPath)) {
-      return res.status(400).json({
-        status: 'error',
-        message: '无效的路径'
-      })
-    }
-
-    await fs.mkdir(dirPath, { recursive: true })
-    
-    res.json({
-      status: 'success',
-      message: '目录创建成功'
-    })
-  } catch (error: any) {
-    res.status(500).json({
-      status: 'error',
-      message: error.message
-    })
-  }
-})
+// 原有的mkdir路由已移除，使用插件API专用的mkdir路由
 
 // 删除文件或目录
 router.delete('/delete', authenticateToken, async (req: Request, res: Response) => {
@@ -982,6 +959,576 @@ async function extractArchive(archivePath: string, targetPath: string) {
     }
   })
 }
+
+// ==================== 插件文件操作API ====================
+
+// 读取文件内容（POST方法，用于插件API）
+router.post('/read', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const { filePath, encoding = 'utf-8' } = req.body
+    
+    if (!filePath) {
+      return res.status(400).json({
+        success: false,
+        message: '缺少文件路径参数'
+      })
+    }
+    
+    // 将相对路径转换为绝对路径（相对于data目录）
+    const dataDir = path.join(process.cwd(), 'data')
+    const fullPath = path.resolve(dataDir, filePath)
+    
+    // 安全检查：确保文件在data目录内
+    if (!fullPath.startsWith(dataDir)) {
+      return res.status(403).json({
+        success: false,
+        message: '访问被拒绝：文件路径超出允许范围'
+      })
+    }
+    
+    const content = await fs.readFile(fullPath, encoding)
+    res.json({
+      success: true,
+      data: { content, encoding, filePath }
+    })
+  } catch (error: any) {
+    if (error.code === 'ENOENT') {
+      return res.status(404).json({
+        success: false,
+        message: '文件不存在'
+      })
+    }
+    res.status(500).json({
+      success: false,
+      message: error.message
+    })
+  }
+})
+
+// 写入文件内容
+router.post('/write', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const { filePath, content, encoding = 'utf-8' } = req.body
+    
+    if (!filePath || content === undefined) {
+      return res.status(400).json({
+        success: false,
+        message: '缺少必要参数'
+      })
+    }
+    
+    const dataDir = path.join(process.cwd(), 'data')
+    const fullPath = path.resolve(dataDir, filePath)
+    
+    if (!fullPath.startsWith(dataDir)) {
+      return res.status(403).json({
+        success: false,
+        message: '访问被拒绝：文件路径超出允许范围'
+      })
+    }
+    
+    // 确保目录存在
+    await fs.mkdir(path.dirname(fullPath), { recursive: true })
+    
+    await fs.writeFile(fullPath, content, encoding)
+    res.json({
+      success: true,
+      message: '文件写入成功',
+      data: { filePath, size: Buffer.byteLength(content, encoding) }
+    })
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      message: error.message
+    })
+  }
+})
+
+// 删除文件
+router.delete('/delete', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const { filePath } = req.body
+    
+    if (!filePath) {
+      return res.status(400).json({
+        success: false,
+        message: '缺少文件路径参数'
+      })
+    }
+    
+    const dataDir = path.join(process.cwd(), 'data')
+    const fullPath = path.resolve(dataDir, filePath)
+    
+    if (!fullPath.startsWith(dataDir)) {
+      return res.status(403).json({
+        success: false,
+        message: '访问被拒绝：文件路径超出允许范围'
+      })
+    }
+    
+    await fs.unlink(fullPath)
+    res.json({
+      success: true,
+      message: '文件删除成功',
+      data: { filePath }
+    })
+  } catch (error: any) {
+    if (error.code === 'ENOENT') {
+      return res.status(404).json({
+        success: false,
+        message: '文件不存在'
+      })
+    }
+    res.status(500).json({
+      success: false,
+      message: error.message
+    })
+  }
+})
+
+// 创建目录
+router.post('/mkdir', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const { dirPath, recursive = true } = req.body
+    
+    if (!dirPath) {
+      return res.status(400).json({
+        success: false,
+        message: '缺少目录路径参数'
+      })
+    }
+    
+    const dataDir = path.join(process.cwd(), 'data')
+    const fullPath = path.resolve(dataDir, dirPath)
+    
+    if (!fullPath.startsWith(dataDir)) {
+      return res.status(403).json({
+        success: false,
+        message: '访问被拒绝：目录路径超出允许范围'
+      })
+    }
+    
+    await fs.mkdir(fullPath, { recursive })
+    res.json({
+      success: true,
+      message: '目录创建成功',
+      data: { dirPath }
+    })
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      message: error.message
+    })
+  }
+})
+
+// 删除目录
+router.delete('/rmdir', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const { dirPath, recursive = false } = req.body
+    
+    if (!dirPath) {
+      return res.status(400).json({
+        success: false,
+        message: '缺少目录路径参数'
+      })
+    }
+    
+    const dataDir = path.join(process.cwd(), 'data')
+    const fullPath = path.resolve(dataDir, dirPath)
+    
+    if (!fullPath.startsWith(dataDir)) {
+      return res.status(403).json({
+        success: false,
+        message: '访问被拒绝：目录路径超出允许范围'
+      })
+    }
+    
+    if (recursive) {
+      await fs.rm(fullPath, { recursive: true, force: true })
+    } else {
+      await fs.rmdir(fullPath)
+    }
+    
+    res.json({
+      success: true,
+      message: '目录删除成功',
+      data: { dirPath }
+    })
+  } catch (error: any) {
+    if (error.code === 'ENOENT') {
+      return res.status(404).json({
+        success: false,
+        message: '目录不存在'
+      })
+    }
+    res.status(500).json({
+      success: false,
+      message: error.message
+    })
+  }
+})
+
+// 列出目录内容（POST方法，用于插件API）
+router.post('/list', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const { dirPath = '', includeHidden = false } = req.body
+    
+    const dataDir = path.join(process.cwd(), 'data')
+    const fullPath = dirPath ? path.resolve(dataDir, dirPath) : dataDir
+    
+    if (!fullPath.startsWith(dataDir)) {
+      return res.status(403).json({
+        success: false,
+        message: '访问被拒绝：目录路径超出允许范围'
+      })
+    }
+    
+    const stats = await fs.stat(fullPath)
+    if (!stats.isDirectory()) {
+      return res.status(400).json({
+        success: false,
+        message: '指定路径不是目录'
+      })
+    }
+    
+    const items = await fs.readdir(fullPath)
+    const files = []
+    
+    for (const item of items) {
+      // 跳过隐藏文件（除非明确要求包含）
+      if (!includeHidden && item.startsWith('.')) {
+        continue
+      }
+      
+      const itemPath = path.join(fullPath, item)
+      try {
+        const itemStats = await fs.stat(itemPath)
+        files.push({
+          name: item,
+          path: path.relative(dataDir, itemPath),
+          type: itemStats.isDirectory() ? 'directory' : 'file',
+          size: itemStats.size,
+          modified: itemStats.mtime.toISOString(),
+          created: itemStats.birthtime.toISOString()
+        })
+      } catch (error) {
+        // 跳过无法访问的文件
+        continue
+      }
+    }
+    
+    res.json({
+      success: true,
+      data: files
+    })
+  } catch (error: any) {
+    if (error.code === 'ENOENT') {
+      return res.status(404).json({
+        success: false,
+        message: '目录不存在'
+      })
+    }
+    res.status(500).json({
+      success: false,
+      message: error.message
+    })
+  }
+})
+
+// 获取文件或目录信息
+router.post('/info', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const { path: itemPath } = req.body
+    
+    if (!itemPath) {
+      return res.status(400).json({
+        success: false,
+        message: '缺少路径参数'
+      })
+    }
+    
+    const dataDir = path.join(process.cwd(), 'data')
+    const fullPath = path.resolve(dataDir, itemPath)
+    
+    if (!fullPath.startsWith(dataDir)) {
+      return res.status(403).json({
+        success: false,
+        message: '访问被拒绝：路径超出允许范围'
+      })
+    }
+    
+    const stats = await fs.stat(fullPath)
+    const info = {
+      name: path.basename(fullPath),
+      path: path.relative(dataDir, fullPath),
+      type: stats.isDirectory() ? 'directory' : 'file',
+      size: stats.size,
+      modified: stats.mtime.toISOString(),
+      created: stats.birthtime.toISOString(),
+      accessed: stats.atime.toISOString(),
+      permissions: stats.mode.toString(8),
+      isReadable: true,
+      isWritable: true
+    }
+    
+    res.json({
+      success: true,
+      data: info
+    })
+  } catch (error: any) {
+    if (error.code === 'ENOENT') {
+      return res.status(404).json({
+        success: false,
+        message: '文件或目录不存在'
+      })
+    }
+    res.status(500).json({
+      success: false,
+      message: error.message
+    })
+  }
+})
+
+// 检查文件或目录是否存在
+router.post('/exists', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const { path: itemPath } = req.body
+    
+    if (!itemPath) {
+      return res.status(400).json({
+        success: false,
+        message: '缺少路径参数'
+      })
+    }
+    
+    const dataDir = path.join(process.cwd(), 'data')
+    const fullPath = path.resolve(dataDir, itemPath)
+    
+    if (!fullPath.startsWith(dataDir)) {
+      return res.status(403).json({
+        success: false,
+        message: '访问被拒绝：路径超出允许范围'
+      })
+    }
+    
+    try {
+      const stats = await fs.stat(fullPath)
+      res.json({
+        success: true,
+        data: {
+          exists: true,
+          type: stats.isDirectory() ? 'directory' : 'file'
+        }
+      })
+    } catch (error: any) {
+      if (error.code === 'ENOENT') {
+        res.json({
+          success: true,
+          data: {
+            exists: false
+          }
+        })
+      } else {
+        throw error
+      }
+    }
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      message: error.message
+    })
+  }
+})
+
+// 复制文件或目录
+router.post('/copy', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const { sourcePath, destPath, overwrite = false } = req.body
+    
+    if (!sourcePath || !destPath) {
+      return res.status(400).json({
+        success: false,
+        message: '缺少源路径或目标路径参数'
+      })
+    }
+    
+    const dataDir = path.join(process.cwd(), 'data')
+    const fullSourcePath = path.resolve(dataDir, sourcePath)
+    const fullDestPath = path.resolve(dataDir, destPath)
+    
+    if (!fullSourcePath.startsWith(dataDir) || !fullDestPath.startsWith(dataDir)) {
+      return res.status(403).json({
+        success: false,
+        message: '访问被拒绝：路径超出允许范围'
+      })
+    }
+    
+    // 检查目标是否已存在
+    try {
+      await fs.access(fullDestPath)
+      if (!overwrite) {
+        return res.status(409).json({
+          success: false,
+          message: '目标文件已存在'
+        })
+      }
+    } catch (error) {
+      // 目标不存在，可以继续
+    }
+    
+    // 确保目标目录存在
+    await fs.mkdir(path.dirname(fullDestPath), { recursive: true })
+    
+    await fs.copyFile(fullSourcePath, fullDestPath)
+    
+    res.json({
+      success: true,
+      message: '文件复制成功',
+      data: { sourcePath, destPath }
+    })
+  } catch (error: any) {
+    if (error.code === 'ENOENT') {
+      return res.status(404).json({
+        success: false,
+        message: '源文件不存在'
+      })
+    }
+    res.status(500).json({
+      success: false,
+      message: error.message
+    })
+  }
+})
+
+// 移动/重命名文件或目录
+router.post('/move', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const { sourcePath, destPath, overwrite = false } = req.body
+    
+    if (!sourcePath || !destPath) {
+      return res.status(400).json({
+        success: false,
+        message: '缺少源路径或目标路径参数'
+      })
+    }
+    
+    const dataDir = path.join(process.cwd(), 'data')
+    const fullSourcePath = path.resolve(dataDir, sourcePath)
+    const fullDestPath = path.resolve(dataDir, destPath)
+    
+    if (!fullSourcePath.startsWith(dataDir) || !fullDestPath.startsWith(dataDir)) {
+      return res.status(403).json({
+        success: false,
+        message: '访问被拒绝：路径超出允许范围'
+      })
+    }
+    
+    // 检查目标是否已存在
+    try {
+      await fs.access(fullDestPath)
+      if (!overwrite) {
+        return res.status(409).json({
+          success: false,
+          message: '目标文件已存在'
+        })
+      }
+    } catch (error) {
+      // 目标不存在，可以继续
+    }
+    
+    // 确保目标目录存在
+    await fs.mkdir(path.dirname(fullDestPath), { recursive: true })
+    
+    await fs.rename(fullSourcePath, fullDestPath)
+    
+    res.json({
+      success: true,
+      message: '文件移动成功',
+      data: { sourcePath, destPath }
+    })
+  } catch (error: any) {
+    if (error.code === 'ENOENT') {
+      return res.status(404).json({
+        success: false,
+        message: '源文件不存在'
+      })
+    }
+    res.status(500).json({
+      success: false,
+      message: error.message
+    })
+  }
+})
+
+// 搜索文件
+router.post('/search', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const { pattern, searchPath = '', recursive = true } = req.body
+    
+    if (!pattern) {
+      return res.status(400).json({
+        success: false,
+        message: '缺少搜索模式参数'
+      })
+    }
+    
+    const dataDir = path.join(process.cwd(), 'data')
+    const fullSearchPath = searchPath ? path.resolve(dataDir, searchPath) : dataDir
+    
+    if (!fullSearchPath.startsWith(dataDir)) {
+      return res.status(403).json({
+        success: false,
+        message: '访问被拒绝：搜索路径超出允许范围'
+      })
+    }
+    
+    const results: any[] = []
+    
+    async function searchRecursive(currentPath: string) {
+      try {
+        const items = await fs.readdir(currentPath)
+        
+        for (const item of items) {
+          const itemPath = path.join(currentPath, item)
+          const stats = await fs.stat(itemPath)
+          
+          // 简单的通配符匹配
+          const regex = new RegExp(pattern.replace(/\*/g, '.*').replace(/\?/g, '.'), 'i')
+          if (regex.test(item)) {
+            results.push({
+              name: item,
+              path: path.relative(dataDir, itemPath),
+              type: stats.isDirectory() ? 'directory' : 'file',
+              size: stats.size,
+              modified: stats.mtime.toISOString()
+            })
+          }
+          
+          if (recursive && stats.isDirectory()) {
+            await searchRecursive(itemPath)
+          }
+        }
+      } catch (error) {
+        // 跳过无法访问的目录
+      }
+    }
+    
+    await searchRecursive(fullSearchPath)
+    
+    res.json({
+      success: true,
+      data: results
+    })
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      message: error.message
+    })
+  }
+})
+
+// ==================== 任务管理API ====================
 
 // 获取任务状态
 router.get('/tasks', authenticateToken, async (req: Request, res: Response) => {
