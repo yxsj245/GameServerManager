@@ -33,6 +33,7 @@ import minecraftRouter from './routes/minecraft.js'
 import moreGamesRouter from './routes/moreGames.js'
 import weatherRouter from './routes/weather.js'
 import pluginsRouter, { setPluginManager } from './routes/plugins.js'
+import pluginApiRouter, { setPluginApiDependencies } from './routes/pluginApi.js'
 
 // 获取当前文件目录
 const __filename = fileURLToPath(import.meta.url)
@@ -502,6 +503,10 @@ async function startServer() {
     
     // 设置插件路由
     app.use('/api/plugins', pluginsRouter)
+    
+    // 设置插件API桥接路由
+    setPluginApiDependencies(instanceManager, systemManager, terminalManager, gameManager)
+    app.use('/api/plugin-api', pluginApiRouter)
 
     // 前端路由处理（SPA支持）
     app.get('*', (req, res) => {

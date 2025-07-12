@@ -188,8 +188,26 @@ router.delete('/:name', authenticateToken, async (req, res) => {
   }
 })
 
-// 获取插件文件内容
-router.get('/:name/files/*', authenticateToken, async (req, res) => {
+// 获取插件文件内容（无需认证的公共资源）
+router.get('/:name/files/*', async (req, res) => {
+  const { name } = req.params
+  const filePath = req.params[0] || 'index.html'
+  
+  // 对于非公共资源文件，需要认证
+  const publicFiles = ['gsm3-api.js', 'index.html', 'style.css']
+  const isPublicFile = publicFiles.some(file => filePath.endsWith(file))
+  
+  if (!isPublicFile) {
+    return authenticateToken(req, res, async () => {
+      await handleFileRequest(req, res)
+    })
+  }
+  
+  await handleFileRequest(req, res)
+})
+
+// 处理文件请求的通用函数
+async function handleFileRequest(req: any, res: any) {
   try {
     const { name } = req.params
     const filePath = req.params[0] || 'index.html'
@@ -239,8 +257,15 @@ router.get('/:name/files/*', authenticateToken, async (req, res) => {
         '.ico': 'image/x-icon'
       }
 
-      // 对于HTML、CSS、JS等文本文件，返回JSON格式的内容
-      if (['.html', '.css', '.js', '.json'].includes(ext)) {
+      // 对于JS文件，直接返回文件内容以便浏览器正确执行
+      if (ext === '.js') {
+        const contentType = contentTypes[ext] || 'application/javascript; charset=utf-8'
+        res.setHeader('Content-Type', contentType)
+        const fileContent = await fs.readFile(fullPath, 'utf-8')
+        res.send(fileContent)
+      }
+      // 对于HTML、CSS、JSON等文本文件，返回JSON格式的内容
+      else if (['.html', '.css', '.json'].includes(ext)) {
         const fileContent = await fs.readFile(fullPath, 'utf-8')
         res.json({
           success: true,
@@ -267,7 +292,7 @@ router.get('/:name/files/*', authenticateToken, async (req, res) => {
       error: error instanceof Error ? error.message : '未知错误'
     })
   }
-})
+}
 
 // 更新插件文件内容
 router.put('/:name/files/*', authenticateToken, async (req, res) => {

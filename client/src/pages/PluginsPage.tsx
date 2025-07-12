@@ -62,6 +62,25 @@ const PluginsPage: React.FC = () => {
   const { addNotification } = useNotificationStore()
   const apiClient = new ApiClient()
 
+  // 监听来自插件的消息
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data && event.data.type === 'gsm3-notification') {
+        const { type, message } = event.data.data
+        addNotification({
+          type: type as 'info' | 'success' | 'warning' | 'error',
+          title: '插件消息',
+          message
+        })
+      } else if (event.data && event.data.type === 'gsm3-plugin-loaded') {
+        console.log('插件加载完成:', event.data.data)
+      }
+    }
+
+    window.addEventListener('message', handleMessage)
+    return () => window.removeEventListener('message', handleMessage)
+  }, [addNotification])
+
   const categories = [
     '工具',
     '游戏',
@@ -215,9 +234,117 @@ const PluginsPage: React.FC = () => {
           }
           
           if (content && content.trim()) {
-            setCurrentPluginContent(content)
+            // 修复gsm3-api.js的引用路径并注入token
+            const token = apiClient.getToken()
+            let injectedContent = content
+            
+            // 替换相对路径的gsm3-api.js引用为正确的API路径
+            injectedContent = injectedContent.replace(
+              /src="gsm3-api\.js"/g,
+              `src="/api/plugins/${plugin.name}/files/gsm3-api.js"`
+            )
+            
+            // 确保gsm3-api.js脚本标签有正确的type属性
+            injectedContent = injectedContent.replace(
+              /<script src="\/api\/plugins\/${plugin.name}\/files\/gsm3-api\.js"><\/script>/g,
+              `<script type="text/javascript" src="/api/plugins/${plugin.name}/files/gsm3-api.js"></script>`
+            )
+            
+            // 注入token设置脚本
+            injectedContent = injectedContent.replace(
+              '</head>',
+              `<script>
+                // 设置全局token变量
+                window.gsm3Token = '${token}';
+                console.log('全局token已设置:', '${token}');
+              </script>
+              </head>`
+            )
+            
+            // 在body结束前注入token设置脚本，确保在gsm3-api.js完全初始化后执行
+            injectedContent = injectedContent.replace(
+              '</body>',
+              `<script>
+                // 等待gsm3-api.js完全加载并初始化
+                (function() {
+                  const waitForGsm3AndSetToken = () => {
+                    // 检查window.gsm3对象是否存在且具有initialize方法
+                    if (window.gsm3 && typeof window.gsm3.initialize === 'function') {
+                      console.log('GSM3 API对象已找到，设置token...');
+                      window.gsm3.token = '${token}';
+                      console.log('GSM3 API Token已设置:', '${token}');
+                      
+                      // 如果API还未初始化，触发初始化
+                      if (!window.gsm3.isInitialized) {
+                        window.gsm3.initialize().then(() => {
+                          console.log('GSM3 API初始化完成');
+                        }).catch(error => {
+                          console.error('GSM3 API初始化失败:', error);
+                        });
+                      }
+                      return true;
+                    }
+                    return false;
+                  };
+                  
+                  // 监听DOMContentLoaded事件，确保在gsm3-api.js的DOMContentLoaded之后执行
+                  if (document.readyState === 'loading') {
+                    document.addEventListener('DOMContentLoaded', () => {
+                      // 延迟一点时间，确保gsm3-api.js的DOMContentLoaded先执行
+                      setTimeout(() => {
+                        if (!waitForGsm3AndSetToken()) {
+                          // 如果仍然失败，继续重试
+                          let attempts = 0;
+                          const checkGsm3 = () => {
+                            attempts++;
+                            if (waitForGsm3AndSetToken()) {
+                              console.log('Token设置成功，尝试次数:', attempts);
+                            } else if (attempts < 30) {
+                              setTimeout(checkGsm3, 200);
+                            } else {
+                              console.error('Token设置失败：超时等待gsm3对象创建');
+                              console.log('当前window对象包含的gsm3相关属性:', Object.keys(window).filter(key => key.includes('gsm3')));
+                            }
+                          };
+                          setTimeout(checkGsm3, 200);
+                        }
+                      }, 100);
+                    });
+                  } else {
+                    // 如果DOM已经加载完成，立即尝试
+                    setTimeout(() => {
+                      if (!waitForGsm3AndSetToken()) {
+                        let attempts = 0;
+                        const checkGsm3 = () => {
+                          attempts++;
+                          if (waitForGsm3AndSetToken()) {
+                            console.log('Token设置成功，尝试次数:', attempts);
+                          } else if (attempts < 30) {
+                            setTimeout(checkGsm3, 200);
+                          } else {
+                            console.error('Token设置失败：超时等待gsm3对象创建');
+                            console.log('当前window对象包含的gsm3相关属性:', Object.keys(window).filter(key => key.includes('gsm3')));
+                          }
+                        };
+                        setTimeout(checkGsm3, 200);
+                      }
+                    }, 100);
+                  }
+                })();
+              </script>
+              </body>`
+            )
+            
+            setCurrentPluginContent(injectedContent)
             setCurrentPluginName(plugin.displayName || plugin.name)
             setShowPluginModal(true)
+            
+            // 发送插件打开成功的通知
+            addNotification({
+              type: 'success',
+              title: '成功',
+              message: `插件 ${plugin.displayName || plugin.name} 已打开`
+            })
           } else {
             addNotification({ type: 'error', title: '错误', message: '插件内容为空' })
           }

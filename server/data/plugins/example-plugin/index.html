@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>示例插件 - GSM3</title>
+    <script src="gsm3-api.js"></script>
     <style>
         * {
             margin: 0;
@@ -298,6 +299,22 @@
         </div>
 
         <div class="demo-section">
+            <h3>🔌 API调用演示</h3>
+            <p>体验插件调用主面板API的功能：</p>
+            
+            <div class="button-group">
+                <button class="btn" onclick="getSystemStatus()">获取系统状态</button>
+                <button class="btn btn-success" onclick="getInstances()">获取实例列表</button>
+                <button class="btn btn-warning" onclick="getSystemInfo()">获取系统信息</button>
+                <button class="btn btn-info" onclick="getApiVersion()">获取API版本</button>
+            </div>
+
+            <div id="apiResult" class="status-display" style="max-height: 300px; overflow-y: auto; white-space: pre-wrap; font-family: 'Courier New', monospace;">
+                <strong>API调用结果:</strong> 点击上方按钮查看API响应
+            </div>
+        </div>
+
+        <div class="demo-section">
             <h3>📊 系统信息</h3>
             <div id="systemInfo">
                 <p><strong>插件名称:</strong> 示例插件</p>
@@ -390,10 +407,139 @@
         `
         document.head.appendChild(style)
 
+        // ==================== API调用演示函数 ====================
+        
+        async function getSystemStatus() {
+            try {
+                if (!window.gsm3) {
+                    throw new Error('GSM3 API对象未找到')
+                }
+                
+                showApiLoading('正在初始化API...')
+                await window.gsm3.initialize()
+                
+                showApiLoading('正在获取系统状态...')
+                const result = await window.gsm3.getSystemStatus()
+                showApiResult('系统状态', result)
+                if (window.gsm3.showNotification) {
+                    window.gsm3.showNotification('success', '系统状态获取成功')
+                }
+            } catch (error) {
+                showApiError('获取系统状态失败', error)
+                if (window.gsm3 && window.gsm3.showNotification) {
+                    window.gsm3.showNotification('error', '获取系统状态失败: ' + error.message)
+                }
+            }
+        }
+        
+        async function getInstances() {
+            try {
+                if (!window.gsm3) {
+                    throw new Error('GSM3 API对象未找到')
+                }
+                
+                showApiLoading('正在初始化API...')
+                await window.gsm3.initialize()
+                
+                showApiLoading('正在获取实例列表...')
+                const result = await window.gsm3.getInstances()
+                showApiResult('实例列表', result)
+                if (window.gsm3.showNotification) {
+                    window.gsm3.showNotification('success', '实例列表获取成功')
+                }
+            } catch (error) {
+                showApiError('获取实例列表失败', error)
+                if (window.gsm3 && window.gsm3.showNotification) {
+                    window.gsm3.showNotification('error', '获取实例列表失败: ' + error.message)
+                }
+            }
+        }
+        
+        async function getSystemInfo() {
+            try {
+                if (!window.gsm3) {
+                    throw new Error('GSM3 API对象未找到')
+                }
+                
+                showApiLoading('正在初始化API...')
+                await window.gsm3.initialize()
+                
+                showApiLoading('正在获取系统信息...')
+                const result = await window.gsm3.getSystemInfo()
+                showApiResult('系统信息', result)
+                if (window.gsm3.showNotification) {
+                    window.gsm3.showNotification('success', '系统信息获取成功')
+                }
+            } catch (error) {
+                showApiError('获取系统信息失败', error)
+                if (window.gsm3 && window.gsm3.showNotification) {
+                    window.gsm3.showNotification('error', '获取系统信息失败: ' + error.message)
+                }
+            }
+        }
+        
+        async function getApiVersion() {
+            try {
+                if (!window.gsm3) {
+                    throw new Error('GSM3 API对象未找到')
+                }
+                
+                showApiLoading('正在初始化API...')
+                await window.gsm3.initialize()
+                
+                showApiLoading('正在获取API版本...')
+                const result = await window.gsm3.getVersion()
+                showApiResult('API版本', result)
+                if (window.gsm3.showNotification) {
+                    window.gsm3.showNotification('info', 'API版本信息获取成功')
+                }
+            } catch (error) {
+                showApiError('获取API版本失败', error)
+                if (window.gsm3 && window.gsm3.showNotification) {
+                    window.gsm3.showNotification('error', '获取API版本失败: ' + error.message)
+                }
+            }
+        }
+        
+        function showApiLoading(message) {
+            const apiResult = document.getElementById('apiResult')
+            apiResult.innerHTML = `<strong>API调用结果:</strong> <span class="loading"></span> ${message}`
+        }
+        
+        function showApiResult(title, result) {
+            const apiResult = document.getElementById('apiResult')
+            apiResult.innerHTML = `<strong>API调用结果 - ${title}:</strong>\n${JSON.stringify(result, null, 2)}`
+        }
+        
+        function showApiError(title, error) {
+            const apiResult = document.getElementById('apiResult')
+            apiResult.innerHTML = `<strong>API调用错误 - ${title}:</strong>\n${error.message || error}`
+            apiResult.style.borderLeft = '4px solid #ff6b6b'
+        }
+
         // 控制台欢迎信息
         console.log('%c🧩 GSM3 插件系统', 'color: #667eea; font-size: 20px; font-weight: bold;')
         console.log('%c欢迎使用示例插件！', 'color: #764ba2; font-size: 14px;')
         console.log('插件开发文档: https://github.com/your-repo/gsm3-docs')
+        
+        // 等待GSM3 API加载完成后进行健康检查
+        window.addEventListener('load', async () => {
+            // 等待一段时间确保gsm3-api.js完全加载
+            setTimeout(async () => {
+                if (window.gsm3) {
+                    try {
+                        console.log('GSM3 API对象已加载:', window.gsm3)
+                        const health = await window.gsm3.healthCheck()
+                        console.log('GSM3 API连接正常:', health)
+                    } catch (error) {
+                        console.warn('GSM3 API连接失败:', error)
+                    }
+                } else {
+                    console.error('GSM3 API对象未找到，请检查gsm3-api.js是否正确加载')
+                    console.log('当前window对象包含的gsm3相关属性:', Object.keys(window).filter(key => key.includes('gsm3')))
+                }
+            }, 1000)
+        })
     </script>
 </body>
 </html>
