@@ -479,6 +479,44 @@ class ApiClient {
     return this.post('/more-games/cancel-deployment', { deploymentId })
   }
 
+  // Minecraft整合包API
+  async searchMrpackModpacks(options: {
+    query?: string
+    limit?: number
+    offset?: number
+    categories?: string[]
+    versions?: string[]
+    loaders?: string[]
+  } = {}) {
+    const params = new URLSearchParams()
+    if (options.query) params.append('query', options.query)
+    if (options.limit) params.append('limit', options.limit.toString())
+    if (options.offset) params.append('offset', options.offset.toString())
+    if (options.categories) params.append('categories', options.categories.join(','))
+    if (options.versions) params.append('versions', options.versions.join(','))
+    if (options.loaders) params.append('loaders', options.loaders.join(','))
+    
+    return this.get(`/more-games/mrpack/search?${params.toString()}`)
+  }
+
+  async getMrpackProjectVersions(projectId: string) {
+    return this.get(`/more-games/mrpack/project/${projectId}/versions`)
+  }
+
+  async deployMrpack(data: {
+    projectId: string
+    versionId: string
+    installPath: string
+    options?: {
+      javaPath?: string
+      maxMemory?: string
+      minMemory?: string
+    }
+    socketId?: string
+  }) {
+    return this.post('/more-games/deploy/mrpack', data)
+  }
+
   // 游戏配置文件API
   async getAvailableConfigs() {
     return this.get('/instances/configs/available')

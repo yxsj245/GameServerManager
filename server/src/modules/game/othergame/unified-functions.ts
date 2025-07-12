@@ -167,12 +167,16 @@ export interface MrpackSearchResponse {
 }
 
 export interface MrpackDeployOptions {
-  mrpackUrl: string;
+  projectId?: string;
+  versionId?: string;
+  mrpackUrl?: string;
   targetDirectory: string;
   minecraftVersion?: string;
   loaderType?: 'forge' | 'fabric' | 'quilt';
   skipJavaCheck?: boolean;
   tempDir?: string;
+  deploymentId?: string;
+  options?: any;
   onProgress?: LogCallback;
 }
 
@@ -1094,6 +1098,11 @@ export async function searchMrpackModpacks(options: MrpackSearchOptions = {}): P
   return await mrpackAPI.searchModpacks(options);
 }
 
+export async function getMrpackProjectVersions(projectId: string): Promise<any[]> {
+  const mrpackAPI = new MrpackServerAPI();
+  return await mrpackAPI.getProjectVersions(projectId);
+}
+
 /**
  * 下载并解析Mrpack文件
  * @deprecated 请使用 MrpackServerAPI.downloadAndParseMrpack 方法
@@ -1107,13 +1116,80 @@ export async function downloadAndParseMrpack(mrpackUrl: string): Promise<MrpackI
  * 部署Mrpack整合包
  */
 export async function deployMrpackServer(options: MrpackDeployOptions): Promise<DeploymentResult> {
-  const { mrpackUrl, targetDirectory, onProgress } = options;
+  const { projectId, versionId, mrpackUrl, targetDirectory, onProgress } = options;
   
   // 创建部署实例
-  const deployment = globalDeploymentManager.createDeployment('mrpack', targetDirectory, onProgress);
+  const deployment = globalDeploymentManager.createDeployment('mrpack', targetDirectory, onProgress, options.deploymentId);
   
   try {
     (deployment.cancellationToken as CancellationTokenImpl).throwIfCancelled();
+    
+    let finalMrpackUrl = mrpackUrl;
+    
+    // 验证参数：必须提供mrpackUrl或者同时提供projectId和versionId
+    if (!finalMrpackUrl && (!projectId || !versionId)) {
+      throw new Error('必须提供mrpackUrl或者同时提供projectId和versionId');
+    }
+    
+    // 验证versionId格式（Modrinth版本ID通常是8位字符的字符串）
+    if (!finalMrpackUrl && versionId && typeof versionId === 'string') {
+      if (versionId.length < 8 || !/^[a-zA-Z0-9]+$/.test(versionId)) {
+        throw new Error(`无效的版本ID格式: ${versionId}。版本ID应该是至少8位的字母数字字符串。`);
+      }
+    }
+    
+    // 如果没有提供mrpackUrl，则通过projectId和versionId获取
+    if (!finalMrpackUrl && projectId && versionId) {
+      if (onProgress) {
+        onProgress('正在获取整合包下载链接...', 'info');
+      }
+      
+      try {
+        // 从Modrinth API获取版本信息
+        if (onProgress) {
+          onProgress(`正在请求版本信息: ${versionId}`, 'info');
+        }
+        
+        const versionResponse = await axios.get(`https://api.modrinth.com/v2/version/${versionId}`, {
+          headers: {
+            'User-Agent': 'GSM3/1.0.0'
+          },
+          timeout: 10000
+        });
+        const versionData = versionResponse.data;
+        
+        if (onProgress) {
+          onProgress(`获取到版本数据，查找mrpack文件...`, 'info');
+        }
+        
+        // 查找mrpack文件
+        const mrpackFile = versionData.files?.find((file: any) => 
+          file.filename?.endsWith('.mrpack') || file.primary === true
+        );
+        
+        if (!mrpackFile || !mrpackFile.url) {
+          throw new Error(`未找到有效的mrpack文件下载链接。版本ID: ${versionId}, 可用文件: ${JSON.stringify(versionData.files?.map((f: any) => f.filename) || [])}`);
+        }
+        
+        finalMrpackUrl = mrpackFile.url;
+        
+        if (onProgress) {
+          onProgress(`找到整合包文件: ${mrpackFile.filename}`, 'info');
+        }
+      } catch (error) {
+        if (axios.isAxiosError(error)) {
+          const status = error.response?.status;
+          const statusText = error.response?.statusText;
+          const responseData = error.response?.data;
+          throw new Error(`获取整合包下载链接失败: HTTP ${status} ${statusText}. 版本ID: ${versionId}. 响应: ${JSON.stringify(responseData)}`);
+        }
+        throw new Error(`获取整合包下载链接失败: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+    
+    if (!finalMrpackUrl) {
+      throw new Error('缺少整合包下载链接');
+    }
     
     // 使用 MrpackServerAPI 进行部署
     const mrpackAPI = new MrpackServerAPI();
@@ -1125,7 +1201,7 @@ export async function deployMrpackServer(options: MrpackDeployOptions): Promise<
     
     // 调用 MrpackServerAPI 的部署方法
     const deployResult = await mrpackAPI.deployModpack({
-      mrpackUrl,
+      mrpackUrl: finalMrpackUrl,
       targetDirectory,
       onProgress,
       skipJavaCheck: options.skipJavaCheck,

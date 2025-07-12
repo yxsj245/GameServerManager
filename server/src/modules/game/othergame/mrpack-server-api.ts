@@ -169,6 +169,30 @@ export class MrpackServerAPI {
   }
 
   /**
+   * 获取项目的版本列表
+   */
+  async getProjectVersions(projectId: string): Promise<any[]> {
+    try {
+      const response = await axios.get(
+        `${MrpackServerAPI.MODRINTH_API_BASE}/project/${projectId}/version`,
+        {
+          headers: {
+            'User-Agent': 'GSM3/1.0.0 (game server manager)'
+          },
+          timeout: 10000
+        }
+      );
+      
+      return response.data;
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        throw new Error(`获取项目版本失败: ${error.response?.status} ${error.response?.statusText}`);
+      }
+      throw new Error(`获取项目版本失败: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  /**
    * 下载并解析mrpack文件
    */
   async downloadAndParseMrpack(mrpackUrl: string): Promise<ModrinthIndex> {

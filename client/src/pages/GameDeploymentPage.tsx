@@ -11,7 +11,8 @@ import {
   Pickaxe,
   CheckCircle,
   AlertCircle,
-  Plus
+  Plus,
+  Package
 } from 'lucide-react'
 import { useNotificationStore } from '@/stores/notificationStore'
 import apiClient from '@/utils/api'
@@ -88,9 +89,36 @@ const GameDeploymentPage: React.FC = () => {
   const [moreGameDeployLogs, setMoreGameDeployLogs] = useState<string[]>([])
   const [moreGameDeployComplete, setMoreGameDeployComplete] = useState(false)
   
+  // Minecraft整合包部署相关状态
+  const [mrpackSearchQuery, setMrpackSearchQuery] = useState('')
+  const [mrpackSearchResults, setMrpackSearchResults] = useState<any[]>([])
+  const [mrpackSearchLoading, setMrpackSearchLoading] = useState(false)
+  const [selectedMrpack, setSelectedMrpack] = useState<any>(null)
+  const [mrpackVersions, setMrpackVersions] = useState<any[]>([])
+  const [mrpackVersionsLoading, setMrpackVersionsLoading] = useState(false)
+  const [selectedMrpackVersion, setSelectedMrpackVersion] = useState<any>(null)
+  const [mrpackInstallPath, setMrpackInstallPath] = useState('')
+  const [mrpackDeploying, setMrpackDeploying] = useState(false)
+  const [mrpackDeployResult, setMrpackDeployResult] = useState<any>(null)
+  const [mrpackDeployProgress, setMrpackDeployProgress] = useState<any>(null)
+  const [mrpackDeployLogs, setMrpackDeployLogs] = useState<string[]>([])
+  const [mrpackDeployComplete, setMrpackDeployComplete] = useState(false)
+  
+  // 整合包悬停详情状态
+  const [hoveredMrpack, setHoveredMrpack] = useState<string | null>(null)
+  const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  
+  // 创建整合包实例相关状态
+  const [showCreateMrpackInstanceModal, setShowCreateMrpackInstanceModal] = useState(false)
+  const [createMrpackInstanceModalAnimating, setCreateMrpackInstanceModalAnimating] = useState(false)
+  const [mrpackInstanceName, setMrpackInstanceName] = useState('')
+  const [mrpackInstanceDescription, setMrpackInstanceDescription] = useState('')
+  const [creatingMrpackInstance, setCreatingMrpackInstance] = useState(false)
+  
   const socketRef = useRef<Socket | null>(null)
   const currentDownloadId = useRef<string | null>(null)
   const currentMoreGameDeploymentId = useRef<string | null>(null)
+  const currentMrpackDeploymentId = useRef<string | null>(null)
 
   // 获取游戏列表
   const fetchGames = async () => {
@@ -261,6 +289,146 @@ const GameDeploymentPage: React.FC = () => {
     }
   }
 
+  // 搜索Minecraft整合包
+  const searchMrpackModpacks = async () => {
+    if (!mrpackSearchQuery.trim()) {
+      addNotification({
+        type: 'error',
+        title: '搜索错误',
+        message: '请输入搜索关键词'
+      })
+      return
+    }
+
+    try {
+      setMrpackSearchLoading(true)
+      const response = await apiClient.searchMrpackModpacks({
+        query: mrpackSearchQuery,
+        limit: 20
+      })
+      
+      if (response.success) {
+        setMrpackSearchResults(response.data?.hits || [])
+      } else {
+        throw new Error(response.message || '搜索整合包失败')
+      }
+    } catch (error: any) {
+      console.error('搜索整合包失败:', error)
+      addNotification({
+        type: 'error',
+        title: '搜索失败',
+        message: error.message || '无法搜索整合包'
+      })
+    } finally {
+      setMrpackSearchLoading(false)
+    }
+  }
+
+  // 获取整合包版本列表
+  const fetchMrpackVersions = async (projectId: string) => {
+    try {
+      setMrpackVersionsLoading(true)
+      const response = await apiClient.getMrpackProjectVersions(projectId)
+      
+      if (response.success) {
+        setMrpackVersions(response.data || [])
+        setSelectedMrpackVersion(null)
+      } else {
+        throw new Error(response.message || '获取版本列表失败')
+      }
+    } catch (error: any) {
+      console.error('获取版本列表失败:', error)
+      addNotification({
+        type: 'error',
+        title: '获取失败',
+        message: error.message || '无法获取版本列表'
+      })
+    } finally {
+      setMrpackVersionsLoading(false)
+    }
+  }
+
+  // 部署Minecraft整合包
+  const deployMrpack = async () => {
+    if (!selectedMrpack || !selectedMrpackVersion || !mrpackInstallPath.trim()) {
+      addNotification({
+        type: 'error',
+        title: '参数错误',
+        message: '请选择整合包、版本和安装路径'
+      })
+      return
+    }
+
+    try {
+      // 重置状态
+      setMrpackDeploying(true)
+      setMrpackDeployResult(null)
+      setMrpackDeployProgress(null)
+      setMrpackDeployLogs([])
+      setMrpackDeployComplete(false)
+      
+      // 初始化WebSocket连接并等待连接建立
+      initializeSocket()
+      
+      // 等待WebSocket连接建立
+      const waitForConnection = () => {
+        return new Promise<string>((resolve, reject) => {
+          if (socketRef.current?.connected && socketRef.current?.id) {
+            resolve(socketRef.current.id)
+            return
+          }
+          
+          const timeout = setTimeout(() => {
+            reject(new Error('WebSocket连接超时'))
+          }, 10000) // 10秒超时
+          
+          const checkConnection = () => {
+            if (socketRef.current?.connected && socketRef.current?.id) {
+              clearTimeout(timeout)
+              resolve(socketRef.current.id)
+            } else {
+              setTimeout(checkConnection, 100)
+            }
+          }
+          
+          checkConnection()
+        })
+      }
+      
+      const socketId = await waitForConnection()
+      console.log('WebSocket连接已建立，Socket ID:', socketId)
+      
+      const response = await apiClient.deployMrpack({
+        projectId: selectedMrpack.project_id,
+        versionId: selectedMrpackVersion.id,
+        installPath: mrpackInstallPath,
+        socketId
+      })
+      
+      if (response.success) {
+        currentMrpackDeploymentId.current = response.data?.deploymentId
+        console.log('整合包部署开始，Deployment ID:', currentMrpackDeploymentId.current)
+        
+        addNotification({
+          type: 'info',
+          title: '开始部署',
+          message: `开始部署整合包 ${selectedMrpack.title}`
+        })
+      } else {
+        throw new Error(response.message || '启动部署失败')
+      }
+    } catch (error: any) {
+      console.error('启动部署失败:', error)
+      setMrpackDeploying(false)
+      currentMrpackDeploymentId.current = null
+      addNotification({
+        type: 'error',
+        title: '部署失败',
+        message: error.message || '无法启动整合包部署'
+      })
+    }
+  }
+
   // 获取指定服务端的可用版本
   const fetchMinecraftVersions = async (server: string) => {
     try {
@@ -378,45 +546,81 @@ const GameDeploymentPage: React.FC = () => {
       }
     })
 
-    // 监听更多游戏部署进度
+    // 监听游戏部署进度（包括更多游戏和Minecraft整合包）
     socketRef.current.on('more-games-deploy-progress', (data) => {
-      console.log('收到更多游戏部署进度:', data)
-      setMoreGameDeployProgress(data.progress)
+      console.log('收到整合包部署进度:', data)
+      // 检查是否是整合包部署的进度
+      if (data.deploymentId && data.deploymentId.startsWith('mrpack-deploy-')) {
+        setMrpackDeployProgress(data.progress)
+      } else {
+        setMoreGameDeployProgress(data.progress)
+      }
     })
 
-    // 监听更多游戏部署日志
+    // 监听Minecraft整合包部署日志
     socketRef.current.on('more-games-deploy-log', (data) => {
-      console.log('收到更多游戏部署日志:', data)
+      console.log('收到部署日志:', data)
       const message = typeof data.message === 'string' ? data.message : JSON.stringify(data.message)
-      setMoreGameDeployLogs(prev => [...prev, message])
+      // 检查是否是整合包部署的日志
+      if (data.deploymentId && data.deploymentId.startsWith('mrpack-deploy-')) {
+        setMrpackDeployLogs(prev => [...prev, message])
+      } else {
+        setMoreGameDeployLogs(prev => [...prev, message])
+      }
     })
 
-    // 监听更多游戏部署完成
+    // 监听Minecraft整合包部署完成
     socketRef.current.on('more-games-deploy-complete', (data) => {
-      console.log('收到更多游戏部署完成事件:', data)
-      setMoreGameDeploying(false)
-      setMoreGameDeployComplete(true)
-      setMoreGameDeployResult(data.data)
-      currentMoreGameDeploymentId.current = null
-      
-      addNotification({
-        type: 'success',
-        title: '部署完成',
-        message: data.message || '游戏部署完成！'
-      })
+      console.log('收到部署完成事件:', data)
+      // 检查是否是整合包部署的完成事件
+      if (data.deploymentId && data.deploymentId.startsWith('mrpack-deploy-')) {
+        setMrpackDeploying(false)
+        setMrpackDeployComplete(true)
+        setMrpackDeployResult(data.data)
+        currentMrpackDeploymentId.current = null // 重置整合包部署ID
+        
+        addNotification({
+          type: 'success',
+          title: '部署完成',
+          message: data.message || '整合包部署完成！'
+        })
+      } else {
+        setMoreGameDeploying(false)
+        setMoreGameDeployComplete(true)
+        setMoreGameDeployResult(data.data)
+        currentMoreGameDeploymentId.current = null
+        
+        addNotification({
+          type: 'success',
+          title: '部署完成',
+          message: data.message || '游戏部署完成！'
+        })
+      }
     })
 
-    // 监听更多游戏部署错误
+    // 监听Minecraft整合包部署错误
     socketRef.current.on('more-games-deploy-error', (data) => {
-      console.log('收到更多游戏部署错误事件:', data)
-      setMoreGameDeploying(false)
-      currentMoreGameDeploymentId.current = null
-      
-      addNotification({
-        type: 'error',
-        title: '部署失败',
-        message: data.error || '部署过程中发生错误'
-      })
+      console.log('收到部署错误事件:', data)
+      // 检查是否是整合包部署的错误事件
+      if (data.deploymentId && data.deploymentId.startsWith('mrpack-deploy-')) {
+        setMrpackDeploying(false)
+        currentMrpackDeploymentId.current = null // 重置整合包部署ID
+        
+        addNotification({
+          type: 'error',
+          title: '部署失败',
+          message: data.error || '整合包部署过程中发生错误'
+        })
+      } else {
+        setMoreGameDeploying(false)
+        currentMoreGameDeploymentId.current = null
+        
+        addNotification({
+          type: 'error',
+          title: '部署失败',
+          message: data.error || '部署过程中发生错误'
+        })
+      }
     })
   }
 
@@ -582,6 +786,70 @@ const GameDeploymentPage: React.FC = () => {
     }
   }
 
+  // 取消整合包部署
+  const cancelMrpackDeployment = async () => {
+    if (!currentMrpackDeploymentId.current) {
+      addNotification({
+        type: 'error',
+        title: '取消失败',
+        message: '没有正在进行的整合包部署任务'
+      })
+      return
+    }
+
+    try {
+      console.log('尝试取消整合包部署，ID:', currentMrpackDeploymentId.current)
+      const response = await apiClient.cancelMoreGameDeployment(currentMrpackDeploymentId.current)
+      
+      if (response.success) {
+        // 重置部署状态
+        setMrpackDeploying(false)
+        setMrpackDeployProgress(null)
+        currentMrpackDeploymentId.current = null
+        
+        addNotification({
+          type: 'info',
+          title: '部署已取消',
+          message: '整合包部署已取消'
+        })
+      } else {
+        console.error('取消整合包部署失败，服务器响应:', response)
+        throw new Error(response.message || '取消整合包部署失败')
+      }
+    } catch (error: any) {
+      console.error('取消整合包部署失败:', error)
+      addNotification({
+        type: 'error',
+        title: '取消失败',
+        message: error.message || '无法取消整合包部署'
+      })
+    }
+  }
+
+  // 处理整合包鼠标悬停
+  const handleMrpackMouseEnter = (mrpackId: string) => {
+    // 清除之前的定时器
+    if (hoverTimeoutRef.current) {
+      clearTimeout(hoverTimeoutRef.current)
+    }
+    
+    // 设置1秒后显示详情
+    hoverTimeoutRef.current = setTimeout(() => {
+      setHoveredMrpack(mrpackId)
+    }, 1000)
+  }
+
+  const handleMrpackMouseLeave = () => {
+    // 清除定时器
+    if (hoverTimeoutRef.current) {
+      clearTimeout(hoverTimeoutRef.current)
+      hoverTimeoutRef.current = null
+    }
+    
+    // 隐藏详情
+    setHoveredMrpack(null)
+  }
+
   // 创建Minecraft实例
   const createMinecraftInstance = async () => {
     if (!instanceName.trim() || !downloadResult) {
@@ -660,12 +928,17 @@ const GameDeploymentPage: React.FC = () => {
     }
   }, [activeTab])
 
-  // 清理WebSocket连接
+  // 清理WebSocket连接和定时器
   useEffect(() => {
     return () => {
       if (socketRef.current) {
         socketRef.current.disconnect()
         socketRef.current = null
+      }
+      // 清理悬停定时器
+      if (hoverTimeoutRef.current) {
+        clearTimeout(hoverTimeoutRef.current)
+        hoverTimeoutRef.current = null
       }
     }
   }, [])
@@ -703,6 +976,68 @@ const GameDeploymentPage: React.FC = () => {
     setTimeout(() => {
       setShowCreateInstanceModal(false)
     }, 300)
+  }
+
+  // 关闭创建整合包实例对话框
+  const handleCloseCreateMrpackInstanceModal = () => {
+    setCreateMrpackInstanceModalAnimating(false)
+    setTimeout(() => {
+      setShowCreateMrpackInstanceModal(false)
+      // 重置表单
+      setMrpackInstanceName('')
+      setMrpackInstanceDescription('')
+    }, 300)
+  }
+
+  // 创建整合包实例
+  const createMrpackInstance = async () => {
+    if (!mrpackInstanceName.trim() || !mrpackDeployResult) {
+      addNotification({
+        type: 'error',
+        title: '参数错误',
+        message: '请填写实例名称'
+      })
+      return
+    }
+
+    try {
+      setCreatingMrpackInstance(true)
+      
+      const response = await apiClient.createInstance({
+        name: mrpackInstanceName.trim(),
+        description: mrpackInstanceDescription.trim() || `Minecraft整合包实例 - ${selectedMrpack?.title}`,
+        workingDirectory: mrpackDeployResult.installPath,
+        startCommand: mrpackDeployResult.serverJarPath ? `java -jar "${mrpackDeployResult.serverJarPath}"` : 'java -jar server.jar',
+        autoStart: false,
+        stopCommand: 'stop' as const
+      })
+      
+      if (response.success) {
+        addNotification({
+          type: 'success',
+          title: '实例创建成功',
+          message: `实例 "${mrpackInstanceName.trim()}" 已创建，即将跳转到实例管理页面...`
+        })
+        
+        handleCloseCreateMrpackInstanceModal()
+        
+        // 跳转到实例管理页面
+        setTimeout(() => {
+          navigate('/instances')
+        }, 1500)
+      } else {
+        throw new Error(response.message || '创建实例失败')
+      }
+    } catch (error: any) {
+      console.error('创建整合包实例失败:', error)
+      addNotification({
+        type: 'error',
+        title: '创建失败',
+        message: error.message || '无法创建整合包实例'
+      })
+    } finally {
+      setCreatingMrpackInstance(false)
+    }
   }
 
   // 开始安装游戏
@@ -812,6 +1147,7 @@ const GameDeploymentPage: React.FC = () => {
   const tabs = [
     { id: 'steamcmd', name: 'SteamCMD', icon: Download },
     { id: 'minecraft', name: 'Minecraft部署', icon: Pickaxe },
+    { id: 'mrpack', name: 'Minecraft整合包部署', icon: Package },
     { id: 'more-games', name: '更多游戏部署', icon: Server }
   ]
 
@@ -1596,6 +1932,420 @@ const GameDeploymentPage: React.FC = () => {
         </div>
       )}
 
+      {/* Minecraft整合包部署标签页内容 */}
+      {activeTab === 'mrpack' && (
+        <div className="space-y-6">
+          {/* 搜索整合包 */}
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+              搜索Minecraft整合包
+            </h3>
+            
+            <div className="flex space-x-4 mb-4">
+              <input
+                type="text"
+                value={mrpackSearchQuery}
+                onChange={(e) => setMrpackSearchQuery(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && searchMrpackModpacks()}
+                className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                placeholder="输入整合包名称或关键词"
+              />
+              <button
+                onClick={searchMrpackModpacks}
+                disabled={mrpackSearchLoading || !mrpackSearchQuery.trim()}
+                className={`px-6 py-2 rounded-lg transition-colors flex items-center space-x-2 ${
+                  mrpackSearchLoading || !mrpackSearchQuery.trim()
+                    ? 'bg-gray-400 dark:bg-gray-600 text-gray-200 cursor-not-allowed'
+                    : 'bg-blue-600 hover:bg-blue-700 text-white'
+                }`}
+              >
+                {mrpackSearchLoading ? (
+                  <>
+                    <Loader className="w-4 h-4 animate-spin" />
+                    <span>搜索中...</span>
+                  </>
+                ) : (
+                  <>
+                    <Download className="w-4 h-4" />
+                    <span>搜索</span>
+                  </>
+                )}
+              </button>
+            </div>
+            
+            {/* 搜索结果 */}
+            {mrpackSearchResults.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {mrpackSearchResults.map((modpack) => (
+                  <div
+                    key={modpack.project_id}
+                    className={`
+                      p-4 border-2 rounded-lg transition-all cursor-pointer
+                      ${selectedMrpack?.project_id === modpack.project_id
+                        ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                        : 'border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500'
+                      }
+                    `}
+                    onClick={() => setSelectedMrpack(modpack)}
+                    onMouseEnter={() => handleMrpackMouseEnter(modpack.project_id)}
+                    onMouseLeave={handleMrpackMouseLeave}
+                  >
+                    <div className="flex items-start space-x-3">
+                      <div className="w-12 h-12 rounded-lg overflow-hidden flex-shrink-0">
+                        {modpack.icon_url ? (
+                          <img
+                            src={modpack.icon_url}
+                            alt={modpack.title}
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                              // 图片加载失败时显示默认图标
+                              const target = e.target as HTMLImageElement;
+                              target.style.display = 'none';
+                              const parent = target.parentElement;
+                              if (parent) {
+                                parent.className = 'w-12 h-12 rounded-lg bg-gradient-to-br from-green-500 to-blue-600 flex items-center justify-center';
+                                parent.innerHTML = '<svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>';
+                              }
+                            }}
+                          />
+                        ) : (
+                          <div className="w-full h-full bg-gradient-to-br from-green-500 to-blue-600 flex items-center justify-center">
+                            <Package className="w-6 h-6 text-white" />
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex-1">
+                        <h4 className="font-medium text-gray-900 dark:text-white">
+                          {modpack.title}
+                        </h4>
+                        <p className={`text-sm text-gray-600 dark:text-gray-400 transition-all duration-300 ${
+                          hoveredMrpack === modpack.project_id ? '' : 'line-clamp-2'
+                        }`}>
+                          {modpack.description}
+                        </p>
+                        <div className="mt-2 flex flex-wrap gap-1">
+                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400">
+                            下载: {modpack.downloads?.toLocaleString() || 0}
+                          </span>
+                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400">
+                            作者: {modpack.author}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              mrpackSearchQuery && !mrpackSearchLoading && (
+                <div className="text-center py-12">
+                  <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center">
+                    <Package className="w-8 h-8 text-gray-400" />
+                  </div>
+                  <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
+                    未找到相关整合包
+                  </h3>
+                  <p className="text-gray-600 dark:text-gray-400 mb-4">
+                    没有找到与 "{mrpackSearchQuery}" 相关的整合包，请尝试其他关键词
+                  </p>
+                  <button
+                    onClick={() => {
+                      setMrpackSearchQuery('')
+                      setMrpackSearchResults([])
+                    }}
+                    className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 font-medium"
+                  >
+                    清除搜索
+                  </button>
+                </div>
+              )
+            )}
+          </div>
+
+          {/* 部署配置 */}
+          {selectedMrpack && (
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+                部署配置
+              </h3>
+              
+              <div className="space-y-4">
+                {/* 选中的整合包信息 */}
+                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                  <div className="flex items-start space-x-3">
+                    <div className="w-12 h-12 rounded-lg overflow-hidden flex-shrink-0">
+                      {selectedMrpack.icon_url ? (
+                        <img
+                          src={selectedMrpack.icon_url}
+                          alt={selectedMrpack.title}
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            // 图片加载失败时显示默认图标
+                            const target = e.target as HTMLImageElement;
+                            target.style.display = 'none';
+                            const parent = target.parentElement;
+                            if (parent) {
+                              parent.className = 'w-12 h-12 rounded-lg bg-blue-600 flex items-center justify-center';
+                              parent.innerHTML = '<svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>';
+                            }
+                          }}
+                        />
+                      ) : (
+                        <div className="w-full h-full bg-blue-600 flex items-center justify-center">
+                          <Package className="w-6 h-6 text-white" />
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center space-x-2 text-blue-800 dark:text-blue-400 mb-2">
+                        <span className="font-medium">选中的整合包</span>
+                      </div>
+                      <p className="text-sm text-blue-700 dark:text-blue-300">
+                        <strong>{selectedMrpack.title}</strong> - {selectedMrpack.description}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* 版本选择 */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    选择版本 *
+                  </label>
+                  <div className="flex space-x-2">
+                    <button
+                      onClick={() => fetchMrpackVersions(selectedMrpack.project_id)}
+                      disabled={mrpackVersionsLoading}
+                      className={`px-4 py-2 rounded-lg transition-colors flex items-center space-x-2 ${
+                        mrpackVersionsLoading
+                          ? 'bg-gray-400 dark:bg-gray-600 text-gray-200 cursor-not-allowed'
+                          : 'bg-green-600 hover:bg-green-700 text-white'
+                      }`}
+                    >
+                      {mrpackVersionsLoading ? (
+                        <>
+                          <Loader className="w-4 h-4 animate-spin" />
+                          <span>加载中...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Download className="w-4 h-4" />
+                          <span>获取版本列表</span>
+                        </>
+                      )}
+                    </button>
+                    
+                    {mrpackVersions.length > 0 && (
+                      <select
+                        value={selectedMrpackVersion?.id || ''}
+                        onChange={(e) => {
+                          const version = mrpackVersions.find(v => v.id === e.target.value)
+                          setSelectedMrpackVersion(version || null)
+                        }}
+                        className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      >
+                        <option value="">请选择版本</option>
+                        {mrpackVersions.map((version) => (
+                          <option key={version.id} value={version.id}>
+                            {version.name} ({version.version_number}) - {version.game_versions?.join(', ')}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+                  
+                  {selectedMrpackVersion && (
+                    <div className="mt-2 p-3 bg-gray-50 dark:bg-gray-900 rounded-lg">
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                        <strong>版本:</strong> {selectedMrpackVersion.name} ({selectedMrpackVersion.version_number})
+                      </p>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                        <strong>支持的Minecraft版本:</strong> {selectedMrpackVersion.game_versions?.join(', ')}
+                      </p>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                        <strong>加载器:</strong> {selectedMrpackVersion.loaders?.join(', ')}
+                      </p>
+                      {selectedMrpackVersion.changelog && (
+                        <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                          <strong>更新日志:</strong> {selectedMrpackVersion.changelog.substring(0, 100)}...
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+                
+                {/* 安装路径 */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    安装路径 *
+                  </label>
+                  <input
+                    type="text"
+                    value={mrpackInstallPath}
+                    onChange={(e) => setMrpackInstallPath(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    placeholder="输入整合包的安装路径"
+                  />
+                </div>
+                
+                {/* 部署按钮 */}
+                <div className="space-y-2">
+                  <div className="flex justify-end space-x-3">
+                    {mrpackDeploying && (
+                      <button
+                        onClick={cancelMrpackDeployment}
+                        className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors flex items-center space-x-2"
+                      >
+                        <X className="w-4 h-4" />
+                        <span>取消部署</span>
+                      </button>
+                    )}
+                    <button
+                      onClick={deployMrpack}
+                      disabled={mrpackDeploying || !mrpackInstallPath.trim()}
+                      className={`px-6 py-2 rounded-lg transition-colors flex items-center space-x-2 ${
+                        mrpackDeploying || !mrpackInstallPath.trim()
+                          ? 'bg-gray-400 dark:bg-gray-600 text-gray-200 cursor-not-allowed'
+                          : 'bg-blue-600 hover:bg-blue-700 text-white'
+                      }`}
+                    >
+                      {mrpackDeploying ? (
+                        <>
+                          <Loader className="w-4 h-4 animate-spin" />
+                          <span>部署中...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Download className="w-4 h-4" />
+                          <span>开始部署</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+                
+                {/* 部署进度 */}
+                {(mrpackDeployProgress || mrpackDeploying) && (
+                  <div className="mt-4 space-y-3">
+                    {mrpackDeployProgress && (
+                      <div>
+                        <div className="flex justify-between text-sm text-gray-600 dark:text-gray-400 mb-1">
+                          <span>部署进度</span>
+                          <span>{mrpackDeployProgress.percentage || 0}%</span>
+                        </div>
+                        <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                          <div
+                            className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                            style={{ width: `${mrpackDeployProgress.percentage || 0}%` }}
+                          ></div>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* 部署日志 */}
+                    {mrpackDeployLogs.length > 0 && (
+                      <div>
+                        <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                          部署日志
+                        </h4>
+                        <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-3 max-h-32 overflow-y-auto">
+                          {mrpackDeployLogs.slice(-10).map((log, index) => (
+                            <div key={index} className="text-xs text-gray-600 dark:text-gray-400 font-mono">
+                              {typeof log === 'string' ? log : JSON.stringify(log)}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* 部署完成后的操作 */}
+          {mrpackDeployComplete && mrpackDeployResult && (
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+                部署完成
+              </h3>
+              
+              <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
+                <div className="flex items-center space-x-2 text-green-800 dark:text-green-400 mb-3">
+                  <CheckCircle className="w-5 h-5" />
+                  <span className="font-medium">部署成功！</span>
+                </div>
+                <div className="flex items-start space-x-3 mb-3">
+                  <div className="w-12 h-12 rounded-lg overflow-hidden flex-shrink-0">
+                    {selectedMrpack?.icon_url ? (
+                      <img
+                        src={selectedMrpack.icon_url}
+                        alt={selectedMrpack.title}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          // 图片加载失败时显示默认图标
+                          const target = e.target as HTMLImageElement;
+                          target.style.display = 'none';
+                          const parent = target.parentElement;
+                          if (parent) {
+                            parent.className = 'w-12 h-12 rounded-lg bg-green-600 flex items-center justify-center';
+                            parent.innerHTML = '<svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>';
+                          }
+                        }}
+                      />
+                    ) : (
+                      <div className="w-full h-full bg-green-600 flex items-center justify-center">
+                        <Package className="w-6 h-6 text-white" />
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex-1 text-sm text-green-700 dark:text-green-300 space-y-1">
+                    <p><strong>整合包:</strong> {selectedMrpack?.title}</p>
+                    <p><strong>安装路径:</strong> {mrpackDeployResult.installPath}</p>
+                    {mrpackDeployResult.version && (
+                      <p><strong>版本:</strong> {mrpackDeployResult.version}</p>
+                    )}
+                    {mrpackDeployResult.serverJarPath && (
+                      <p><strong>服务端文件:</strong> {mrpackDeployResult.serverJarPath}</p>
+                    )}
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  <button
+                    onClick={() => {
+                      // 打开创建整合包实例对话框
+                      setShowCreateMrpackInstanceModal(true)
+                      setCreateMrpackInstanceModalAnimating(true)
+                    }}
+                    className="w-full bg-green-600 hover:bg-green-700 text-white py-2 px-4 rounded-lg transition-colors flex items-center justify-center space-x-2"
+                  >
+                    <Server className="w-4 h-4" />
+                    <span>创建实例</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      // 重置状态
+                      setSelectedMrpack(null)
+                      setMrpackInstallPath('')
+                      setMrpackDeployComplete(false)
+                      setMrpackDeployResult(null)
+                      setMrpackDeployProgress(null)
+                      setMrpackDeployLogs([])
+                      setMrpackSearchResults([])
+                      setMrpackSearchQuery('')
+                    }}
+                    className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg transition-colors flex items-center justify-center space-x-2"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>部署其他整合包</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* 安装配置对话框 */}
       {showInstallModal && selectedGame && (
         <div className={`fixed inset-0 bg-black/50 flex items-center justify-center z-50 transition-opacity duration-300 ${
@@ -1823,6 +2573,130 @@ const GameDeploymentPage: React.FC = () => {
                 ) : (
                   <>
                     <Plus className="w-4 h-4" />
+                    <span>创建实例</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 创建整合包实例对话框 */}
+      {showCreateMrpackInstanceModal && mrpackDeployResult && (
+        <div className={`fixed inset-0 bg-black/50 flex items-center justify-center z-50 transition-opacity duration-300 ${
+          createMrpackInstanceModalAnimating ? 'opacity-100' : 'opacity-0'
+        }`}>
+          <div className={`bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md mx-4 transform transition-all duration-300 ${
+            createMrpackInstanceModalAnimating ? 'scale-100 opacity-100' : 'scale-95 opacity-0'
+          }`}>
+            <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                创建整合包实例
+              </h3>
+              <button
+                onClick={handleCloseCreateMrpackInstanceModal}
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="p-6 space-y-4">
+              {/* 整合包信息 */}
+              <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-3">
+                <div className="flex items-start space-x-3">
+                  <div className="w-12 h-12 rounded-lg overflow-hidden flex-shrink-0">
+                    {selectedMrpack?.icon_url ? (
+                      <img
+                        src={selectedMrpack.icon_url}
+                        alt={selectedMrpack.title}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          // 图片加载失败时显示默认图标
+                          const target = e.target as HTMLImageElement;
+                          target.style.display = 'none';
+                          const parent = target.parentElement;
+                          if (parent) {
+                            parent.className = 'w-12 h-12 rounded-lg bg-green-600 flex items-center justify-center';
+                            parent.innerHTML = '<svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>';
+                          }
+                        }}
+                      />
+                    ) : (
+                      <div className="w-full h-full bg-green-600 flex items-center justify-center">
+                        <Package className="w-6 h-6 text-white" />
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex-1">
+                    <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      整合包信息
+                    </h4>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      名称: {selectedMrpack?.title}
+                    </p>
+                    {mrpackDeployResult.version && (
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                        版本: {mrpackDeployResult.version}
+                      </p>
+                    )}
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      路径: {mrpackDeployResult.installPath}
+                    </p>
+                  </div>
+                </div>
+              </div>
+              
+              {/* 实例名称 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  实例名称 *
+                </label>
+                <input
+                  type="text"
+                  value={mrpackInstanceName}
+                  onChange={(e) => setMrpackInstanceName(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  placeholder="输入实例名称"
+                />
+              </div>
+              
+              {/* 实例描述 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  实例描述
+                </label>
+                <textarea
+                  value={mrpackInstanceDescription}
+                  onChange={(e) => setMrpackInstanceDescription(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  placeholder="输入实例描述（可选）"
+                  rows={3}
+                />
+              </div>
+            </div>
+            
+            <div className="flex space-x-3 p-6 border-t border-gray-200 dark:border-gray-700">
+              <button
+                onClick={handleCloseCreateMrpackInstanceModal}
+                className="flex-1 px-4 py-2 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-600 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-500 transition-colors"
+              >
+                取消
+              </button>
+              <button
+                onClick={createMrpackInstance}
+                disabled={!mrpackInstanceName.trim() || creatingMrpackInstance}
+                className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white rounded-lg transition-colors flex items-center justify-center space-x-2"
+              >
+                {creatingMrpackInstance ? (
+                  <>
+                    <Loader className="w-4 h-4 animate-spin" />
+                    <span>创建中...</span>
+                  </>
+                ) : (
+                  <>
+                    <Server className="w-4 h-4" />
                     <span>创建实例</span>
                   </>
                 )}

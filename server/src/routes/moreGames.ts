@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express'
 import { promises as fs } from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
-import { deployTModLoaderServer, deployFactorioServer, cancelDeployment, getActiveDeployments, getTModLoaderInfo } from '../modules/game/othergame/unified-functions.js'
+import { deployTModLoaderServer, deployFactorioServer, cancelDeployment, getActiveDeployments, getTModLoaderInfo, searchMrpackModpacks, getMrpackProjectVersions, deployMrpackServer } from '../modules/game/othergame/unified-functions.js'
 import { authenticateToken } from '../middleware/auth.js'
 import logger from '../utils/logger.js'
 import { Server as SocketIOServer } from 'socket.io'
@@ -21,7 +21,8 @@ export function setMoreGamesDependencies(socketIO: SocketIOServer) {
 // 游戏类型枚举
 export enum GameType {
   TMODLOADER = 'tmodloader',
-  FACTORIO = 'factorio'
+  FACTORIO = 'factorio',
+  MRPACK = 'mrpack'
 }
 
 // 平台类型枚举
@@ -96,6 +97,15 @@ const supportedGames: GameInfo[] = [
     category: '策略游戏',
     supported: true,
     supportedPlatforms: [Platform.LINUX] // 仅Linux平台支持
+  },
+  {
+    id: 'mrpack',
+    name: 'Minecraft整合包',
+    description: 'Minecraft Mrpack整合包服务端部署',
+    icon: '📦',
+    category: '沙盒游戏',
+    supported: true,
+    supportedPlatforms: [Platform.WINDOWS, Platform.LINUX, Platform.MACOS] // 全平台支持
   }
 ]
 
@@ -561,6 +571,199 @@ router.get('/version/:gameId', authenticateToken, async (req: Request, res: Resp
     res.status(500).json({
       success: false,
       error: '获取版本信息失败',
+      message: error.message
+    })
+  }
+})
+
+// 搜索Minecraft整合包
+router.get('/mrpack/search', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const { query, limit = 20, offset = 0, categories, versions, loaders } = req.query
+    
+    const searchOptions = {
+      query: query as string,
+      limit: parseInt(limit as string),
+      offset: parseInt(offset as string),
+      categories: categories ? (categories as string).split(',') : undefined,
+      versions: versions ? (versions as string).split(',') : undefined,
+      loaders: loaders ? (loaders as string).split(',') : undefined
+    }
+    
+    const result = await searchMrpackModpacks(searchOptions)
+    
+    res.json({
+      success: true,
+      data: result,
+      message: '搜索整合包成功'
+    })
+    
+  } catch (error: any) {
+    logger.error('搜索整合包失败:', error)
+    res.status(500).json({
+      success: false,
+      error: '搜索整合包失败',
+      message: error.message
+    })
+  }
+})
+
+// 获取Minecraft整合包项目版本
+router.get('/mrpack/project/:projectId/versions', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const { projectId } = req.params
+    
+    if (!projectId) {
+      return res.status(400).json({
+        success: false,
+        error: '缺少项目ID参数',
+        message: '项目ID为必填项'
+      })
+    }
+    
+    const versions = await getMrpackProjectVersions(projectId)
+    
+    res.json({
+      success: true,
+      data: versions,
+      message: '获取项目版本成功'
+    })
+    
+  } catch (error: any) {
+    logger.error('获取项目版本失败:', error)
+    res.status(500).json({
+      success: false,
+      error: '获取项目版本失败',
+      message: error.message
+    })
+  }
+})
+
+// 部署Minecraft整合包
+router.post('/deploy/mrpack', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const { projectId, versionId, installPath, options = {}, socketId } = req.body
+    
+    if (!projectId || !versionId || !installPath) {
+      return res.status(400).json({
+        success: false,
+        error: '缺少必填参数',
+        message: 'projectId、versionId和installPath为必填项'
+      })
+    }
+    
+    // 验证参数格式
+    if (typeof projectId !== 'string' || typeof versionId !== 'string' || typeof installPath !== 'string') {
+      return res.status(400).json({
+        success: false,
+        error: '参数类型错误',
+        message: 'projectId、versionId和installPath必须是字符串类型'
+      })
+    }
+    
+    // 验证versionId格式（Modrinth版本ID格式）
+    if (versionId.length < 8 || !/^[a-zA-Z0-9]+$/.test(versionId)) {
+      return res.status(400).json({
+        success: false,
+        error: '版本ID格式错误',
+        message: `无效的版本ID: ${versionId}。版本ID应该是至少8位的字母数字字符串。`
+      })
+    }
+    
+    const deploymentId = `mrpack-deploy-${Date.now()}`
+    
+    // 立即返回部署ID
+    res.json({
+      success: true,
+      data: {
+        deploymentId
+      },
+      message: '开始部署Minecraft整合包'
+    })
+    
+    logger.info('开始部署Minecraft整合包', { projectId, versionId, installPath, options, deploymentId })
+    
+    // 异步执行部署
+    ;(async () => {
+      try {
+        // 使用统一函数进行部署
+        const result = await deployMrpackServer({
+          projectId,
+          versionId,
+          targetDirectory: installPath,
+          deploymentId,
+          options,
+          onProgress: (message, type = 'info') => {
+            if (io && socketId) {
+              io.to(socketId).emit('more-games-deploy-log', {
+                deploymentId,
+                message,
+                type,
+                timestamp: new Date().toISOString()
+              })
+            }
+          }
+        })
+        
+        if (result.success) {
+          logger.info('Minecraft整合包部署成功', {
+            installPath: result.targetDirectory,
+            deploymentId: result.deploymentId
+          })
+          
+          // 发送最终完成日志和进度
+          if (io && socketId) {
+            io.to(socketId).emit('more-games-deploy-log', {
+              deploymentId,
+              message: 'Minecraft整合包部署成功！'
+            })
+            io.to(socketId).emit('more-games-deploy-progress', {
+              deploymentId,
+              progress: { percentage: 100 },
+              message: '部署完成'
+            })
+            io.to(socketId).emit('more-games-deploy-complete', {
+              deploymentId,
+              success: true,
+              data: {
+                installPath: result.targetDirectory,
+                deploymentId: result.deploymentId
+              },
+              message: 'Minecraft整合包部署成功！'
+            })
+          }
+        } else {
+          logger.error('Minecraft整合包部署失败:', result.message)
+          
+          // 发送错误事件
+          if (io && socketId) {
+            io.to(socketId).emit('more-games-deploy-error', {
+              deploymentId,
+              success: false,
+              error: result.message || 'Minecraft整合包部署失败'
+            })
+          }
+        }
+        
+      } catch (error: any) {
+        logger.error('Minecraft整合包部署失败:', error)
+        
+        // 发送错误事件
+        if (io && socketId) {
+          io.to(socketId).emit('more-games-deploy-error', {
+            deploymentId,
+            success: false,
+            error: error.message || 'Minecraft整合包部署失败'
+          })
+        }
+      }
+    })()
+    
+  } catch (error: any) {
+    logger.error('启动Minecraft整合包部署失败:', error)
+    res.status(500).json({
+      success: false,
+      error: 'Minecraft整合包部署失败',
       message: error.message
     })
   }
