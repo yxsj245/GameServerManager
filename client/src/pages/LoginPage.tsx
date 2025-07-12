@@ -153,7 +153,7 @@ const LoginPage: React.FC = () => {
           {/* 底部信息 */}
           <div className="mt-6 text-center">
             <p className="text-sm text-gray-600 dark:text-gray-400">
-              GSManager3 游戏服务器管理面板 v3.0
+              GSManager3 游戏服务器管理面板
             </p>
           </div>
         </div>
