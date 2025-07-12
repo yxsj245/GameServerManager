@@ -140,6 +140,82 @@ class GSM3API {
     return await this.request(`/instances/${instanceId}/status`)
   }
 
+  /**
+   * 创建新实例
+   * @param {Object} instanceData 实例数据
+   * @param {string} instanceData.name 实例名称
+   * @param {string} instanceData.description 实例描述
+   * @param {string} instanceData.workingDirectory 工作目录
+   * @param {string} instanceData.startCommand 启动命令
+   * @param {boolean} instanceData.autoStart 是否自动启动
+   * @param {string} instanceData.stopCommand 停止命令
+   */
+  async createInstance(instanceData) {
+    return await this.request('/instances', {
+      method: 'POST',
+      body: instanceData
+    })
+  }
+
+  /**
+   * 更新实例
+   * @param {string} instanceId 实例ID
+   * @param {Object} instanceData 实例数据
+   */
+  async updateInstance(instanceId, instanceData) {
+    return await this.request(`/instances/${instanceId}`, {
+      method: 'PUT',
+      body: instanceData
+    })
+  }
+
+  /**
+   * 删除实例
+   * @param {string} instanceId 实例ID
+   */
+  async deleteInstance(instanceId) {
+    return await this.request(`/instances/${instanceId}`, {
+      method: 'DELETE'
+    })
+  }
+
+  /**
+   * 启动实例
+   * @param {string} instanceId 实例ID
+   */
+  async startInstance(instanceId) {
+    return await this.request(`/instances/${instanceId}/start`, {
+      method: 'POST'
+    })
+  }
+
+  /**
+   * 停止实例
+   * @param {string} instanceId 实例ID
+   */
+  async stopInstance(instanceId) {
+    return await this.request(`/instances/${instanceId}/stop`, {
+      method: 'POST'
+    })
+  }
+
+  /**
+   * 重启实例
+   * @param {string} instanceId 实例ID
+   */
+  async restartInstance(instanceId) {
+    return await this.request(`/instances/${instanceId}/restart`, {
+      method: 'POST'
+    })
+  }
+
+  /**
+   * 获取实例市场列表
+   */
+  async getMarketInstances() {
+    return await this.request('/instances/market')
+  }
+
   // ==================== 终端管理API ====================
 
   /**
@@ -147,6 +223,95 @@ class GSM3API {
    */
   async getTerminals() {
     return await this.request('/terminals')
+  }
+
+   /**
+   * 获取终端会话统计信息
+   */
+  async getTerminalStats() {
+    return await this.request('/terminals/stats', {
+      method: 'GET'
+    })
+  }
+
+  /**
+   * 获取终端会话详细信息
+   */
+  async getTerminalSessions() {
+    return await this.request('/terminals/sessions', {
+      method: 'GET'
+    })
+  }
+
+  /**
+   * 获取活跃终端进程信息
+   */
+  async getActiveTerminalProcesses() {
+    return await this.request('/terminals/active-processes', {
+      method: 'GET'
+    })
+  }
+
+  /**
+   * 更新终端会话名称
+   * @param {string} sessionId 会话ID
+   * @param {string} name 新的会话名称
+   */
+  async updateTerminalSessionName(sessionId, name) {
+    return await this.request(`/terminals/sessions/${sessionId}/name`, {
+      method: 'PUT',
+      body: { name }
+    })
+  }
+
+  /**
+   * 验证终端配置
+   * @param {string} workingDirectory 工作目录
+   * @param {string} shell Shell程序路径
+   */
+  async validateTerminalConfig(workingDirectory, shell) {
+    return await this.request('/terminals/validate-config', {
+      method: 'POST',
+      body: { workingDirectory, shell }
+    })
+  }
+
+  /**
+   * 获取系统默认Shell信息
+   */
+  async getDefaultShell() {
+    return await this.request('/terminals/default-shell', {
+      method: 'GET'
+    })
+  }
+
+  /**
+   * 获取终端主题配置
+   */
+  async getTerminalThemes() {
+    return await this.request('/terminals/themes', {
+      method: 'GET'
+    })
+  }
+
+  /**
+   * 获取终端字体配置
+   */
+  async getTerminalFonts() {
+    return await this.request('/terminals/fonts', {
+      method: 'GET'
+    })
+  }
+
+  /**
+   * 测试终端连接
+   * @param {string} workingDirectory 工作目录
+   */
+  async testTerminalConnection(workingDirectory) {
+    return await this.request('/terminals/test-connection', {
+      method: 'POST',
+      body: { workingDirectory }
+    })
   }
 
   // ==================== 游戏管理API ====================

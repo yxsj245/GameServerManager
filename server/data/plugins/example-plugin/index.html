@@ -340,6 +340,85 @@
         </div>
 
         <div class="demo-section">
+            <h3>🖥️ 实例管理演示</h3>
+            <p>体验插件实例管理API的功能：</p>
+            
+            <div class="button-group">
+                <button class="btn" onclick="getInstances()">获取实例列表</button>
+                <button class="btn btn-success" onclick="getMarketInstances()">获取市场实例</button>
+                <button class="btn btn-warning" onclick="showCreateInstanceForm()">创建实例</button>
+                <button class="btn btn-info" onclick="getInstanceDetails()">获取实例详情</button>
+            </div>
+            
+            <div class="button-group">
+                <input type="text" id="instanceIdInput" placeholder="输入实例ID" value="" style="padding: 12px; border-radius: 25px; border: 1px solid rgba(255,255,255,0.3); background: rgba(255,255,255,0.1); color: white; margin-right: 10px;">
+                <button class="btn" onclick="startInstance()">启动实例</button>
+                <button class="btn btn-warning" onclick="stopInstance()">停止实例</button>
+                <button class="btn btn-info" onclick="restartInstance()">重启实例</button>
+                <button class="btn btn-danger" onclick="deleteInstance()">删除实例</button>
+            </div>
+            
+            <!-- 创建实例表单 -->
+            <div id="createInstanceForm" style="display: none; margin-top: 20px; padding: 20px; background: rgba(255,255,255,0.1); border-radius: 15px;">
+                <h4>创建新实例</h4>
+                <div style="margin-bottom: 15px;">
+                    <input type="text" id="instanceName" placeholder="实例名称" style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.3); background: rgba(255,255,255,0.1); color: white; margin-bottom: 10px;">
+                </div>
+                <div style="margin-bottom: 15px;">
+                    <input type="text" id="instanceDescription" placeholder="实例描述" style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.3); background: rgba(255,255,255,0.1); color: white; margin-bottom: 10px;">
+                </div>
+                <div style="margin-bottom: 15px;">
+                    <input type="text" id="instanceWorkingDir" placeholder="工作目录" style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.3); background: rgba(255,255,255,0.1); color: white; margin-bottom: 10px;">
+                </div>
+                <div style="margin-bottom: 15px;">
+                    <input type="text" id="instanceStartCommand" placeholder="启动命令" style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.3); background: rgba(255,255,255,0.1); color: white; margin-bottom: 10px;">
+                </div>
+                <div style="margin-bottom: 15px;">
+                    <select id="instanceStopCommand" style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.3); background: rgba(255,255,255,0.1); color: white; margin-bottom: 10px;">
+                        <option value="ctrl+c">ctrl+c</option>
+                        <option value="stop">stop</option>
+                        <option value="exit">exit</option>
+                    </select>
+                </div>
+                <div style="margin-bottom: 15px;">
+                    <label style="color: white; display: flex; align-items: center;">
+                        <input type="checkbox" id="instanceAutoStart" style="margin-right: 10px;">
+                        自动启动
+                    </label>
+                </div>
+                <div class="button-group">
+                    <button class="btn btn-success" onclick="createInstance()">创建实例</button>
+                    <button class="btn" onclick="hideCreateInstanceForm()">取消</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="demo-section">
+            <h3>💻 终端管理演示</h3>
+            <p>体验插件终端管理API的功能：</p>
+            
+            <div class="button-group">
+                <button class="btn" onclick="getTerminalStats()">获取终端统计</button>
+                <button class="btn btn-success" onclick="getTerminalSessions()">获取终端会话</button>
+                <button class="btn btn-warning" onclick="getActiveTerminalProcesses()">获取活跃进程</button>
+                <button class="btn btn-info" onclick="getDefaultShell()">获取默认Shell</button>
+            </div>
+            
+            <div class="button-group">
+                <button class="btn" onclick="getTerminalThemes()">获取终端主题</button>
+                <button class="btn btn-success" onclick="getTerminalFonts()">获取终端字体</button>
+                <button class="btn btn-warning" onclick="validateTerminalConfig()">验证终端配置</button>
+                <button class="btn btn-info" onclick="testTerminalConnection()">测试终端连接</button>
+            </div>
+            
+            <div class="button-group">
+                <input type="text" id="sessionIdInput" placeholder="输入会话ID" value="session-001" style="padding: 12px; border-radius: 25px; border: 1px solid rgba(255,255,255,0.3); background: rgba(255,255,255,0.1); color: white; margin-right: 10px;">
+                <input type="text" id="sessionNameInput" placeholder="输入新会话名称" value="新会话名称" style="padding: 12px; border-radius: 25px; border: 1px solid rgba(255,255,255,0.3); background: rgba(255,255,255,0.1); color: white; margin-right: 10px;">
+                <button class="btn" onclick="updateTerminalSessionName()">更新会话名称</button>
+            </div>
+        </div>
+
+        <div class="demo-section">
             <h3>📊 系统信息</h3>
             <div id="systemInfo">
                 <p><strong>插件名称:</strong> 示例插件</p>
@@ -807,6 +886,478 @@
                 showApiError('获取文件信息失败', error)
                 if (window.gsm3 && window.gsm3.showNotification) {
                     window.gsm3.showNotification('error', '获取文件信息失败: ' + error.message)
+                }
+            }
+        }
+
+        // ==================== 实例管理函数 ====================
+
+        // 显示创建实例表单
+        function showCreateInstanceForm() {
+            document.getElementById('createInstanceForm').style.display = 'block'
+        }
+
+        // 隐藏创建实例表单
+        function hideCreateInstanceForm() {
+            document.getElementById('createInstanceForm').style.display = 'none'
+            // 清空表单
+            document.getElementById('instanceName').value = ''
+            document.getElementById('instanceDescription').value = ''
+            document.getElementById('instanceWorkingDir').value = ''
+            document.getElementById('instanceStartCommand').value = ''
+            document.getElementById('instanceStopCommand').value = 'ctrl+c'
+            document.getElementById('instanceAutoStart').checked = false
+        }
+
+        // 创建实例
+        async function createInstance() {
+            try {
+                if (!window.gsm3) {
+                    throw new Error('GSM3 API对象未找到')
+                }
+                
+                const name = document.getElementById('instanceName').value
+                const description = document.getElementById('instanceDescription').value
+                const workingDirectory = document.getElementById('instanceWorkingDir').value
+                const startCommand = document.getElementById('instanceStartCommand').value
+                const stopCommand = document.getElementById('instanceStopCommand').value
+                const autoStart = document.getElementById('instanceAutoStart').checked
+                
+                if (!name || !workingDirectory || !startCommand) {
+                    showApiError('创建实例失败', new Error('请填写实例名称、工作目录和启动命令'))
+                    return
+                }
+                
+                const instanceData = {
+                    name: name.trim(),
+                    description: description.trim(),
+                    workingDirectory: workingDirectory.trim(),
+                    startCommand: startCommand.trim(),
+                    stopCommand: stopCommand,
+                    autoStart: autoStart
+                }
+                
+                showApiLoading('正在初始化API...')
+                await window.gsm3.initialize()
+                
+                showApiLoading('正在创建实例...')
+                const result = await window.gsm3.createInstance(instanceData)
+                showApiResult('创建实例成功', result)
+                hideCreateInstanceForm()
+                if (window.gsm3.showNotification) {
+                    window.gsm3.showNotification('success', '实例创建成功')
+                }
+            } catch (error) {
+                showApiError('创建实例失败', error)
+                if (window.gsm3 && window.gsm3.showNotification) {
+                    window.gsm3.showNotification('error', '创建实例失败: ' + error.message)
+                }
+            }
+        }
+
+        // 获取市场实例
+        async function getMarketInstances() {
+            try {
+                if (!window.gsm3) {
+                    throw new Error('GSM3 API对象未找到')
+                }
+                
+                showApiLoading('正在初始化API...')
+                await window.gsm3.initialize()
+                
+                showApiLoading('正在获取市场实例列表...')
+                const result = await window.gsm3.getMarketInstances()
+                showApiResult('市场实例列表', result)
+                if (window.gsm3.showNotification) {
+                    window.gsm3.showNotification('success', '市场实例列表获取成功')
+                }
+            } catch (error) {
+                showApiError('获取市场实例列表失败', error)
+                if (window.gsm3 && window.gsm3.showNotification) {
+                    window.gsm3.showNotification('error', '获取市场实例列表失败: ' + error.message)
+                }
+            }
+        }
+
+        // 获取实例详情
+        async function getInstanceDetails() {
+            try {
+                if (!window.gsm3) {
+                    throw new Error('GSM3 API对象未找到')
+                }
+                
+                const instanceId = document.getElementById('instanceIdInput').value
+                if (!instanceId) {
+                    showApiError('获取实例详情失败', new Error('请输入实例ID'))
+                    return
+                }
+                
+                showApiLoading('正在初始化API...')
+                await window.gsm3.initialize()
+                
+                showApiLoading('正在获取实例详情...')
+                const result = await window.gsm3.getInstance(instanceId)
+                showApiResult(`实例详情: ${instanceId}`, result)
+                if (window.gsm3.showNotification) {
+                    window.gsm3.showNotification('success', '实例详情获取成功')
+                }
+            } catch (error) {
+                showApiError('获取实例详情失败', error)
+                if (window.gsm3 && window.gsm3.showNotification) {
+                    window.gsm3.showNotification('error', '获取实例详情失败: ' + error.message)
+                }
+            }
+        }
+
+        // 启动实例
+        async function startInstance() {
+            try {
+                if (!window.gsm3) {
+                    throw new Error('GSM3 API对象未找到')
+                }
+                
+                const instanceId = document.getElementById('instanceIdInput').value
+                if (!instanceId) {
+                    showApiError('启动实例失败', new Error('请输入实例ID'))
+                    return
+                }
+                
+                showApiLoading('正在初始化API...')
+                await window.gsm3.initialize()
+                
+                showApiLoading('正在启动实例...')
+                const result = await window.gsm3.startInstance(instanceId)
+                showApiResult(`启动实例: ${instanceId}`, result)
+                if (window.gsm3.showNotification) {
+                    window.gsm3.showNotification('success', '实例启动成功')
+                }
+            } catch (error) {
+                showApiError('启动实例失败', error)
+                if (window.gsm3 && window.gsm3.showNotification) {
+                    window.gsm3.showNotification('error', '启动实例失败: ' + error.message)
+                }
+            }
+        }
+
+        // 停止实例
+        async function stopInstance() {
+            try {
+                if (!window.gsm3) {
+                    throw new Error('GSM3 API对象未找到')
+                }
+                
+                const instanceId = document.getElementById('instanceIdInput').value
+                if (!instanceId) {
+                    showApiError('停止实例失败', new Error('请输入实例ID'))
+                    return
+                }
+                
+                showApiLoading('正在初始化API...')
+                await window.gsm3.initialize()
+                
+                showApiLoading('正在停止实例...')
+                const result = await window.gsm3.stopInstance(instanceId)
+                showApiResult(`停止实例: ${instanceId}`, result)
+                if (window.gsm3.showNotification) {
+                    window.gsm3.showNotification('success', '实例停止成功')
+                }
+            } catch (error) {
+                showApiError('停止实例失败', error)
+                if (window.gsm3 && window.gsm3.showNotification) {
+                    window.gsm3.showNotification('error', '停止实例失败: ' + error.message)
+                }
+            }
+        }
+
+        // 重启实例
+        async function restartInstance() {
+            try {
+                if (!window.gsm3) {
+                    throw new Error('GSM3 API对象未找到')
+                }
+                
+                const instanceId = document.getElementById('instanceIdInput').value
+                if (!instanceId) {
+                    showApiError('重启实例失败', new Error('请输入实例ID'))
+                    return
+                }
+                
+                showApiLoading('正在初始化API...')
+                await window.gsm3.initialize()
+                
+                showApiLoading('正在重启实例...')
+                const result = await window.gsm3.restartInstance(instanceId)
+                showApiResult(`重启实例: ${instanceId}`, result)
+                if (window.gsm3.showNotification) {
+                    window.gsm3.showNotification('success', '实例重启成功')
+                }
+            } catch (error) {
+                showApiError('重启实例失败', error)
+                if (window.gsm3 && window.gsm3.showNotification) {
+                    window.gsm3.showNotification('error', '重启实例失败: ' + error.message)
+                }
+            }
+        }
+
+        // 删除实例
+        async function deleteInstance() {
+            try {
+                if (!window.gsm3) {
+                    throw new Error('GSM3 API对象未找到')
+                }
+                
+                const instanceId = document.getElementById('instanceIdInput').value
+                if (!instanceId) {
+                    showApiError('删除实例失败', new Error('请输入实例ID'))
+                    return
+                }
+                
+                if (!confirm(`确定要删除实例 ${instanceId} 吗？此操作不可撤销！`)) {
+                    return
+                }
+                
+                showApiLoading('正在初始化API...')
+                await window.gsm3.initialize()
+                
+                showApiLoading('正在删除实例...')
+                const result = await window.gsm3.deleteInstance(instanceId)
+                showApiResult(`删除实例: ${instanceId}`, result)
+                if (window.gsm3.showNotification) {
+                    window.gsm3.showNotification('success', '实例删除成功')
+                }
+            } catch (error) {
+                showApiError('删除实例失败', error)
+                if (window.gsm3 && window.gsm3.showNotification) {
+                    window.gsm3.showNotification('error', '删除实例失败: ' + error.message)
+                }
+            }
+        }
+
+        // ==================== 终端管理函数 ====================
+
+        // 获取终端统计信息
+        async function getTerminalStats() {
+            try {
+                if (!window.gsm3) {
+                    throw new Error('GSM3 API对象未找到')
+                }
+                
+                showApiLoading('正在初始化API...')
+                await window.gsm3.initialize()
+                
+                showApiLoading('正在获取终端统计信息...')
+                const result = await window.gsm3.getTerminalStats()
+                showApiResult('终端统计信息', result)
+                if (window.gsm3.showNotification) {
+                    window.gsm3.showNotification('success', '终端统计信息获取成功')
+                }
+            } catch (error) {
+                showApiError('获取终端统计信息失败', error)
+                if (window.gsm3 && window.gsm3.showNotification) {
+                    window.gsm3.showNotification('error', '获取终端统计信息失败: ' + error.message)
+                }
+            }
+        }
+
+        // 获取终端会话列表
+        async function getTerminalSessions() {
+            try {
+                if (!window.gsm3) {
+                    throw new Error('GSM3 API对象未找到')
+                }
+                
+                showApiLoading('正在初始化API...')
+                await window.gsm3.initialize()
+                
+                showApiLoading('正在获取终端会话列表...')
+                const result = await window.gsm3.getTerminalSessions()
+                showApiResult('终端会话列表', result)
+                if (window.gsm3.showNotification) {
+                    window.gsm3.showNotification('success', '终端会话列表获取成功')
+                }
+            } catch (error) {
+                showApiError('获取终端会话列表失败', error)
+                if (window.gsm3 && window.gsm3.showNotification) {
+                    window.gsm3.showNotification('error', '获取终端会话列表失败: ' + error.message)
+                }
+            }
+        }
+
+        // 获取活跃终端进程
+        async function getActiveTerminalProcesses() {
+            try {
+                if (!window.gsm3) {
+                    throw new Error('GSM3 API对象未找到')
+                }
+                
+                showApiLoading('正在初始化API...')
+                await window.gsm3.initialize()
+                
+                showApiLoading('正在获取活跃终端进程...')
+                const result = await window.gsm3.getActiveTerminalProcesses()
+                showApiResult('活跃终端进程', result)
+                if (window.gsm3.showNotification) {
+                    window.gsm3.showNotification('success', '活跃终端进程获取成功')
+                }
+            } catch (error) {
+                showApiError('获取活跃终端进程失败', error)
+                if (window.gsm3 && window.gsm3.showNotification) {
+                    window.gsm3.showNotification('error', '获取活跃终端进程失败: ' + error.message)
+                }
+            }
+        }
+
+        // 获取默认Shell
+        async function getDefaultShell() {
+            try {
+                if (!window.gsm3) {
+                    throw new Error('GSM3 API对象未找到')
+                }
+                
+                showApiLoading('正在初始化API...')
+                await window.gsm3.initialize()
+                
+                showApiLoading('正在获取默认Shell信息...')
+                const result = await window.gsm3.getDefaultShell()
+                showApiResult('默认Shell信息', result)
+                if (window.gsm3.showNotification) {
+                    window.gsm3.showNotification('success', '默认Shell信息获取成功')
+                }
+            } catch (error) {
+                showApiError('获取默认Shell信息失败', error)
+                if (window.gsm3 && window.gsm3.showNotification) {
+                    window.gsm3.showNotification('error', '获取默认Shell信息失败: ' + error.message)
+                }
+            }
+        }
+
+        // 获取终端主题
+        async function getTerminalThemes() {
+            try {
+                if (!window.gsm3) {
+                    throw new Error('GSM3 API对象未找到')
+                }
+                
+                showApiLoading('正在初始化API...')
+                await window.gsm3.initialize()
+                
+                showApiLoading('正在获取终端主题配置...')
+                const result = await window.gsm3.getTerminalThemes()
+                showApiResult('终端主题配置', result)
+                if (window.gsm3.showNotification) {
+                    window.gsm3.showNotification('success', '终端主题配置获取成功')
+                }
+            } catch (error) {
+                showApiError('获取终端主题配置失败', error)
+                if (window.gsm3 && window.gsm3.showNotification) {
+                    window.gsm3.showNotification('error', '获取终端主题配置失败: ' + error.message)
+                }
+            }
+        }
+
+        // 获取终端字体
+        async function getTerminalFonts() {
+            try {
+                if (!window.gsm3) {
+                    throw new Error('GSM3 API对象未找到')
+                }
+                
+                showApiLoading('正在初始化API...')
+                await window.gsm3.initialize()
+                
+                showApiLoading('正在获取终端字体配置...')
+                const result = await window.gsm3.getTerminalFonts()
+                showApiResult('终端字体配置', result)
+                if (window.gsm3.showNotification) {
+                    window.gsm3.showNotification('success', '终端字体配置获取成功')
+                }
+            } catch (error) {
+                showApiError('获取终端字体配置失败', error)
+                if (window.gsm3 && window.gsm3.showNotification) {
+                    window.gsm3.showNotification('error', '获取终端字体配置失败: ' + error.message)
+                }
+            }
+        }
+
+        // 验证终端配置
+        async function validateTerminalConfig() {
+            try {
+                if (!window.gsm3) {
+                    throw new Error('GSM3 API对象未找到')
+                }
+                
+                showApiLoading('正在初始化API...')
+                await window.gsm3.initialize()
+                
+                showApiLoading('正在验证终端配置...')
+                const workingDirectory = process.cwd ? process.cwd() : '/'
+                const shell = process.platform === 'win32' ? 'powershell.exe' : '/bin/bash'
+                const result = await window.gsm3.validateTerminalConfig(workingDirectory, shell)
+                showApiResult('验证终端配置', result)
+                if (window.gsm3.showNotification) {
+                    window.gsm3.showNotification('success', '终端配置验证成功')
+                }
+            } catch (error) {
+                showApiError('验证终端配置失败', error)
+                if (window.gsm3 && window.gsm3.showNotification) {
+                    window.gsm3.showNotification('error', '验证终端配置失败: ' + error.message)
+                }
+            }
+        }
+
+        // 测试终端连接
+        async function testTerminalConnection() {
+            try {
+                if (!window.gsm3) {
+                    throw new Error('GSM3 API对象未找到')
+                }
+                
+                showApiLoading('正在初始化API...')
+                await window.gsm3.initialize()
+                
+                showApiLoading('正在测试终端连接...')
+                const workingDirectory = process.cwd ? process.cwd() : '/'
+                const result = await window.gsm3.testTerminalConnection(workingDirectory)
+                showApiResult('测试终端连接', result)
+                if (window.gsm3.showNotification) {
+                    window.gsm3.showNotification('success', '终端连接测试成功')
+                }
+            } catch (error) {
+                showApiError('测试终端连接失败', error)
+                if (window.gsm3 && window.gsm3.showNotification) {
+                    window.gsm3.showNotification('error', '测试终端连接失败: ' + error.message)
+                }
+            }
+        }
+
+        // 更新终端会话名称
+        async function updateTerminalSessionName() {
+            try {
+                if (!window.gsm3) {
+                    throw new Error('GSM3 API对象未找到')
+                }
+                
+                const sessionId = document.getElementById('sessionIdInput').value
+                const sessionName = document.getElementById('sessionNameInput').value
+                
+                if (!sessionId || !sessionName) {
+                    showApiError('更新会话名称失败', new Error('请输入会话ID和新名称'))
+                    return
+                }
+                
+                showApiLoading('正在初始化API...')
+                await window.gsm3.initialize()
+                
+                showApiLoading('正在更新终端会话名称...')
+                const result = await window.gsm3.updateTerminalSessionName(sessionId, sessionName)
+                showApiResult(`更新会话名称: ${sessionId} -> ${sessionName}`, result)
+                if (window.gsm3.showNotification) {
+                    window.gsm3.showNotification('success', '终端会话名称更新成功')
+                }
+            } catch (error) {
+                showApiError('更新终端会话名称失败', error)
+                if (window.gsm3 && window.gsm3.showNotification) {
+                    window.gsm3.showNotification('error', '更新终端会话名称失败: ' + error.message)
                 }
             }
         }

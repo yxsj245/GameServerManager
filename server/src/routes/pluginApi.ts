@@ -5,6 +5,7 @@ import type { SystemManager } from '../modules/system/SystemManager.js'
 import type { TerminalManager } from '../modules/terminal/TerminalManager.js'
 import type { GameManager } from '../modules/game/GameManager.js'
 import filesRouter from './files.js'
+import { setupTerminalRoutes } from './terminal.js'
 import logger from '../utils/logger.js'
 
 const router = Router()
@@ -200,32 +201,297 @@ router.get('/instances/:id/status', async (req: Request, res: Response) => {
   }
 })
 
-// ==================== 终端管理API ====================
-
-// 获取终端会话列表
-router.get('/terminals', async (req: Request, res: Response) => {
+// 获取市场实例列表
+router.get('/instances/market', async (req: Request, res: Response) => {
   try {
-    if (!terminalManager) {
+    if (!instanceManager) {
       return res.status(503).json({
         success: false,
-        message: '终端管理器未初始化'
+        message: '实例管理器未初始化'
       })
     }
 
-    const terminals = terminalManager.getSessionStats()
+    const marketInstances = instanceManager.getMarketInstances()
     res.json({
       success: true,
-      data: terminals
+      data: marketInstances
     })
   } catch (error) {
-    logger.error('插件获取终端列表失败:', error)
+    logger.error('插件获取市场实例列表失败:', error)
     res.status(500).json({
       success: false,
-      message: '获取终端列表失败',
+      message: '获取市场实例列表失败',
       error: error instanceof Error ? error.message : '未知错误'
     })
   }
 })
+
+// 创建实例
+router.post('/instances', async (req: Request, res: Response) => {
+  try {
+    if (!instanceManager) {
+      return res.status(503).json({
+        success: false,
+        message: '实例管理器未初始化'
+      })
+    }
+
+    const { name, description, workingDirectory, startCommand, stopCommand, autoStart } = req.body
+
+    // 验证必填字段
+    if (!name || !workingDirectory || !startCommand) {
+      return res.status(400).json({
+        success: false,
+        message: '缺少必填字段: name, workingDirectory, startCommand'
+      })
+    }
+
+    // 验证停止命令
+    const validStopCommands = ['ctrl+c', 'stop', 'quit', 'exit']
+    if (stopCommand && !validStopCommands.includes(stopCommand)) {
+      return res.status(400).json({
+        success: false,
+        message: `无效的停止命令。支持的命令: ${validStopCommands.join(', ')}`
+      })
+    }
+
+    const instanceData = {
+      name: name.trim(),
+      description: description?.trim() || '',
+      workingDirectory: workingDirectory.trim(),
+      startCommand: startCommand.trim(),
+      stopCommand: stopCommand || 'ctrl+c',
+      autoStart: autoStart || false
+    }
+
+    const result = await instanceManager.createInstance(instanceData)
+    res.status(201).json({
+      success: true,
+      data: result,
+      message: '实例创建成功'
+    })
+  } catch (error) {
+    logger.error('插件创建实例失败:', error)
+    res.status(500).json({
+      success: false,
+      message: '创建实例失败',
+      error: error instanceof Error ? error.message : '未知错误'
+    })
+  }
+})
+
+// 更新实例
+router.put('/instances/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params
+    
+    if (!instanceManager) {
+      return res.status(503).json({
+        success: false,
+        message: '实例管理器未初始化'
+      })
+    }
+
+    const instance = instanceManager.getInstance(id)
+    if (!instance) {
+      return res.status(404).json({
+        success: false,
+        message: '实例不存在'
+      })
+    }
+
+    const { name, description, workingDirectory, startCommand, stopCommand, autoStart } = req.body
+
+    // 验证必填字段
+    if (!name || !workingDirectory || !startCommand) {
+      return res.status(400).json({
+        success: false,
+        message: '缺少必填字段: name, workingDirectory, startCommand'
+      })
+    }
+
+    // 验证停止命令
+    const validStopCommands = ['ctrl+c', 'stop', 'quit', 'exit']
+    if (stopCommand && !validStopCommands.includes(stopCommand)) {
+      return res.status(400).json({
+        success: false,
+        message: `无效的停止命令。支持的命令: ${validStopCommands.join(', ')}`
+      })
+    }
+
+    const instanceData = {
+      name: name.trim(),
+      description: description?.trim() || '',
+      workingDirectory: workingDirectory.trim(),
+      startCommand: startCommand.trim(),
+      stopCommand: stopCommand || 'ctrl+c',
+      autoStart: autoStart || false
+    }
+
+    const result = await instanceManager.updateInstance(id, instanceData)
+    res.json({
+      success: true,
+      data: result,
+      message: '实例更新成功'
+    })
+  } catch (error) {
+    logger.error('插件更新实例失败:', error)
+    res.status(500).json({
+      success: false,
+      message: '更新实例失败',
+      error: error instanceof Error ? error.message : '未知错误'
+    })
+  }
+})
+
+// 删除实例
+router.delete('/instances/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params
+    
+    if (!instanceManager) {
+      return res.status(503).json({
+        success: false,
+        message: '实例管理器未初始化'
+      })
+    }
+
+    const instance = instanceManager.getInstance(id)
+    if (!instance) {
+      return res.status(404).json({
+        success: false,
+        message: '实例不存在'
+      })
+    }
+
+    await instanceManager.deleteInstance(id)
+    res.json({
+      success: true,
+      message: '实例删除成功'
+    })
+  } catch (error) {
+    logger.error('插件删除实例失败:', error)
+    res.status(500).json({
+      success: false,
+      message: '删除实例失败',
+      error: error instanceof Error ? error.message : '未知错误'
+    })
+  }
+})
+
+// 启动实例
+router.post('/instances/:id/start', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params
+    
+    if (!instanceManager) {
+      return res.status(503).json({
+        success: false,
+        message: '实例管理器未初始化'
+      })
+    }
+
+    const instance = instanceManager.getInstance(id)
+    if (!instance) {
+      return res.status(404).json({
+        success: false,
+        message: '实例不存在'
+      })
+    }
+
+    const result = await instanceManager.startInstance(id)
+    res.json({
+      success: true,
+      data: result,
+      message: '实例启动成功'
+    })
+  } catch (error) {
+    logger.error('插件启动实例失败:', error)
+    res.status(500).json({
+      success: false,
+      message: '启动实例失败',
+      error: error instanceof Error ? error.message : '未知错误'
+    })
+  }
+})
+
+// 停止实例
+router.post('/instances/:id/stop', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params
+    
+    if (!instanceManager) {
+      return res.status(503).json({
+        success: false,
+        message: '实例管理器未初始化'
+      })
+    }
+
+    const instance = instanceManager.getInstance(id)
+    if (!instance) {
+      return res.status(404).json({
+        success: false,
+        message: '实例不存在'
+      })
+    }
+
+    const result = await instanceManager.stopInstance(id)
+    res.json({
+      success: true,
+      data: result,
+      message: '实例停止成功'
+    })
+  } catch (error) {
+    logger.error('插件停止实例失败:', error)
+    res.status(500).json({
+      success: false,
+      message: '停止实例失败',
+      error: error instanceof Error ? error.message : '未知错误'
+    })
+  }
+})
+
+// 重启实例
+router.post('/instances/:id/restart', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params
+    
+    if (!instanceManager) {
+      return res.status(503).json({
+        success: false,
+        message: '实例管理器未初始化'
+      })
+    }
+
+    const instance = instanceManager.getInstance(id)
+    if (!instance) {
+      return res.status(404).json({
+        success: false,
+        message: '实例不存在'
+      })
+    }
+
+    const result = await instanceManager.restartInstance(id)
+    res.json({
+      success: true,
+      data: result,
+      message: '实例重启成功'
+    })
+  } catch (error) {
+    logger.error('插件重启实例失败:', error)
+    res.status(500).json({
+      success: false,
+      message: '重启实例失败',
+      error: error instanceof Error ? error.message : '未知错误'
+    })
+  }
+})
+
+// ==================== 终端管理API ====================
+
+// 转发终端操作请求到terminal路由
+const terminalRouter = setupTerminalRoutes(terminalManager)
+router.use('/terminals', terminalRouter)
 
 // ==================== 游戏管理API ====================
 
