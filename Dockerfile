@@ -188,13 +188,13 @@ RUN mkdir -p ${STEAMCMD_DIR} \
 # 复制菜单脚本和启动脚本
 COPY --chown=steam:steam start.sh /home/steam/start.sh
 
+# 安装Python依赖
+RUN pip3 install --no-cache-dir -r /app/server/src/Python/requirements.txt
+
 # 复制构建好的应用到steam用户目录
 RUN cp -r /app/dist/package/* ${STEAM_HOME}/ \
     && chown -R ${STEAM_USER}:${STEAM_USER} ${STEAM_HOME} \
-    && chmod +x ${STEAM_HOME}/start.sh \
-    && chmod +x ${STEAM_HOME}/install-python-deps.sh \
-    && cd ${STEAM_HOME} \
-    && ./install-python-deps.sh
+    && chmod +x ${STEAM_HOME}/start.sh
 
 # 创建目录用于挂载游戏数据
 VOLUME ["${GAMES_DIR}"]

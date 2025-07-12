@@ -262,7 +262,7 @@ pause`
     // 创建Linux Python依赖安装脚本
     const installPythonDepsShScript = `#!/bin/bash
 echo "正在安装Python依赖..."
-cd server/Python
+cd server/src/Python
 pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple/ --trusted-host pypi.tuna.tsinghua.edu.cn
 echo "Python依赖安装完成！"`
     
