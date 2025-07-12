@@ -23,7 +23,7 @@ export function authenticateToken(req: AuthenticatedRequest, res: Response, next
   if (!token) {
     return res.status(401).json({
       error: '访问被拒绝',
-      message: '需要提供访问令牌'
+      message: '需要提供访问令牌或重新登录'
     })
   }
 
@@ -40,7 +40,7 @@ export function authenticateToken(req: AuthenticatedRequest, res: Response, next
   if (!decoded) {
     return res.status(401).json({
       error: '访问被拒绝',
-      message: '无效或过期的访问令牌'
+      message: '无效或过期的访问令牌，请重新登录'
     })
   }
 
