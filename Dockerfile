@@ -181,9 +181,6 @@ RUN mkdir -p ${STEAMCMD_DIR} \
     && ln -sf ${STEAMCMD_DIR}/steamcmd ${STEAM_HOME}/.steam/steam/steamcmd \
     && chown -R ${STEAM_USER}:${STEAM_USER} ${STEAM_HOME}/.steam
 
-# 复制菜单脚本和启动脚本
-COPY --chown=steam:steam start.sh /home/steam/start.sh
-
 # 安装依赖并构建项目
 RUN npm run install:all \
     && npm run package:linux:no-zip
@@ -191,10 +188,13 @@ RUN npm run install:all \
 # 安装Python依赖
 RUN pip3 install --no-cache-dir -r /app/server/src/Python/requirements.txt
 
-# 复制构建好的应用到steam用户目录
-RUN cp -r /app/dist/package/* ${STEAM_HOME}/ \
-    && chown -R ${STEAM_USER}:${STEAM_USER} ${STEAM_HOME} \
-    && chmod +x ${STEAM_HOME}/start.sh
+# 复制构建好的应用到root目录
+RUN cp -r /app/dist/package/* /root/ \
+    && chmod +x /root/start.sh
+
+# 复制启动脚本到root目录
+COPY start.sh /root/start.sh
+RUN chmod +x /root/start.sh
 
 # 创建目录用于挂载游戏数据
 VOLUME ["${GAMES_DIR}"]
@@ -202,9 +202,9 @@ VOLUME ["${GAMES_DIR}"]
 # 暴露GSM3管理面板端口
 EXPOSE 3001
 
-# 切回steam用户
-USER ${STEAM_USER}
-WORKDIR ${STEAM_HOME}
+# 保持root用户
+USER root
+WORKDIR /root
 
 # 启动容器时运行start.sh
-ENTRYPOINT ["/home/steam/start.sh"]
+ENTRYPOINT ["/root/start.sh"]
