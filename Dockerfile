@@ -141,10 +141,6 @@ COPY --chown=steam:steam . /app/
 USER ${STEAM_USER}
 WORKDIR /app
 
-# 安装依赖并构建项目
-RUN npm run install:all \
-    && npm run package:linux:no-zip
-
 # 切换回root用户继续安装SteamCMD
 USER root
 
@@ -187,6 +183,10 @@ RUN mkdir -p ${STEAMCMD_DIR} \
 
 # 复制菜单脚本和启动脚本
 COPY --chown=steam:steam start.sh /home/steam/start.sh
+
+# 安装依赖并构建项目
+RUN npm run install:all \
+    && npm run package:linux:no-zip
 
 # 安装Python依赖
 RUN pip3 install --no-cache-dir -r /app/server/src/Python/requirements.txt

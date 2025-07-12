@@ -547,153 +547,14 @@ async function getAvailablePythonCommand(): Promise<string> {
   throw new Error('未找到可用的Python命令')
 }
 
-// 获取正确的pip命令
-function getPipCommand(): string {
-  const platform = os.platform()
-  if (platform === 'win32') {
-    return 'pip'
-  } else {
-    return 'pip3'
-  }
-}
+// pip相关函数已移除
 
-// 根据Python命令获取对应的pip命令
-function getPipCommandForPython(pythonCommand: string): string {
-  if (pythonCommand === 'python3') {
-    return 'pip3'
-  } else if (pythonCommand === 'python') {
-    return 'pip'
-  } else {
-    // 默认情况
-    return getPipCommand()
-  }
-}
-
-// 重置Python环境状态
-function resetPythonEnvironmentStatus(): void {
-  pythonEnvironmentFailed = false
-  pythonFailureCount = 0
-  logger.info('Python环境状态已重置')
-}
-
-function installPythonDependencies(): Promise<void> {
-  return new Promise(async (resolve, reject) => {
-    if (pythonDepsInstalled) {
-      resolve()
-      return
-    }
-    
-    try {
-      // 动态获取可用的Python命令
-      const pythonCommand = await getAvailablePythonCommand()
-      const pipCommand = getPipCommandForPython(pythonCommand)
-      logger.info(`使用pip命令: ${pipCommand} (对应Python命令: ${pythonCommand})`)
-      
-      const requirementsPath = path.join(__dirname, '..', 'Python', 'requirements.txt')
-      
-      // 国内镜像源列表，按优先级排序
-      const mirrors = [
-        {
-          url: 'https://pypi.tuna.tsinghua.edu.cn/simple/',
-          host: 'pypi.tuna.tsinghua.edu.cn',
-          name: '清华大学镜像源'
-        },
-        {
-          url: 'https://mirrors.aliyun.com/pypi/simple/',
-          host: 'mirrors.aliyun.com',
-          name: '阿里云镜像源'
-        },
-        {
-          url: 'https://pypi.douban.com/simple/',
-          host: 'pypi.douban.com',
-          name: '豆瓣镜像源'
-        }
-      ]
-      
-      let currentMirrorIndex = 0
-      
-      function tryInstallWithMirror() {
-        if (currentMirrorIndex >= mirrors.length) {
-          pythonFailureCount++
-          pythonEnvironmentFailed = true
-          logger.error(`所有镜像源都尝试失败，Python依赖安装失败 (第${pythonFailureCount}次)`)
-          reject(new Error('Python依赖安装失败：所有镜像源都不可用'))
-          return
-        }
-        
-        const mirror = mirrors[currentMirrorIndex]
-        logger.info(`尝试使用${mirror.name}安装Python依赖`)
-        
-        const installProcess = spawn(pipCommand, [
-          'install', 
-          '-r', 
-          requirementsPath,
-          '-i', 
-          mirror.url,
-          '--trusted-host',
-          mirror.host,
-          '--timeout',
-          '60'
-        ], {
-          stdio: ['pipe', 'pipe', 'pipe']
-        })
-      
-      let stderr = ''
-      installProcess.stderr.on('data', (data) => {
-        stderr += data.toString()
-      })
-      
-      installProcess.on('close', (code) => {
-        if (code === 0) {
-          pythonDepsInstalled = true
-          logger.info(`Python依赖安装成功，使用${mirror.name}`)
-          resolve()
-        } else {
-          logger.warn(`${mirror.name}安装失败: ${stderr}`)
-          currentMirrorIndex++
-          tryInstallWithMirror() // 尝试下一个镜像源
-        }
-      })
-      
-      installProcess.on('error', (error) => {
-        logger.warn(`${mirror.name}启动失败: ${error.message}`)
-        // 如果是最后一个镜像源，更新失败状态
-        if (currentMirrorIndex === mirrors.length - 1) {
-          pythonFailureCount++
-          pythonEnvironmentFailed = true
-          logger.error(`pip命令启动失败 (第${pythonFailureCount}次): ${error.message}`)
-          reject(new Error(`pip命令启动失败: ${error.message}`))
-          return
-        }
-        currentMirrorIndex++
-        tryInstallWithMirror() // 尝试下一个镜像源
-      })
-    }
-    
-    tryInstallWithMirror()
-    } catch (error: any) {
-      pythonFailureCount++
-      pythonEnvironmentFailed = true
-      logger.error(`Python环境检测失败 (第${pythonFailureCount}次): ${error.message}`)
-      reject(new Error(`Python环境检测失败: ${error.message}`))
-    }
-  })
-}
+// Python依赖安装功能已移除
 
 // 调用Python脚本的辅助函数
 function callPythonScript(method: string, args: any[] = []): Promise<any> {
   return new Promise(async (resolve, reject) => {
     try {
-      // 检查Python环境是否已经失败过多次
-      if (pythonEnvironmentFailed && pythonFailureCount >= MAX_PYTHON_RETRY_COUNT) {
-        logger.error(`Python环境已失败${pythonFailureCount}次，停止尝试启动`)
-        reject(new Error('Python环境不可用，已停止重试'))
-        return
-      }
-      
-      // 确保Python依赖已安装
-      await installPythonDependencies()
-      
       // 动态获取可用的Python命令
       const pythonCommand = await getAvailablePythonCommand()
       logger.info(`使用Python命令: ${pythonCommand}`)
@@ -727,26 +588,19 @@ function callPythonScript(method: string, args: any[] = []): Promise<any> {
         if (code === 0) {
           try {
             const result = JSON.parse(stdout)
-            // 成功时重置失败状态
-            pythonEnvironmentFailed = false
-            pythonFailureCount = 0
             resolve(result)
           } catch (error) {
             logger.error(`JSON解析失败: ${error}, stdout: ${stdout}`)
             reject(new Error(`JSON解析失败: ${error}`))
           }
         } else {
-          pythonFailureCount++
-          pythonEnvironmentFailed = true
-          logger.error(`Python脚本执行失败 (第${pythonFailureCount}次)，退出码: ${code}, stderr: ${stderr}, stdout: ${stdout}`)
+          logger.error(`Python脚本执行失败，退出码: ${code}, stderr: ${stderr}, stdout: ${stdout}`)
           reject(new Error(`Python脚本执行失败: ${stderr}`))
         }
       })
 
       pythonProcess.on('error', (error) => {
-        pythonFailureCount++
-        pythonEnvironmentFailed = true
-        logger.error(`Python进程启动失败 (第${pythonFailureCount}次): ${error.message}`)
+        logger.error(`Python进程启动失败: ${error.message}`)
         reject(new Error(`启动Python进程失败: ${error.message}`))
       })
      } catch (error) {
@@ -930,23 +784,7 @@ router.post('/:instanceId/configs/:configId', authenticateToken, async (req: Req
   }
 })
 
-// 重置Python环境状态
-router.post('/python/reset', authenticateToken, async (req: Request, res: Response) => {
-  try {
-    resetPythonEnvironmentStatus()
-    res.json({
-      success: true,
-      message: 'Python环境状态已重置'
-    })
-  } catch (error: any) {
-    logger.error('重置Python环境状态失败:', error)
-    res.status(500).json({
-      success: false,
-      error: '重置Python环境状态失败',
-      message: error.message
-    })
-  }
-})
+// Python环境重置功能已移除
 
 // Python环境检测
 router.get('/python/check', authenticateToken, async (req: Request, res: Response) => {
@@ -971,9 +809,7 @@ router.get('/python/check', authenticateToken, async (req: Request, res: Respons
         available: true,
         version: version,
         command: pythonCommand,
-        platform: platform,
-        failureCount: pythonFailureCount,
-        environmentFailed: pythonEnvironmentFailed
+        platform: platform
       }
     })
   } catch (error: any) {
@@ -984,9 +820,7 @@ router.get('/python/check', authenticateToken, async (req: Request, res: Respons
       data: {
         available: false,
         error: `未检测到Python环境: ${error.message}`,
-        platform: os.platform(),
-        failureCount: pythonFailureCount,
-        environmentFailed: pythonEnvironmentFailed
+        platform: os.platform()
       }
     })
   }
