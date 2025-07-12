@@ -10,7 +10,7 @@ import * as yauzl from 'yauzl';
 import { spawn, ChildProcess } from 'child_process';
 import * as os from 'os';
 import * as tar from 'tar';
-import { MrpackServerAPI } from './mrpack-server-api';
+import { MrpackServerAPI } from './mrpack-server-api.js';
 import { pipeline } from 'stream';
 import { promisify } from 'util';
 

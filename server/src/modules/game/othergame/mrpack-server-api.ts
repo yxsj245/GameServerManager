@@ -4,7 +4,7 @@ import { createWriteStream } from 'fs';
 import * as path from 'path';
 import * as yauzl from 'yauzl';
 import { spawn, ChildProcess } from 'child_process';
-import { ApiService as MinecraftAPI, FileManager, LogCallback } from './minecraft-server-api';
+import { ApiService as MinecraftAPI, FileManager, LogCallback } from './minecraft-server-api.js';
 
 // ==================== 类型定义 ====================
 
