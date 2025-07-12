@@ -97,15 +97,6 @@ const supportedGames: GameInfo[] = [
     category: '策略游戏',
     supported: true,
     supportedPlatforms: [Platform.LINUX] // 仅Linux平台支持
-  },
-  {
-    id: 'mrpack',
-    name: 'Minecraft整合包',
-    description: 'Minecraft Mrpack整合包服务端部署',
-    icon: '📦',
-    category: '沙盒游戏',
-    supported: true,
-    supportedPlatforms: [Platform.WINDOWS, Platform.LINUX, Platform.MACOS] // 全平台支持
   }
 ]
 
