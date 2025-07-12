@@ -2,8 +2,7 @@ import { Router, Request, Response } from 'express'
 import { promises as fs } from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
-import { TModDownloader } from '../modules/game/tmodloader-server-api.js'
-import { FactorioDeployer } from '../modules/game/factorio-deployer.js'
+import { deployTModLoaderServer, deployFactorioServer, cancelDeployment, getActiveDeployments, getTModLoaderInfo } from '../modules/game/othergame/unified-functions.js'
 import { authenticateToken } from '../middleware/auth.js'
 import logger from '../utils/logger.js'
 import { Server as SocketIOServer } from 'socket.io'
@@ -13,9 +12,6 @@ const __dirname = path.dirname(__filename)
 
 const router = Router()
 let io: SocketIOServer
-
-// 全局部署任务管理器
-const activeDeployments = new Map<string, any>()
 
 // 设置Socket.IO依赖
 export function setMoreGamesDependencies(socketIO: SocketIOServer) {
@@ -102,6 +98,83 @@ const supportedGames: GameInfo[] = [
     supportedPlatforms: [Platform.LINUX] // 仅Linux平台支持
   }
 ]
+
+// 获取活动部署列表
+router.get('/active-deployments', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const activeDeployments = getActiveDeployments()
+    
+    res.json({
+      success: true,
+      data: activeDeployments.map(deployment => ({
+        id: deployment.id,
+        game: deployment.game,
+        targetDirectory: deployment.targetDirectory,
+        startTime: deployment.startTime
+      })),
+      message: '获取活动部署列表成功'
+    })
+  } catch (error: any) {
+    logger.error('获取活动部署列表失败:', error)
+    res.status(500).json({
+      success: false,
+      message: error.message || '获取活动部署列表失败'
+    })
+  }
+})
+
+// 取消部署
+router.post('/cancel-deployment', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const { deploymentId } = req.body
+    
+    if (!deploymentId) {
+      return res.status(400).json({
+        success: false,
+        message: '缺少部署ID参数'
+      })
+    }
+    
+    // 获取当前活动部署列表用于调试
+    const activeDeployments = getActiveDeployments()
+    logger.info(`尝试取消部署: ${deploymentId}`, {
+      deploymentId,
+      activeDeployments: activeDeployments.map(d => ({
+        id: d.id,
+        game: d.game,
+        startTime: d.startTime
+      }))
+    })
+    
+    // 使用统一函数取消部署
+    const success = await cancelDeployment(deploymentId)
+    
+    if (!success) {
+      return res.status(404).json({
+        success: false,
+        message: '未找到指定的部署任务或取消失败',
+        debug: {
+          requestedId: deploymentId,
+          activeDeployments: activeDeployments.map(d => d.id)
+        }
+      })
+    }
+    
+    logger.info(`部署任务已取消: ${deploymentId}`)
+    
+    res.json({
+      success: true,
+      message: '部署已取消'
+    })
+    
+  } catch (error: any) {
+    logger.error('取消部署失败:', error)
+    res.status(500).json({
+      success: false,
+      message: error.message || '取消部署失败'
+    })
+  }
+})
 
 // 获取支持的游戏列表
 router.get('/games', authenticateToken, async (req: Request, res: Response) => {
@@ -191,112 +264,65 @@ router.post('/deploy/tmodloader', authenticateToken, async (req: Request, res: R
     // 异步执行部署
     ;(async () => {
       try {
-        // 发送开始部署事件
-        if (io && socketId) {
-          io.to(socketId).emit('more-games-deploy-log', {
-            deploymentId,
-            message: '开始部署tModLoader服务端...'
-          })
-          io.to(socketId).emit('more-games-deploy-progress', {
-            deploymentId,
-            progress: { percentage: 10 },
-            message: '初始化部署环境...'
-          })
-        }
-        
-        // 创建tModLoader下载器实例
-        const downloader = new TModDownloader({
-          downloadDir: path.dirname(installPath),
-          extractDir: installPath,
-          deleteAfterExtract: options.deleteAfterExtract ?? true,
-          clearExtractDir: options.clearExtractDir ?? false,
-          createVersionDir: options.createVersionDir ?? false
+        // 使用统一函数进行部署
+        const result = await deployTModLoaderServer({
+          targetDirectory: installPath,
+          options,
+          deploymentId, // 传递自定义的部署ID
+          onProgress: (message, type = 'info') => {
+            if (io && socketId) {
+              io.to(socketId).emit('more-games-deploy-log', {
+                deploymentId,
+                message,
+                type,
+                timestamp: new Date().toISOString()
+              })
+            }
+          }
         })
         
-        // 将部署任务添加到活跃列表
-        activeDeployments.set(deploymentId, { type: 'tmodloader', downloader })
-        
-        // 发送下载开始日志
-        if (io && socketId) {
-          io.to(socketId).emit('more-games-deploy-log', {
-            deploymentId,
-            message: '正在下载tModLoader服务端...'
+        if (result.success) {
+          logger.info('tModLoader服务端部署成功', {
+            installPath: result.targetDirectory,
+            deploymentId: result.deploymentId
           })
-          io.to(socketId).emit('more-games-deploy-progress', {
-            deploymentId,
-            progress: { percentage: 30 },
-            message: '正在下载tModLoader...'
-          })
-        }
-        
-        // 执行下载和解压
-        await downloader.downloadAndExtract()
-        
-        // 发送解压进度日志
-        if (io && socketId) {
-          io.to(socketId).emit('more-games-deploy-log', {
-            deploymentId,
-            message: '下载完成，正在解压文件...'
-          })
-          io.to(socketId).emit('more-games-deploy-progress', {
-            deploymentId,
-            progress: { percentage: 70 },
-            message: '正在解压文件...'
-          })
-        }
-        
-        // 获取版本信息
-        const versionInfo = await downloader.getVersionInfo()
-        
-        // 发送版本检测日志
-        if (io && socketId) {
-          io.to(socketId).emit('more-games-deploy-log', {
-            deploymentId,
-            message: `检测到tModLoader版本: ${versionInfo.version || '未知'}`
-          })
-          io.to(socketId).emit('more-games-deploy-progress', {
-            deploymentId,
-            progress: { percentage: 95 },
-            message: '正在完成部署...'
-          })
-        }
-        
-        // 从活跃部署列表中移除
-        activeDeployments.delete(deploymentId)
-        
-        logger.info('tModLoader服务端部署成功', {
-          installPath,
-          version: versionInfo.version
-        })
-        
-        // 发送最终完成日志和进度
-        if (io && socketId) {
-          io.to(socketId).emit('more-games-deploy-log', {
-            deploymentId,
-            message: 'tModLoader服务端部署成功！'
-          })
-          io.to(socketId).emit('more-games-deploy-progress', {
-            deploymentId,
-            progress: { percentage: 100 },
-            message: '部署完成'
-          })
-          io.to(socketId).emit('more-games-deploy-complete', {
-            deploymentId,
-            success: true,
-            data: {
-              installPath,
-              version: versionInfo.version,
-              downloadUrl: versionInfo.downloadUrl
-            },
-            message: 'tModLoader服务端部署成功！'
-          })
+          
+          // 发送最终完成日志和进度
+          if (io && socketId) {
+            io.to(socketId).emit('more-games-deploy-log', {
+              deploymentId,
+              message: 'tModLoader服务端部署成功！'
+            })
+            io.to(socketId).emit('more-games-deploy-progress', {
+              deploymentId,
+              progress: { percentage: 100 },
+              message: '部署完成'
+            })
+            io.to(socketId).emit('more-games-deploy-complete', {
+              deploymentId,
+              success: true,
+              data: {
+                installPath: result.targetDirectory,
+                deploymentId: result.deploymentId
+              },
+              message: 'tModLoader服务端部署成功！'
+            })
+          }
+        } else {
+          logger.error('tModLoader部署失败:', result.message)
+          
+          // 发送错误事件
+          if (io && socketId) {
+            io.to(socketId).emit('more-games-deploy-error', {
+              deploymentId,
+              success: false,
+              error: result.message || 'tModLoader部署失败'
+            })
+          }
         }
         
       } catch (error: any) {
         logger.error('tModLoader部署失败:', error)
-        
-        // 从活跃部署列表中移除
-        activeDeployments.delete(deploymentId)
         
         // 发送错误事件
         if (io && socketId) {
@@ -348,114 +374,64 @@ router.post('/deploy/factorio', authenticateToken, async (req: Request, res: Res
     // 异步执行部署
     ;(async () => {
       try {
-        // 发送开始部署事件
-        if (io && socketId) {
-          io.to(socketId).emit('more-games-deploy-log', {
-            deploymentId,
-            message: '开始部署Factorio服务端...'
-          })
-          io.to(socketId).emit('more-games-deploy-progress', {
-            deploymentId,
-            progress: { percentage: 10 },
-            message: '初始化部署环境...'
-          })
-        }
-        
-        // 创建Factorio部署器实例
-        const deployer = new FactorioDeployer()
-        
-        // 将部署任务添加到活跃列表
-        activeDeployments.set(deploymentId, { type: 'factorio', deployer })
-        
-        // 发送下载开始日志
-        if (io && socketId) {
-          io.to(socketId).emit('more-games-deploy-log', {
-            deploymentId,
-            message: '正在下载Factorio服务端...'
-          })
-          io.to(socketId).emit('more-games-deploy-progress', {
-            deploymentId,
-            progress: { percentage: 30 },
-            message: '正在下载Factorio...'
-          })
-        }
-        
-        // 执行部署
-        const result = await deployer.deploy({
-          extractPath: installPath,
-          tempDir: options.tempDir
+        // 使用统一函数进行部署
+        const result = await deployFactorioServer({
+          targetDirectory: installPath,
+          deploymentId, // 传递自定义的部署ID
+          onProgress: (message, type = 'info') => {
+            if (io && socketId) {
+              io.to(socketId).emit('more-games-deploy-log', {
+                deploymentId,
+                message,
+                type,
+                timestamp: new Date().toISOString()
+              })
+            }
+          }
         })
         
-        if (!result.success) {
-          throw new Error(result.message || 'Factorio部署失败')
-        }
-        
-        // 发送解压完成日志
-        if (io && socketId) {
-          io.to(socketId).emit('more-games-deploy-log', {
-            deploymentId,
-            message: '文件解压完成，正在配置服务端...'
+        if (result.success) {
+          logger.info('Factorio服务端部署成功', {
+            installPath: result.targetDirectory,
+            deploymentId: result.deploymentId
           })
-          io.to(socketId).emit('more-games-deploy-progress', {
-            deploymentId,
-            progress: { percentage: 80 },
-            message: '正在配置服务端...'
-          })
-        }
-        
-        // 获取版本信息
-        const version = await deployer.getServerVersion(installPath)
-        
-        // 发送版本检测日志
-        if (io && socketId) {
-          io.to(socketId).emit('more-games-deploy-log', {
-            deploymentId,
-            message: `检测到Factorio版本: ${version || '未知'}`
-          })
-          io.to(socketId).emit('more-games-deploy-progress', {
-            deploymentId,
-            progress: { percentage: 95 },
-            message: '正在完成部署...'
-          })
-        }
-        
-        // 从活跃部署列表中移除
-        activeDeployments.delete(deploymentId)
-        
-        logger.info('Factorio服务端部署成功', {
-          installPath,
-          version,
-          serverExecutablePath: result.serverExecutablePath
-        })
-        
-        // 发送最终完成日志和进度
-        if (io && socketId) {
-          io.to(socketId).emit('more-games-deploy-log', {
-            deploymentId,
-            message: 'Factorio服务端部署成功！'
-          })
-          io.to(socketId).emit('more-games-deploy-progress', {
-            deploymentId,
-            progress: { percentage: 100 },
-            message: '部署完成'
-          })
-          io.to(socketId).emit('more-games-deploy-complete', {
-            deploymentId,
-            success: true,
-            data: {
-              installPath: result.extractPath,
-              version,
-              serverExecutablePath: result.serverExecutablePath
-            },
-            message: 'Factorio服务端部署成功！'
-          })
+          
+          // 发送最终完成日志和进度
+          if (io && socketId) {
+            io.to(socketId).emit('more-games-deploy-log', {
+              deploymentId,
+              message: 'Factorio服务端部署成功！'
+            })
+            io.to(socketId).emit('more-games-deploy-progress', {
+              deploymentId,
+              progress: { percentage: 100 },
+              message: '部署完成'
+            })
+            io.to(socketId).emit('more-games-deploy-complete', {
+              deploymentId,
+              success: true,
+              data: {
+                installPath: result.targetDirectory,
+                deploymentId: result.deploymentId
+              },
+              message: 'Factorio服务端部署成功！'
+            })
+          }
+        } else {
+          logger.error('Factorio部署失败:', result.message)
+          
+          // 发送错误事件
+          if (io && socketId) {
+            io.to(socketId).emit('more-games-deploy-error', {
+              deploymentId,
+              success: false,
+              error: result.message || 'Factorio部署失败'
+            })
+          }
         }
         
       } catch (error: any) {
         logger.error('Factorio部署失败:', error)
-        
-        // 从活跃部署列表中移除
-        activeDeployments.delete(deploymentId)
         
         // 发送错误事件
         if (io && socketId) {
@@ -509,10 +485,13 @@ router.get('/status/:gameId/:installPath(*)', authenticateToken, async (req: Req
       }
       case 'factorio': {
         // 检查Factorio部署状态
-        const deployer = new FactorioDeployer()
-        isDeployed = await deployer.checkDeployment(installPath)
-        if (isDeployed) {
-          version = await deployer.getServerVersion(installPath)
+        const factorioExecutable = path.join(installPath, 'factorio', 'bin', 'x64', 'factorio')
+        try {
+          await fs.access(factorioExecutable)
+          isDeployed = true
+          // 这里可以添加版本检测逻辑
+        } catch {
+          isDeployed = false
         }
         break
       }
@@ -553,8 +532,7 @@ router.get('/version/:gameId', authenticateToken, async (req: Request, res: Resp
     
     switch (gameId) {
       case 'tmodloader': {
-        const downloader = new TModDownloader()
-        versionInfo = await downloader.getVersionInfo()
+        versionInfo = await getTModLoaderInfo()
         break
       }
       case 'factorio': {

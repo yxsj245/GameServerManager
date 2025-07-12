@@ -475,6 +475,10 @@ class ApiClient {
     return this.get(`/more-games/version/${gameId}`)
   }
 
+  async cancelMoreGameDeployment(deploymentId: string) {
+    return this.post('/more-games/cancel-deployment', { deploymentId })
+  }
+
   // 游戏配置文件API
   async getAvailableConfigs() {
     return this.get('/instances/configs/available')

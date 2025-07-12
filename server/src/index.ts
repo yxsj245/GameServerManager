@@ -29,7 +29,7 @@ import filesRouter from './routes/files.js'
 import { setupInstanceRoutes } from './routes/instances.js'
 import steamcmdRouter, { setSteamCMDManager } from './routes/steamcmd.js'
 import gameDeploymentRouter, { setGameDeploymentManagers } from './routes/gameDeployment.js'
-import minecraftRouter from './routes/minecraft.js'
+import { minecraftRouter, setMinecraftDependencies } from './routes/minecraft.js'
 import moreGamesRouter from './routes/moreGames.js'
 import weatherRouter from './routes/weather.js'
 import pluginsRouter, { setPluginManager } from './routes/plugins.js'
@@ -489,7 +489,6 @@ async function startServer() {
     app.use('/api/game-deployment', gameDeploymentRouter)
     
     // 设置Minecraft路由
-    const { setMinecraftDependencies } = await import('./routes/minecraft.js')
     setMinecraftDependencies(io, instanceManager)
     app.use('/api/minecraft', minecraftRouter)
     

@@ -1,6 +1,6 @@
 import axios from 'axios';
-import * as fs from 'fs';
-import * as fse from 'fs-extra';
+import * as fs from 'fs-extra';
+import { createWriteStream } from 'fs';
 import * as path from 'path';
 import { spawn, ChildProcess } from 'child_process';
 
@@ -16,7 +16,8 @@ export interface ApiResponse<T> {
 // 服务器分类数据类型
 export interface ServerClassifyData {
   pluginsCore: string[];
-  pluginsAndModsCore: string[];
+  pluginsAndModsCore_Forge: string[];
+  pluginsAndModsCore_Fabric: string[];
   modsCore_Forge: string[];
   modsCore_Fabric: string[];
   vanillaCore: string[];
@@ -164,7 +165,7 @@ export class ApiService {
         }
       });
 
-      const writer = fs.createWriteStream(filePath);
+      const writer = createWriteStream(filePath);
       
       response.data.pipe(writer);
       
@@ -212,7 +213,7 @@ export class FileManager {
    * 创建临时目录
    */
   static async createTempDirectory(): Promise<string> {
-    await fse.ensureDir(this.tempDir);
+    await fs.ensureDir(this.tempDir);
     return this.tempDir;
   }
 
@@ -228,7 +229,7 @@ export class FileManager {
    */
   static async fileExists(filePath: string): Promise<boolean> {
     try {
-      await fs.promises.access(filePath);
+      await fs.access(filePath);
       return true;
     } catch {
       return false;
@@ -307,7 +308,7 @@ export class FileManager {
         reject(new Error(`启动服务端失败: ${error.message}`));
       });
 
-      // 设置超时（5分钟）
+      // 设置超时（10分钟）
       setTimeout(() => {
         if (!serverProcess.killed) {
           if (onLog) {
@@ -316,7 +317,7 @@ export class FileManager {
           serverProcess.kill('SIGKILL');
           resolve();
         }
-      }, 5 * 60 * 1000);
+      }, 10 * 60 * 1000);
     });
   }
 
@@ -325,10 +326,10 @@ export class FileManager {
    */
   static async moveFilesToTarget(targetDir: string, onLog?: LogCallback): Promise<void> {
     // 确保目标目录存在
-    await fse.ensureDir(targetDir);
+    await fs.ensureDir(targetDir);
     
     // 获取临时目录中的所有文件
-    const files = await fs.promises.readdir(this.tempDir);
+    const files = await fs.readdir(this.tempDir);
     
     if (onLog) {
       onLog(`正在移动 ${files.length} 个文件到目标目录...`, 'info');
@@ -338,18 +339,25 @@ export class FileManager {
       const sourcePath = path.join(this.tempDir, file);
       const targetPath = path.join(targetDir, file);
       
-      // 检查是否是文件
-      const stat = await fs.promises.stat(sourcePath);
-      if (stat.isFile()) {
-        await fse.move(sourcePath, targetPath, { overwrite: true });
-        if (onLog) {
-          onLog(`已移动: ${file}`, 'info');
+      try {
+        // 统一使用move操作，无论是文件还是目录
+        await fs.move(sourcePath, targetPath, { overwrite: true });
+        
+        const stat = await fs.stat(targetPath);
+        if (stat.isFile()) {
+          if (onLog) {
+            onLog(`已移动文件: ${file}`, 'info');
+          }
+        } else if (stat.isDirectory()) {
+          if (onLog) {
+            onLog(`已移动目录: ${file}`, 'info');
+          }
         }
-      } else if (stat.isDirectory()) {
-        await fse.copy(sourcePath, targetPath, { overwrite: true });
+      } catch (error) {
         if (onLog) {
-          onLog(`已复制目录: ${file}`, 'info');
+          onLog(`移动失败: ${file} - ${error}`, 'error');
         }
+        throw error;
       }
     }
   }
@@ -360,7 +368,7 @@ export class FileManager {
   static async cleanupTempDirectory(onLog?: LogCallback): Promise<void> {
     try {
       if (await this.fileExists(this.tempDir)) {
-        await fse.remove(this.tempDir);
+        await fs.remove(this.tempDir);
         if (onLog) {
           onLog('临时目录已清理。', 'info');
         }
@@ -368,6 +376,24 @@ export class FileManager {
     } catch (error) {
       if (onLog) {
         onLog(`清理临时目录时出现警告: ${error}`, 'warn');
+      }
+    }
+  }
+
+  /**
+   * 强制清理指定临时目录
+   */
+  static async forceCleanupDirectory(dirPath: string, onLog?: LogCallback): Promise<void> {
+    try {
+      if (await this.fileExists(dirPath)) {
+        await fs.remove(dirPath);
+        if (onLog) {
+          onLog(`已清理目录: ${dirPath}`, 'info');
+        }
+      }
+    } catch (error) {
+      if (onLog) {
+        onLog(`清理目录时出现警告: ${dirPath} - ${error}`, 'warn');
       }
     }
   }
@@ -407,21 +433,41 @@ export class MinecraftServerDownloader {
   private onProgress?: ProgressCallback;
   private onLog?: LogCallback;
   private cancelled: boolean = false;
-  private downloadId?: string;
+  private currentProcess?: ChildProcess;
+  private tempDir?: string;
 
-  constructor(onProgress?: ProgressCallback, onLog?: LogCallback, downloadId?: string) {
+  constructor(onProgress?: ProgressCallback, onLog?: LogCallback) {
     this.onProgress = onProgress;
     this.onLog = onLog;
-    this.downloadId = downloadId;
   }
 
   /**
-   * 取消下载
+   * 取消当前下载/部署操作
    */
   cancel(): void {
     this.cancelled = true;
+    
+    // 终止当前进程
+    if (this.currentProcess && !this.currentProcess.killed) {
+      this.currentProcess.kill('SIGTERM');
+      
+      // 等待一段时间后强制终止
+      setTimeout(() => {
+        if (this.currentProcess && !this.currentProcess.killed) {
+          this.currentProcess.kill('SIGKILL');
+        }
+      }, 5000);
+    }
+    
+    // 清理临时目录
+    if (this.tempDir) {
+      FileManager.cleanupTempDirectory(this.onLog).catch(() => {
+        // 忽略清理错误
+      });
+    }
+    
     if (this.onLog) {
-      this.onLog('下载已被用户取消', 'warn');
+      this.onLog('Minecraft服务端部署已取消', 'warn');
     }
   }
 
@@ -430,13 +476,6 @@ export class MinecraftServerDownloader {
    */
   isCancelled(): boolean {
     return this.cancelled;
-  }
-
-  /**
-   * 获取下载ID
-   */
-  getDownloadId(): string | undefined {
-    return this.downloadId;
   }
 
   /**
@@ -454,11 +493,12 @@ export class MinecraftServerDownloader {
     } = options;
 
     const log = silent ? undefined : this.onLog;
+    this.cancelled = false; // 重置取消状态
 
     try {
       // 检查是否已取消
       if (this.cancelled) {
-        throw new Error('下载已被取消');
+        throw new Error('操作已取消');
       }
 
       // 验证Java环境（除非跳过）
@@ -477,18 +517,18 @@ export class MinecraftServerDownloader {
 
       // 检查是否已取消
       if (this.cancelled) {
-        throw new Error('下载已被取消');
+        throw new Error('操作已取消');
       }
 
       // 创建临时目录
       if (log) log('创建临时工作目录...', 'info');
-      const tempDir = await FileManager.createTempDirectory();
-      if (log) log(`临时目录创建成功: ${tempDir}`, 'success');
+      this.tempDir = await FileManager.createTempDirectory();
+      if (log) log(`临时目录创建成功: ${this.tempDir}`, 'success');
       
       try {
         // 检查是否已取消
         if (this.cancelled) {
-          throw new Error('下载已被取消');
+          throw new Error('操作已取消');
         }
 
         // 获取下载地址
@@ -498,7 +538,7 @@ export class MinecraftServerDownloader {
         
         // 检查是否已取消
         if (this.cancelled) {
-          throw new Error('下载已被取消');
+          throw new Error('操作已取消');
         }
 
         // 下载服务端核心
@@ -509,20 +549,20 @@ export class MinecraftServerDownloader {
         
         // 检查是否已取消
         if (this.cancelled) {
-          throw new Error('下载已被取消');
+          throw new Error('操作已取消');
         }
 
         // 运行服务端直到EULA协议（除非跳过）
         if (!skipServerRun) {
           if (log) log('正在运行服务端核心...', 'info');
           if (log) log('注意: 服务端将运行直到出现EULA协议提示，然后自动关闭。', 'info');
-          await FileManager.runServerUntilEula(jarPath, log);
+          this.currentProcess = await this.runServerUntilEulaWithCancel(jarPath, log);
           if (log) log('服务端运行完成。', 'success');
         }
         
         // 检查是否已取消
         if (this.cancelled) {
-          throw new Error('下载已被取消');
+          throw new Error('操作已取消');
         }
 
         // 移动文件到目标目录
@@ -535,9 +575,10 @@ export class MinecraftServerDownloader {
         if (log) log('正在清理临时文件...', 'info');
         await FileManager.cleanupTempDirectory(log);
         if (log) log('临时文件清理完成。', 'success');
+        this.tempDir = undefined;
       }
       
-      if (log) {
+      if (!this.cancelled && log) {
         log('=== 所有操作完成 ===', 'success');
         log(`服务端文件已保存到: ${targetDirectory}`, 'info');
         log('您现在可以在目标目录中找到服务端文件。', 'info');
@@ -550,6 +591,7 @@ export class MinecraftServerDownloader {
       // 确保清理临时目录
       try {
         await FileManager.cleanupTempDirectory();
+        this.tempDir = undefined;
       } catch (cleanupError) {
         if (log) log(`清理临时目录时出现问题: ${cleanupError}`, 'warn');
       }
@@ -581,6 +623,116 @@ export class MinecraftServerDownloader {
   }
 
   /**
+   * 运行服务端直到EULA协议（支持取消）
+   */
+  private async runServerUntilEulaWithCancel(jarPath: string, onLog?: LogCallback): Promise<ChildProcess | undefined> {
+    return new Promise((resolve, reject) => {
+      if (this.cancelled) {
+        reject(new Error('操作已取消'));
+        return;
+      }
+
+      if (onLog) {
+        onLog('正在启动服务端...', 'info');
+      }
+      
+      const serverProcess: ChildProcess = spawn('java', ['-jar', path.basename(jarPath)], {
+        cwd: path.dirname(jarPath),
+        stdio: ['pipe', 'pipe', 'pipe']
+      });
+
+      this.currentProcess = serverProcess;
+      let hasEulaMessage = false;
+
+      // 监听标准输出
+      serverProcess.stdout?.on('data', (data: Buffer) => {
+        if (this.cancelled) {
+          serverProcess.kill('SIGTERM');
+          return;
+        }
+
+        const output = data.toString();
+        if (onLog) {
+          onLog(output, 'info');
+        }
+        
+        // 检查是否出现EULA相关信息
+        if (output.toLowerCase().includes('eula') || 
+            output.toLowerCase().includes('you need to agree to the eula')) {
+          hasEulaMessage = true;
+          if (onLog) {
+            onLog('检测到EULA协议提示，正在关闭服务端...', 'info');
+          }
+          serverProcess.kill('SIGTERM');
+        }
+      });
+
+      // 监听标准错误
+      serverProcess.stderr?.on('data', (data: Buffer) => {
+        if (this.cancelled) {
+          serverProcess.kill('SIGTERM');
+          return;
+        }
+
+        const output = data.toString();
+        if (onLog) {
+          onLog(output, 'error');
+        }
+        
+        if (output.toLowerCase().includes('eula')) {
+          hasEulaMessage = true;
+          if (onLog) {
+            onLog('检测到EULA协议提示，正在关闭服务端...', 'info');
+          }
+          serverProcess.kill('SIGTERM');
+        }
+      });
+
+      // 监听进程退出
+      serverProcess.on('close', (code: number | null) => {
+        this.currentProcess = undefined;
+        
+        if (this.cancelled) {
+          reject(new Error('操作已取消'));
+          return;
+        }
+
+        if (hasEulaMessage) {
+          if (onLog) {
+            onLog('服务端已关闭，EULA协议检测完成。', 'success');
+          }
+          resolve(serverProcess);
+        } else if (code === 0) {
+          if (onLog) {
+            onLog('服务端正常退出。', 'success');
+          }
+          resolve(serverProcess);
+        } else {
+          reject(new Error(`服务端异常退出，退出码: ${code}`));
+        }
+      });
+
+      // 监听进程错误
+      serverProcess.on('error', (error: Error) => {
+        this.currentProcess = undefined;
+        reject(new Error(`启动服务端失败: ${error.message}`));
+      });
+
+      // 设置超时（10分钟）
+      setTimeout(() => {
+        if (!serverProcess.killed && !this.cancelled) {
+          if (onLog) {
+            onLog('服务端运行超时，正在强制关闭...', 'warn');
+          }
+          serverProcess.kill('SIGKILL');
+          this.currentProcess = undefined;
+          resolve(serverProcess);
+        }
+      }, 10 * 60 * 1000);
+    });
+  }
+
+  /**
    * 验证Java环境
    */
   async validateJava(): Promise<boolean> {
@@ -598,9 +750,14 @@ export class MinecraftServerDownloader {
         servers: data.pluginsCore || []
       },
       {
-        name: 'pluginsAndModsCore',
-        displayName: '插件+模组服务端核心',
-        servers: data.pluginsAndModsCore || []
+        name: 'pluginsAndModsCore_Forge',
+        displayName: '插件+模组服务端核心 (Forge)',
+        servers: data.pluginsAndModsCore_Forge || []
+      },
+      {
+        name: 'pluginsAndModsCore_Fabric',
+        displayName: '插件+模组服务端核心 (Fabric)',
+        servers: data.pluginsAndModsCore_Fabric || []
       },
       {
         name: 'modsCore_Forge',

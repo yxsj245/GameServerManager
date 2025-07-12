@@ -4,6 +4,7 @@ import gameRoutes from './games.js'
 import systemRoutes from './system.js'
 import fileRoutes from './files.js'
 import instanceRoutes from './instances.js'
+import minecraftRoutes from './minecraft.js'
 
 const router = Router()
 
@@ -33,5 +34,6 @@ router.use('/games', gameRoutes)
 router.use('/system', systemRoutes)
 router.use('/files', fileRoutes)
 router.use('/instances', instanceRoutes)
+router.use('/minecraft', minecraftRoutes)
 
 export default router

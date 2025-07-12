@@ -90,6 +90,7 @@ const GameDeploymentPage: React.FC = () => {
   
   const socketRef = useRef<Socket | null>(null)
   const currentDownloadId = useRef<string | null>(null)
+  const currentMoreGameDeploymentId = useRef<string | null>(null)
 
   // 获取游戏列表
   const fetchGames = async () => {
@@ -214,6 +215,9 @@ const GameDeploymentPage: React.FC = () => {
       }
       
       if (response.success) {
+        currentMoreGameDeploymentId.current = response.data?.deploymentId
+        console.log('更多游戏部署开始，Deployment ID:', currentMoreGameDeploymentId.current)
+        
         addNotification({
           type: 'info',
           title: '开始部署',
@@ -225,6 +229,7 @@ const GameDeploymentPage: React.FC = () => {
     } catch (error: any) {
       console.error('启动部署失败:', error)
       setMoreGameDeploying(false)
+      currentMoreGameDeploymentId.current = null
       addNotification({
         type: 'error',
         title: '部署失败',
@@ -392,6 +397,7 @@ const GameDeploymentPage: React.FC = () => {
       setMoreGameDeploying(false)
       setMoreGameDeployComplete(true)
       setMoreGameDeployResult(data.data)
+      currentMoreGameDeploymentId.current = null
       
       addNotification({
         type: 'success',
@@ -404,6 +410,7 @@ const GameDeploymentPage: React.FC = () => {
     socketRef.current.on('more-games-deploy-error', (data) => {
       console.log('收到更多游戏部署错误事件:', data)
       setMoreGameDeploying(false)
+      currentMoreGameDeploymentId.current = null
       
       addNotification({
         type: 'error',
@@ -493,6 +500,46 @@ const GameDeploymentPage: React.FC = () => {
         type: 'error',
         title: '下载失败',
         message: error.message || '无法启动Minecraft服务端下载'
+      })
+    }
+  }
+
+  // 取消更多游戏部署
+  const cancelMoreGameDeployment = async () => {
+    if (!currentMoreGameDeploymentId.current) {
+      addNotification({
+        type: 'error',
+        title: '取消失败',
+        message: '没有正在进行的部署任务'
+      })
+      return
+    }
+
+    try {
+      console.log('尝试取消部署，ID:', currentMoreGameDeploymentId.current)
+      const response = await apiClient.cancelMoreGameDeployment(currentMoreGameDeploymentId.current)
+      
+      if (response.success) {
+        // 重置部署状态
+        setMoreGameDeploying(false)
+        setMoreGameDeployProgress(null)
+        currentMoreGameDeploymentId.current = null
+        
+        addNotification({
+          type: 'info',
+          title: '部署已取消',
+          message: '更多游戏部署已取消'
+        })
+      } else {
+        console.error('取消部署失败，服务器响应:', response)
+        throw new Error(response.message || '取消部署失败')
+      }
+    } catch (error: any) {
+      console.error('取消部署失败:', error)
+      addNotification({
+        type: 'error',
+        title: '取消失败',
+        message: error.message || '无法取消部署'
       })
     }
   }
@@ -1416,41 +1463,56 @@ const GameDeploymentPage: React.FC = () => {
                 })()}
                 
                 {/* 部署按钮 */}
-                <div className="flex justify-end">
-                  {(() => {
-                    const selectedGame = moreGames.find(g => g.id === selectedMoreGame)
-                    const isGameSupported = selectedGame?.supportedOnCurrentPlatform ?? false
-                    const isDisabled = moreGameDeploying || !moreGameInstallPath.trim() || !isGameSupported
-                    
-                    return (
+                <div className="space-y-2">
+                  <div className="flex justify-end">
+                    {(() => {
+                      const selectedGame = moreGames.find(g => g.id === selectedMoreGame)
+                      const isGameSupported = selectedGame?.supportedOnCurrentPlatform ?? false
+                      const isDisabled = moreGameDeploying || !moreGameInstallPath.trim() || !isGameSupported
+                      
+                      return (
+                        <button
+                          onClick={deployMoreGame}
+                          disabled={isDisabled}
+                          className={`px-6 py-2 rounded-lg transition-colors flex items-center space-x-2 ${
+                            isDisabled
+                              ? 'bg-gray-400 dark:bg-gray-600 text-gray-200 cursor-not-allowed'
+                              : 'bg-blue-600 hover:bg-blue-700 text-white'
+                          }`}
+                        >
+                          {moreGameDeploying ? (
+                            <>
+                              <Loader className="w-4 h-4 animate-spin" />
+                              <span>部署中...</span>
+                            </>
+                          ) : !isGameSupported ? (
+                            <>
+                              <AlertCircle className="w-4 h-4" />
+                              <span>不支持当前平台</span>
+                            </>
+                          ) : (
+                            <>
+                              <Download className="w-4 h-4" />
+                              <span>开始部署</span>
+                            </>
+                          )}
+                        </button>
+                      )
+                    })()} 
+                  </div>
+                  
+                  {/* 取消部署按钮 */}
+                  {moreGameDeploying && (
+                    <div className="flex justify-end">
                       <button
-                        onClick={deployMoreGame}
-                        disabled={isDisabled}
-                        className={`px-6 py-2 rounded-lg transition-colors flex items-center space-x-2 ${
-                          isDisabled
-                            ? 'bg-gray-400 dark:bg-gray-600 text-gray-200 cursor-not-allowed'
-                            : 'bg-blue-600 hover:bg-blue-700 text-white'
-                        }`}
+                        onClick={cancelMoreGameDeployment}
+                        className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors flex items-center space-x-2"
                       >
-                        {moreGameDeploying ? (
-                          <>
-                            <Loader className="w-4 h-4 animate-spin" />
-                            <span>部署中...</span>
-                          </>
-                        ) : !isGameSupported ? (
-                          <>
-                            <AlertCircle className="w-4 h-4" />
-                            <span>不支持当前平台</span>
-                          </>
-                        ) : (
-                          <>
-                            <Download className="w-4 h-4" />
-                            <span>开始部署</span>
-                          </>
-                        )}
+                        <X className="w-4 h-4" />
+                        <span>取消部署</span>
                       </button>
-                    )
-                  })()}
+                    </div>
+                  )}
                 </div>
                 
                 {/* 部署进度 */}

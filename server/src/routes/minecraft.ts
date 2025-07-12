@@ -1,5 +1,14 @@
 import { Router, Request, Response } from 'express'
-import { MinecraftServerDownloader, getServerCategories, getAvailableVersions, getDownloadInfo, validateJavaEnvironment } from '../modules/game/minecraft-server-api.js'
+import { getServerCategories, getAvailableVersions, getDownloadInfo, validateJavaEnvironment } from '../modules/game/othergame/minecraft-server-api.js'
+import { 
+  getMinecraftServerCategories, 
+  getMinecraftVersions, 
+  getMinecraftDownloadInfo, 
+  validateJavaEnvironment as validateJava, 
+  deployMinecraftServer,
+  cancelDeployment,
+  getActiveDeployments
+} from '../modules/game/othergame/unified-functions.js'
 import { authenticateToken } from '../middleware/auth.js'
 import logger from '../utils/logger.js'
 import path from 'path'
@@ -10,11 +19,8 @@ const router = Router()
 let io: SocketIOServer
 let instanceManager: InstanceManager
 
-// 全局下载器管理器
-const activeDownloads = new Map<string, MinecraftServerDownloader>()
-
 // 设置Socket.IO和InstanceManager
-export function setMinecraftDependencies(socketIO: SocketIOServer, instManager: InstanceManager) {
+function setMinecraftDependencies(socketIO: SocketIOServer, instManager: InstanceManager) {
   io = socketIO
   instanceManager = instManager
 }
@@ -42,6 +48,30 @@ router.get('/server-categories', async (req: Request, res: Response) => {
   }
 })
 
+// 获取活动部署列表
+router.get('/active-deployments', async (req: Request, res: Response) => {
+  try {
+    const activeDeployments = getActiveDeployments()
+    
+    res.json({
+      success: true,
+      data: activeDeployments.map(deployment => ({
+        id: deployment.id,
+        game: deployment.game,
+        targetDirectory: deployment.targetDirectory,
+        startTime: deployment.startTime
+      })),
+      message: '获取活动部署列表成功'
+    })
+  } catch (error: any) {
+    logger.error('获取活动部署列表失败:', error)
+    res.status(500).json({
+      success: false,
+      message: error.message || '获取活动部署列表失败'
+    })
+  }
+})
+
 // 取消Minecraft服务端下载
 router.post('/cancel-download', async (req: Request, res: Response) => {
   try {
@@ -54,21 +84,16 @@ router.post('/cancel-download', async (req: Request, res: Response) => {
       })
     }
     
-    // 查找活跃的下载任务
-    const downloader = activeDownloads.get(downloadId)
+    logger.info(`尝试取消下载: ${downloadId}`)
     
-    if (!downloader) {
+    const success = await cancelDeployment(downloadId)
+    
+    if (!success) {
       return res.status(404).json({
         success: false,
-        message: '未找到指定的下载任务'
+        message: '未找到指定的下载任务或取消失败'
       })
     }
-    
-    // 取消下载
-    downloader.cancel()
-    
-    // 从活跃下载列表中移除
-    activeDownloads.delete(downloadId)
     
     logger.info(`下载任务已取消: ${downloadId}`)
     
@@ -181,37 +206,37 @@ router.post('/download', async (req: Request, res: Response) => {
       ? targetDirectory 
       : path.resolve(process.cwd(), 'server', 'data', 'minecraft-servers', targetDirectory)
     
-    const downloadId = `minecraft-download-${Date.now()}`
-    
-    // 立即返回下载ID
-    res.json({
-      success: true,
-      data: {
-        downloadId
-      },
-      message: '开始下载Minecraft服务端'
-    })
-    
     logger.info(`开始下载Minecraft服务端: ${server} ${version} 到 ${absoluteTargetDir}`)
+    
+    // 创建一个临时的downloadId用于立即响应
+    const downloadId = `minecraft-deploy-${Date.now()}`
     
     // 异步执行下载
     ;(async () => {
       try {
-        // 创建下载器实例
-        const downloader = new MinecraftServerDownloader(
-          // 进度回调
-          (progress) => {
+        // 使用统一函数部署Minecraft服务器
+        const result = await deployMinecraftServer({
+          server,
+          version,
+          targetDirectory: absoluteTargetDir,
+          deploymentId: downloadId,
+          skipJavaCheck,
+          skipServerRun,
+          onProgress: (progress) => {
             if (io && socketId) {
               io.to(socketId).emit('minecraft-download-progress', {
                 downloadId,
-                progress,
-                message: `下载进度: ${progress.percentage}% (${progress.loaded}/${progress.total})`
+                progress: {
+                  percentage: progress.percentage,
+                  loaded: progress.loaded,
+                  total: progress.total
+                },
+                message: `下载进度: ${progress.percentage}%`
               })
             }
-            logger.info(`下载进度: ${progress.percentage}% (${progress.loaded}/${progress.total})`)
+            logger.info(`下载进度: ${progress.percentage}%`)
           },
-          // 日志回调
-          (message, type = 'info') => {
+          onLog: (message, type = 'info') => {
             if (io && socketId) {
               io.to(socketId).emit('minecraft-download-log', {
                 downloadId,
@@ -219,58 +244,50 @@ router.post('/download', async (req: Request, res: Response) => {
               })
             }
             logger.info(`[${type.toUpperCase()}] ${message}`)
-          },
-          // 下载ID
-          downloadId
-        )
-        
-        // 将下载器添加到活跃下载列表
-        activeDownloads.set(downloadId, downloader)
-        
-        // 执行下载
-        await downloader.downloadServer({
-          server,
-          version,
-          targetDirectory: absoluteTargetDir,
-          skipJavaCheck,
-          skipServerRun
+          }
         })
         
-        logger.info(`Minecraft服务端下载完成: ${server} ${version}`)
-        
-        // 从活跃下载列表中移除
-        activeDownloads.delete(downloadId)
-        
-        // 下载完成，发送完成事件
-        if (io && socketId) {
-          io.to(socketId).emit('minecraft-download-complete', {
-            downloadId,
-            success: true,
-            data: {
-              server,
-              version,
-              targetDirectory: absoluteTargetDir
-            },
-            message: `${server} ${version} 下载完成！可以创建实例了`
-          })
+        if (result.success) {
+          logger.info(`Minecraft服务端下载完成: ${server} ${version}`)
+          
+          // 下载完成，发送完成事件
+          if (io && socketId) {
+            io.to(socketId).emit('minecraft-download-complete', {
+              downloadId,
+              success: true,
+              data: {
+                server,
+                version,
+                targetDirectory: absoluteTargetDir
+              },
+              message: `${server} ${version} 下载完成！可以创建实例了`
+            })
+          }
+        } else {
+          throw new Error(result.message)
         }
         
       } catch (error: any) {
         logger.error('Minecraft服务端下载失败:', error)
         
-        // 从活跃下载列表中移除
-        activeDownloads.delete(downloadId)
-        
         // 发送错误事件
         if (io && socketId) {
           io.to(socketId).emit('minecraft-download-error', {
             downloadId,
-            success: false,
             error: error.message || 'Minecraft服务端下载失败'
           })
         }
       }
     })()
+    
+    // 立即返回响应
+     res.json({
+       success: true,
+       data: {
+         downloadId
+       },
+       message: '开始下载Minecraft服务端'
+     })
     
   } catch (error: any) {
     logger.error('启动Minecraft服务端下载失败:', error)
@@ -351,4 +368,4 @@ router.post('/create-instance', async (req: Request, res: Response) => {
   }
 })
 
-export default router
+export { router as minecraftRouter, setMinecraftDependencies }
