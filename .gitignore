@@ -14,6 +14,7 @@ login_attempts.json
 scheduled-tasks.json
 steamcmd-config.json
 terminal-sessions.json
+captchas.json
 users.json
 
 dist/
