@@ -96,7 +96,7 @@ const SettingsPage: React.FC = () => {
   // SteamCMD设置状态
   const [steamcmdSettings, setSteamcmdSettings] = useState({
     installMode: 'online' as 'online' | 'manual',
-    installPath: '',
+    installPath: '/home/steam/steamcmd',
     isInstalled: false,
     version: '',
     lastChecked: ''
