@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express'
 import { SystemManager } from '../modules/system/SystemManager.js'
+import { authenticateToken } from '../middleware/auth.js'
 import logger from '../utils/logger.js'
 import os from 'os'
 import fs from 'fs/promises'
@@ -475,6 +476,27 @@ router.get('/time', (req: Request, res: Response) => {
     res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : '获取时间失败'
+    })
+  }
+})
+
+// 获取活跃端口
+router.get('/ports', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    if (!systemManager) {
+      return res.status(500).json({ error: '系统管理器未初始化' })
+    }
+    
+    const ports = await systemManager.getActivePorts()
+    res.json({
+      success: true,
+      data: ports
+    })
+  } catch (error) {
+    logger.error('获取活跃端口失败:', error)
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : '获取活跃端口失败'
     })
   }
 })

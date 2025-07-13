@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '@/stores/authStore'
-import { SystemStats, SystemInfo, ProcessInfo, WeatherData } from '@/types'
+import { SystemStats, SystemInfo, ProcessInfo, WeatherData, ActivePort } from '@/types'
 import socketClient from '@/utils/socket'
 import apiClient from '@/utils/api'
 import {
@@ -12,7 +12,9 @@ import {
   Server,
   Activity,
   Terminal,
-  ArrowRight
+  ArrowRight,
+  Wifi,
+  Search
 } from 'lucide-react'
 import MusicPlayer from '@/components/MusicPlayer'
 
@@ -64,6 +66,11 @@ const HomePage: React.FC = () => {
   const [currentDateTime, setCurrentDateTime] = useState(new Date())
   const [weatherData, setWeatherData] = useState<WeatherData | null>(null)
   const [weatherLoading, setWeatherLoading] = useState(false)
+  const [activePorts, setActivePorts] = useState<ActivePort[]>([])
+  const [portsLoading, setPortsLoading] = useState(false)
+  const [isFirstPortsLoad, setIsFirstPortsLoad] = useState(true)
+  const [portSearchQuery, setPortSearchQuery] = useState('')
+  const [filteredPorts, setFilteredPorts] = useState<ActivePort[]>([])
   
   useEffect(() => {
     // 获取系统信息
@@ -90,11 +97,53 @@ const HomePage: React.FC = () => {
       }
     }
     
+    // 获取活跃端口列表
+    const fetchActivePorts = async () => {
+      try {
+        // 只有在首次加载时才设置loading为true
+        if (isFirstPortsLoad) {
+          setPortsLoading(true)
+        }
+        const response = await apiClient.getActivePorts()
+        if (response.success) {
+          setActivePorts(response.data)
+        }
+      } catch (error) {
+        console.error('获取活跃端口失败:', error)
+      } finally {
+        if (isFirstPortsLoad) {
+          setPortsLoading(false)
+          setIsFirstPortsLoad(false)
+        }
+      }
+    }
+    
     fetchSystemInfo()
     fetchTerminalProcesses()
+    fetchActivePorts()
     
     // 设置定时刷新终端进程列表
     const processInterval = setInterval(fetchTerminalProcesses, 5000) // 每5秒刷新一次
+    
+    // 设置定时刷新活跃端口列表（仅在连接时刷新）
+    let portsInterval: NodeJS.Timeout | null = null
+    
+    const startPortsRefresh = () => {
+      if (portsInterval) clearInterval(portsInterval)
+      portsInterval = setInterval(fetchActivePorts, 10000) // 每10秒刷新一次
+    }
+    
+    const stopPortsRefresh = () => {
+      if (portsInterval) {
+        clearInterval(portsInterval)
+        portsInterval = null
+      }
+    }
+    
+    // 如果已连接则开始刷新
+    if (socketClient.isConnected()) {
+      startPortsRefresh()
+    }
     
     // 设置定时更新日期时间
     const dateTimeInterval = setInterval(() => {
@@ -154,6 +203,12 @@ const HomePage: React.FC = () => {
     // 监听Socket连接状态
     socketClient.on('connection-status', ({ connected }) => {
       setConnected(connected)
+      // 根据连接状态控制端口刷新
+      if (connected) {
+        startPortsRefresh()
+      } else {
+        stopPortsRefresh()
+      }
     })
     
     // 监听系统状态更新
@@ -169,10 +224,25 @@ const HomePage: React.FC = () => {
       socketClient.off('system-stats')
       socketClient.emit('unsubscribe-system-stats')
       clearInterval(processInterval)
+      stopPortsRefresh()
       clearInterval(dateTimeInterval)
       clearInterval(weatherInterval)
     }
   }, [])
+  
+  // 处理端口搜索过滤
+  useEffect(() => {
+    if (portSearchQuery.trim() === '') {
+      setFilteredPorts(activePorts)
+    } else {
+      const filtered = activePorts.filter(port => 
+        port.port.toString().includes(portSearchQuery) ||
+        port.protocol.toLowerCase().includes(portSearchQuery.toLowerCase()) ||
+        port.address.toLowerCase().includes(portSearchQuery.toLowerCase())
+      )
+      setFilteredPorts(filtered)
+    }
+  }, [activePorts, portSearchQuery])
   
   const formatBytes = (bytes: number) => {
     if (bytes === 0) return '0 B'
@@ -396,13 +466,13 @@ const HomePage: React.FC = () => {
         </div>
       )}
       
-      {/* 终端占用和音乐播放器 */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {/* 终端占用、活跃端口和音乐播放器 */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* 终端占用模块 */}
         <div className="card-game p-6">
           <div className="flex items-center space-x-3 mb-4">
             <Terminal className="w-6 h-6 text-orange-500" />
-            <h3 className="text-lg font-semibold text-black dark:text-white">终端占用</h3>
+            <h3 className="text-lg font-semibold text-black dark:text-white">活跃终端</h3>
             <span className="text-sm text-gray-600 dark:text-gray-400">({processList.length} 个进程)</span>
           </div>
           
@@ -438,6 +508,82 @@ const HomePage: React.FC = () => {
             <div className="text-center py-8 text-gray-500 dark:text-gray-400">
               <Terminal className="w-12 h-12 mx-auto mb-3 opacity-50" />
               <p>暂无终端进程运行</p>
+            </div>
+          )}
+        </div>
+        
+        {/* 活跃端口模块 */}
+        <div className="card-game p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center space-x-3">
+              <Wifi className="w-6 h-6 text-cyan-500" />
+              <h3 className="text-lg font-semibold text-black dark:text-white">活跃端口</h3>
+              <span className="text-sm text-gray-600 dark:text-gray-400">({filteredPorts.length}/{activePorts.length} 个端口)</span>
+            </div>
+          </div>
+          
+          {/* 搜索框 */}
+          <div className="relative mb-4">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input
+              type="text"
+              placeholder="搜索端口号、协议或地址..."
+              value={portSearchQuery}
+              onChange={(e) => setPortSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-black dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
+            />
+          </div>
+          
+          {portsLoading && isFirstPortsLoad ? (
+            <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+              <Wifi className="w-12 h-12 mx-auto mb-3 opacity-50 animate-pulse" />
+              <p>正在扫描端口...</p>
+            </div>
+          ) : filteredPorts.length > 0 ? (
+            <div className="space-y-3">
+              <div className="grid grid-cols-4 gap-4 text-sm font-medium text-gray-600 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700 pb-2">
+                <span>端口</span>
+                <span>协议</span>
+                <span>状态</span>
+                <span>地址</span>
+              </div>
+              
+              <div className="max-h-64 overflow-y-auto space-y-2">
+                {filteredPorts.slice(0, 20).map((port, index) => (
+                  <div key={`${port.protocol}-${port.port}-${port.address}-${index}`} className="grid grid-cols-4 gap-4 text-sm py-2 hover:bg-gray-50 dark:hover:bg-gray-800 rounded">
+                    <span className="text-blue-600 dark:text-blue-400 font-mono font-bold">
+                      {port.port}
+                    </span>
+                    <span className={`font-medium ${
+                      port.protocol === 'tcp' ? 'text-green-600 dark:text-green-400' : 'text-orange-600 dark:text-orange-400'
+                    }`}>
+                      {port.protocol.toUpperCase()}
+                    </span>
+                    <span className="text-gray-700 dark:text-gray-300 text-xs">
+                      {port.state}
+                    </span>
+                    <span className="text-gray-600 dark:text-gray-400 text-xs truncate" title={port.address}>
+                      {port.address}
+                    </span>
+                  </div>
+                ))}
+                {filteredPorts.length > 20 && (
+                  <div className="text-center text-sm text-gray-500 dark:text-gray-400 py-2">
+                    还有 {filteredPorts.length - 20} 个端口未显示
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : activePorts.length > 0 ? (
+            <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+              <Search className="w-12 h-12 mx-auto mb-3 opacity-50" />
+              <p>未找到匹配的端口</p>
+              <p className="text-xs mt-1">尝试搜索其他关键词</p>
+            </div>
+          ) : (
+            <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+              <Wifi className="w-12 h-12 mx-auto mb-3 opacity-50" />
+              <p>暂无活跃端口</p>
             </div>
           )}
         </div>

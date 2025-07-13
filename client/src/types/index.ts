@@ -99,6 +99,15 @@ export interface ProcessInfo {
   command: string
 }
 
+export interface ActivePort {
+  port: number
+  protocol: 'tcp' | 'udp'
+  state: string
+  process?: string
+  pid?: number
+  address: string
+}
+
 // 游戏相关类型
 export interface GameServer {
   id: string

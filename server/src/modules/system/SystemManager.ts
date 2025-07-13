@@ -90,6 +90,15 @@ interface NetworkInterface {
   cidr: string
 }
 
+interface ActivePort {
+  port: number
+  protocol: 'tcp' | 'udp'
+  state: string
+  process?: string
+  pid?: number
+  address: string
+}
+
 interface SystemAlert {
   id: string
   type: 'cpu' | 'memory' | 'disk' | 'network' | 'process'
@@ -669,6 +678,119 @@ export class SystemManager extends EventEmitter {
     const unit = match[2] || ''
     
     return Math.floor(value * (units[unit] || 1))
+  }
+
+  /**
+   * 获取活跃端口列表
+   */
+  public async getActivePorts(): Promise<ActivePort[]> {
+    try {
+      let command: string
+      
+      if (os.platform() === 'win32') {
+        // Windows: 使用 netstat 命令
+        command = 'netstat -ano'
+      } else {
+        // Linux/Unix: 使用 netstat 或 ss 命令
+        command = 'netstat -tulpn 2>/dev/null || ss -tulpn'
+      }
+      
+      const { stdout } = await execAsync(command)
+      const result: ActivePort[] = []
+      const lines = stdout.trim().split('\n')
+      
+      for (const line of lines) {
+        const trimmedLine = line.trim()
+        if (!trimmedLine || trimmedLine.includes('Proto') || trimmedLine.includes('Active')) {
+          continue
+        }
+        
+        if (os.platform() === 'win32') {
+          // Windows netstat 输出格式解析
+          const parts = trimmedLine.split(/\s+/)
+          if (parts.length >= 4) {
+            const protocol = parts[0].toLowerCase()
+            const localAddress = parts[1]
+            const state = parts[3] || 'UNKNOWN'
+            const pid = parts[4] ? parseInt(parts[4]) : undefined
+            
+            // 解析地址和端口
+            const addressMatch = localAddress.match(/^(.+):(\d+)$/)
+            if (addressMatch) {
+              const address = addressMatch[1] === '0.0.0.0' ? '所有接口' : addressMatch[1]
+              const port = parseInt(addressMatch[2])
+              
+              if (port > 0 && (protocol === 'tcp' || protocol === 'udp')) {
+                result.push({
+                  port,
+                  protocol: protocol as 'tcp' | 'udp',
+                  state: state === 'LISTENING' ? '监听中' : state,
+                  pid,
+                  address
+                })
+              }
+            }
+          }
+        } else {
+          // Linux/Unix netstat/ss 输出格式解析
+          const parts = trimmedLine.split(/\s+/)
+          if (parts.length >= 4) {
+            const protocol = parts[0].toLowerCase()
+            const localAddress = parts[3] || parts[4] // netstat vs ss 格式差异
+            const state = parts[5] || 'UNKNOWN'
+            
+            // 解析进程信息 (如果有)
+            let processInfo = ''
+            let pid: number | undefined
+            const processMatch = trimmedLine.match(/(\d+)\/([^\s]+)/)
+            if (processMatch) {
+              pid = parseInt(processMatch[1])
+              processInfo = processMatch[2]
+            }
+            
+            // 解析地址和端口
+            const addressMatch = localAddress.match(/^(.+?):(\d+)$/)
+            if (addressMatch) {
+              let address = addressMatch[1]
+              if (address === '0.0.0.0' || address === '::') {
+                address = '所有接口'
+              } else if (address === '127.0.0.1' || address === '::1') {
+                address = '本地回环'
+              }
+              
+              const port = parseInt(addressMatch[2])
+              
+              if (port > 0 && (protocol.includes('tcp') || protocol.includes('udp'))) {
+                const protocolType = protocol.includes('tcp') ? 'tcp' : 'udp'
+                result.push({
+                  port,
+                  protocol: protocolType,
+                  state: state === 'LISTEN' ? '监听中' : state,
+                  process: processInfo || undefined,
+                  pid,
+                  address
+                })
+              }
+            }
+          }
+        }
+      }
+      
+      // 按端口号排序并去重
+      const uniquePorts = new Map<string, ActivePort>()
+      for (const port of result) {
+        const key = `${port.protocol}-${port.port}-${port.address}`
+        if (!uniquePorts.has(key)) {
+          uniquePorts.set(key, port)
+        }
+      }
+      
+      return Array.from(uniquePorts.values()).sort((a, b) => a.port - b.port)
+      
+    } catch (error) {
+      this.logger.error('获取活跃端口失败:', error)
+      return []
+    }
   }
 
   /**

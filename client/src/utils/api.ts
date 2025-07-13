@@ -228,6 +228,10 @@ class ApiClient {
     return this.get('/system/stats')
   }
 
+  async getActivePorts() {
+    return this.get('/system/ports')
+  }
+
   async getSystemInfo() {
     return this.get('/system/info')
   }
