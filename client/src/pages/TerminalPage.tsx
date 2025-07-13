@@ -45,6 +45,7 @@ const TerminalPage: React.FC = () => {
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [sessionsLoaded, setSessionsLoaded] = useState(false)
   const [showCreateModal, setShowCreateModal] = useState(false)
+  const [createModalAnimating, setCreateModalAnimating] = useState(false)
   const [createModalData, setCreateModalData] = useState({
     name: '',
     workingDirectory: '',
@@ -115,17 +116,23 @@ const TerminalPage: React.FC = () => {
       programPath: ''
     })
     setShowCreateModal(true)
+    // 延迟设置动画状态，确保DOM已渲染
+    setTimeout(() => setCreateModalAnimating(true), 10)
   }, [])
 
   // 关闭创建终端模态框
   const closeCreateModal = useCallback(() => {
-    setShowCreateModal(false)
-    setCreateModalData({
-      name: '',
-      workingDirectory: '',
-      enableStreamForward: false,
-      programPath: ''
-    })
+    setCreateModalAnimating(false)
+    // 等待淡出动画完成后再隐藏模态框
+    setTimeout(() => {
+      setShowCreateModal(false)
+      setCreateModalData({
+        name: '',
+        workingDirectory: '',
+        enableStreamForward: false,
+        programPath: ''
+      })
+    }, 300) // 300ms 动画时长
   }, [])
 
   // 创建新的终端会话
@@ -1604,8 +1611,18 @@ const TerminalPage: React.FC = () => {
       
       {/* 创建终端模态框 */}
       {showCreateModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-gray-800 rounded-lg shadow-xl w-full max-w-md">
+        <div 
+          className={`fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 transition-opacity duration-300 ${
+            createModalAnimating ? 'opacity-100' : 'opacity-0'
+          }`}
+        >
+          <div 
+            className={`bg-gray-800 rounded-lg shadow-xl w-full max-w-md transform transition-all duration-300 ${
+              createModalAnimating 
+                ? 'opacity-100 scale-100 translate-y-0' 
+                : 'opacity-0 scale-95 translate-y-4'
+            }`}
+          >
             <div className="p-6">
               <div className="flex items-center justify-between mb-6">
                 <h3 className="text-lg font-semibold text-white">创建新终端</h3>
