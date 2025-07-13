@@ -490,7 +490,8 @@ export class TerminalManager {
           ...process.env,
           TERM: 'xterm-256color',
           COLORTERM: 'truecolor'
-        }
+        },
+        detached: os.platform() !== 'win32' // 在非Windows平台创建独立进程组
       })
       
       session.streamForwardProcess = forwardProcess
@@ -692,30 +693,47 @@ export class TerminalManager {
       
       // 检查是否为Ctrl+C信号 (ASCII码3)
       if (inputData === '\x03') {
-        this.logger.info(`检测到Ctrl+C信号，转发到进程: ${sessionId}`)
+        this.logger.info(`检测到Ctrl+C信号: ${sessionId}`)
         
-        // 如果有输出流转发进程，强制终止它
+        // 如果有输出流转发进程，优先处理它
         if (session.streamForwardProcess && !session.streamForwardProcess.killed) {
-          this.forceKillProcess(session.streamForwardProcess, '输出流转发进程', () => {
-            session.streamForwardProcess = undefined
-          })
-        }
-        
-        // 同时向PTY进程发送Ctrl+C
-        if (session.process.stdin && !session.process.stdin.destroyed) {
-          session.process.stdin.write(inputData)
-        }
-        
-        // 如果PTY进程有PID，也尝试发送SIGINT信号
-        if (session.process.pid && !session.process.killed) {
-          try {
-            process.kill(session.process.pid, 'SIGINT')
-            this.logger.info(`已向PTY进程发送SIGINT信号: ${session.process.pid}`)
-          } catch (error) {
-            this.logger.warn(`向PTY进程发送SIGINT信号失败:`, error)
+          const pid = session.streamForwardProcess.pid
+          this.logger.info(`向输出流转发进程(PID: ${pid})及其子进程发送关闭信号...`)
+
+          if (os.platform() === 'win32') {
+            // 在Windows上，使用 taskkill /T 来优雅地终止整个进程树
+            exec(`taskkill /PID ${pid} /T`, (err) => {
+              if (err) {
+                this.logger.error(`使用 taskkill /T 终止进程树 PID: ${pid} 失败:`, err)
+                // 如果 taskkill 失败, 可能是进程已经退出.
+                // 作为后备，仍然可以尝试原来的方法
+                try {
+                  session.streamForwardProcess.kill('SIGINT')
+                } catch (killError) {
+                  this.logger.error(`后备的 kill SIGINT 信号也失败了:`, killError)
+                }
+              } else {
+                this.logger.info(`成功通过 taskkill /T 向进程树 PID: ${pid} 发送关闭信号`)
+              }
+            })
+          } else {
+            // 在 Linux/macOS上，向整个进程组发送 SIGINT
+            try {
+              // process.kill 的 PID 为负数时，会向整个进程组发送信号
+              process.kill(-pid, 'SIGINT')
+              this.logger.info(`成功向进程组 -${pid} 发送 SIGINT 信号`)
+            } catch (error) {
+              this.logger.error(`向进程组 -${pid} 发送SIGINT失败，将只发送给主进程:`, error)
+              session.streamForwardProcess.kill('SIGINT')
+            }
+          }
+        } else {
+          // 如果没有输出流转发进程，则将Ctrl+C发送到PTY进程
+          this.logger.info(`向 PTY 进程发送 Ctrl+C: ${sessionId}`)
+          if (session.process.stdin && !session.process.stdin.destroyed) {
+            session.process.stdin.write(inputData)
           }
         }
-        
         return
       }
       
