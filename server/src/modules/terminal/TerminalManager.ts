@@ -25,6 +25,9 @@ interface PtySession {
   disconnected?: boolean
   disconnectedAt?: Date
   outputBuffer: string[] // 存储终端输出历史
+  streamForwardProcess?: ChildProcess // 输出流转发进程
+  enableStreamForward?: boolean // 是否启用输出流转发
+  programPath?: string // 程序启动参数的绝对路径
 }
 
 interface CreatePtyData {
@@ -33,6 +36,8 @@ interface CreatePtyData {
   cols: number
   rows: number
   workingDirectory?: string
+  enableStreamForward?: boolean // 是否启用输出流转发
+  programPath?: string // 程序启动参数的绝对路径
 }
 
 interface TerminalInputData {
@@ -101,8 +106,60 @@ export class TerminalManager {
    */
   public createPty(socket: Socket, data: CreatePtyData): void {
     try {
-      const { sessionId, name, cols, rows, workingDirectory = process.cwd() } = data
+      const { sessionId, name, cols, rows, workingDirectory = process.cwd(), enableStreamForward = false, programPath } = data
       const sessionName = name || `终端会话 ${sessionId.slice(-8)}`
+      
+      // 验证输出流转发参数
+      if (enableStreamForward && os.platform() !== 'win32') {
+        this.logger.warn(`输出流转发功能仅在Windows平台支持，当前平台: ${os.platform()}`)
+        socket.emit('terminal-error', {
+          sessionId,
+          error: '输出流转发功能仅在Windows平台支持'
+        })
+        return
+      }
+      
+      if (enableStreamForward && !programPath) {
+        this.logger.warn(`启用输出流转发时必须提供程序启动命令`)
+        socket.emit('terminal-error', {
+          sessionId,
+          error: '启用输出流转发时必须提供程序启动命令'
+        })
+        return
+      }
+      
+      if (enableStreamForward && programPath) {
+        // 解析命令行，检查可执行文件路径是否为绝对路径
+        const commandLine = programPath.trim()
+        let executablePath: string
+        
+        if (commandLine.startsWith('"')) {
+          // 处理带引号的可执行文件路径
+          const endQuoteIndex = commandLine.indexOf('"', 1)
+          if (endQuoteIndex === -1) {
+            this.logger.warn(`未找到匹配的引号: ${commandLine}`)
+            socket.emit('terminal-error', {
+              sessionId,
+              error: '未找到匹配的引号'
+            })
+            return
+          }
+          executablePath = commandLine.substring(1, endQuoteIndex)
+        } else {
+          // 处理不带引号的路径
+          const parts = commandLine.split(/\s+/)
+          executablePath = parts[0]
+        }
+        
+        if (!path.isAbsolute(executablePath)) {
+          this.logger.warn(`可执行文件路径必须是绝对路径: ${executablePath}`)
+          socket.emit('terminal-error', {
+            sessionId,
+            error: '可执行文件路径必须是绝对路径'
+          })
+          return
+        }
+      }
       
       this.logger.info(`创建PTY会话: ${sessionId} (${sessionName}), 大小: ${cols}x${rows}`)
       
@@ -150,7 +207,9 @@ export class TerminalManager {
         workingDirectory,
         createdAt: new Date(),
         lastActivity: new Date(),
-        outputBuffer: []
+        outputBuffer: [],
+        enableStreamForward,
+        programPath
       }
       
       // 保存会话到内存
@@ -225,6 +284,11 @@ export class TerminalManager {
         this.sessions.delete(sessionId)
       })
       
+      // 如果启用了输出流转发，启动转发进程
+      if (enableStreamForward && programPath) {
+        this.startStreamForwardProcess(session, programPath)
+      }
+      
       // 发送创建成功事件
       socket.emit('pty-created', {
         sessionId,
@@ -246,6 +310,121 @@ export class TerminalManager {
       socket.emit('terminal-error', {
         sessionId: data.sessionId,
         error: error instanceof Error ? error.message : '未知错误'
+      })
+    }
+  }
+
+  /**
+   * 启动输出流转发进程
+   */
+  private startStreamForwardProcess(session: PtySession, programPath: string): void {
+    try {
+      this.logger.info(`启动输出流转发进程: ${programPath}`)
+      
+      // 解析程序路径和参数
+      // 支持带引号的路径，例如: "C:\\Program Files\\MyApp\\app.exe" arg1 arg2
+      const commandLine = programPath.trim()
+      let executablePath: string
+      let args: string[]
+      
+      if (commandLine.startsWith('"')) {
+        // 处理带引号的可执行文件路径
+        const endQuoteIndex = commandLine.indexOf('"', 1)
+        if (endQuoteIndex === -1) {
+          throw new Error('未找到匹配的引号')
+        }
+        executablePath = commandLine.substring(1, endQuoteIndex)
+        const remainingArgs = commandLine.substring(endQuoteIndex + 1).trim()
+        args = remainingArgs ? remainingArgs.split(/\s+/) : []
+      } else {
+        // 处理不带引号的路径
+        const parts = commandLine.split(/\s+/)
+        executablePath = parts[0]
+        args = parts.slice(1)
+      }
+      
+      this.logger.info(`可执行文件路径: ${executablePath}`)
+      this.logger.info(`参数列表: ${JSON.stringify(args)}`)
+      
+      // 启动目标程序进程
+      const forwardProcess = spawn(executablePath, args, {
+        stdio: ['pipe', 'pipe', 'pipe'],
+        cwd: session.workingDirectory,
+        env: {
+          ...process.env,
+          TERM: 'xterm-256color',
+          COLORTERM: 'truecolor'
+        }
+      })
+      
+      session.streamForwardProcess = forwardProcess
+      
+      this.logger.info(`输出流转发进程已启动，PID: ${forwardProcess.pid}`)
+      
+      // 处理转发进程的输出，将其转发到终端
+      forwardProcess.stdout?.on('data', (data: Buffer) => {
+        session.lastActivity = new Date()
+        const output = data.toString()
+        
+        // 保存到输出缓存
+        session.outputBuffer.push(output)
+        if (session.outputBuffer.length > 1000) {
+          session.outputBuffer.shift()
+        }
+        
+        this.logger.debug(`转发进程输出 ${session.id}: ${JSON.stringify(output)}`)
+        session.socket.emit('terminal-output', {
+          sessionId: session.id,
+          data: output
+        })
+      })
+      
+      // 处理转发进程的错误输出
+      forwardProcess.stderr?.on('data', (data: Buffer) => {
+        session.lastActivity = new Date()
+        const output = data.toString()
+        
+        // 保存到输出缓存
+        session.outputBuffer.push(output)
+        if (session.outputBuffer.length > 1000) {
+          session.outputBuffer.shift()
+        }
+        
+        this.logger.warn(`转发进程错误输出 ${session.id}: ${JSON.stringify(output)}`)
+        session.socket.emit('terminal-output', {
+          sessionId: session.id,
+          data: output
+        })
+      })
+      
+      // 处理转发进程退出
+      forwardProcess.on('exit', (code, signal) => {
+        this.logger.info(`转发进程退出: ${session.id}, 退出码: ${code}, 信号: ${signal}`)
+        session.socket.emit('terminal-output', {
+          sessionId: session.id,
+          data: `\r\n[转发进程已退出，退出码: ${code}]\r\n`
+        })
+        session.streamForwardProcess = undefined
+      })
+      
+      // 处理转发进程错误
+      forwardProcess.on('error', (error) => {
+        this.logger.error(`转发进程错误 ${session.id}:`, error)
+        session.socket.emit('terminal-output', {
+          sessionId: session.id,
+          data: `\r\n[转发进程错误: ${error.message}]\r\n`
+        })
+        session.streamForwardProcess = undefined
+      })
+      
+      // 将终端输入转发到目标进程
+      // 注意：这里我们不直接转发所有输入，而是让用户通过特殊命令来与转发进程交互
+      
+    } catch (error) {
+      this.logger.error(`启动输出流转发进程失败:`, error)
+      session.socket.emit('terminal-output', {
+        sessionId: session.id,
+        data: `\r\n[启动转发进程失败: ${error instanceof Error ? error.message : '未知错误'}]\r\n`
       })
     }
   }
@@ -354,6 +533,19 @@ export class TerminalManager {
       }
       
       this.logger.info(`关闭PTY会话: ${sessionId}`)
+      
+      // 终止输出流转发进程
+      if (session.streamForwardProcess && !session.streamForwardProcess.killed) {
+        this.logger.info(`终止输出流转发进程: ${sessionId}`)
+        session.streamForwardProcess.kill('SIGTERM')
+        
+        // 如果进程在3秒内没有退出，强制杀死
+        setTimeout(() => {
+          if (session.streamForwardProcess && !session.streamForwardProcess.killed) {
+            session.streamForwardProcess.kill('SIGKILL')
+          }
+        }, 3000)
+      }
       
       // 终止PTY进程
       if (!session.process.killed) {
@@ -666,6 +858,13 @@ export class TerminalManager {
     
     for (const [sessionId, session] of this.sessions.entries()) {
       try {
+        // 清理输出流转发进程
+        if (session.streamForwardProcess && !session.streamForwardProcess.killed) {
+          this.logger.info(`清理输出流转发进程: ${sessionId}`)
+          session.streamForwardProcess.kill('SIGTERM')
+        }
+        
+        // 清理PTY进程
         if (!session.process.killed) {
           session.process.kill('SIGTERM')
         }

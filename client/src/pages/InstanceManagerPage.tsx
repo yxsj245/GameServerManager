@@ -91,7 +91,9 @@ const InstanceManagerPage: React.FC = () => {
     workingDirectory: '',
     startCommand: '',
     autoStart: false,
-    stopCommand: 'ctrl+c'
+    stopCommand: 'ctrl+c',
+    enableStreamForward: false,
+    programPath: ''
   })
 
   // 游戏配置相关状态
@@ -403,6 +405,29 @@ const InstanceManagerPage: React.FC = () => {
   // 创建实例
   const handleCreateInstance = async () => {
     try {
+      // 验证输出流转发配置
+      if (formData.enableStreamForward && formData.programPath) {
+        // 解析程序路径，支持带引号的路径
+        let executablePath = formData.programPath.trim()
+        if (executablePath.startsWith('"') && executablePath.includes('"', 1)) {
+          const endQuoteIndex = executablePath.indexOf('"', 1)
+          executablePath = executablePath.substring(1, endQuoteIndex)
+        } else {
+          executablePath = executablePath.split(' ')[0]
+        }
+        
+        // 检查是否为绝对路径（Windows: C:\ 或 D:\ 等，Unix: /开头）
+        const isAbsolute = /^([a-zA-Z]:\\|\/)/.test(executablePath)
+        if (!isAbsolute) {
+          addNotification({
+            type: 'error',
+            title: '验证失败',
+            message: '启用输出流转发时必须提供程序启动命令的绝对路径'
+          })
+          return
+        }
+      }
+      
       const response = await apiClient.createInstance(formData)
       if (response.success) {
         addNotification({
@@ -437,6 +462,29 @@ const InstanceManagerPage: React.FC = () => {
     if (!editingInstance) return
     
     try {
+      // 验证输出流转发配置
+      if (formData.enableStreamForward && formData.programPath) {
+        // 解析程序路径，支持带引号的路径
+        let executablePath = formData.programPath.trim()
+        if (executablePath.startsWith('"') && executablePath.includes('"', 1)) {
+          const endQuoteIndex = executablePath.indexOf('"', 1)
+          executablePath = executablePath.substring(1, endQuoteIndex)
+        } else {
+          executablePath = executablePath.split(' ')[0]
+        }
+        
+        // 检查是否为绝对路径（Windows: C:\ 或 D:\ 等，Unix: /开头）
+        const isAbsolute = /^([a-zA-Z]:\\|\/)/.test(executablePath)
+        if (!isAbsolute) {
+          addNotification({
+            type: 'error',
+            title: '验证失败',
+            message: '启用输出流转发时必须提供程序启动命令的绝对路径'
+          })
+          return
+        }
+      }
+      
       const response = await apiClient.updateInstance(editingInstance.id, formData)
       if (response.success) {
         addNotification({
@@ -700,7 +748,9 @@ const InstanceManagerPage: React.FC = () => {
       workingDirectory: '',
       startCommand: '',
       autoStart: false,
-      stopCommand: 'ctrl+c'
+      stopCommand: 'ctrl+c',
+      enableStreamForward: false,
+      programPath: ''
     })
   }
 
@@ -733,7 +783,9 @@ const InstanceManagerPage: React.FC = () => {
       workingDirectory: instance.workingDirectory,
       startCommand: instance.startCommand,
       autoStart: instance.autoStart,
-      stopCommand: instance.stopCommand
+      stopCommand: instance.stopCommand,
+      enableStreamForward: instance.enableStreamForward || false,
+      programPath: instance.programPath || ''
     })
     setShowCreateModal(true)
     setTimeout(() => setCreateModalAnimating(true), 10)
@@ -1475,6 +1527,37 @@ const InstanceManagerPage: React.FC = () => {
                   自动启动
                 </label>
               </div>
+              
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  id="enableStreamForward"
+                  checked={formData.enableStreamForward}
+                  onChange={(e) => setFormData({ ...formData, enableStreamForward: e.target.checked })}
+                  className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
+                />
+                <label htmlFor="enableStreamForward" className="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+                  启用输出流转发
+                </label>
+              </div>
+              
+              {formData.enableStreamForward && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    程序启动命令 *
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.programPath}
+                    onChange={(e) => setFormData({ ...formData, programPath: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder={'"C:\\Program Files\\MyApp\\app.exe" arg1 arg2'}
+                  />
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    可以输入包含参数的完整命令行，如果路径包含空格请使用引号包围
+                  </p>
+                </div>
+              )}
             </div>
             
             <div className="flex items-center justify-end space-x-3 mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
@@ -1486,7 +1569,7 @@ const InstanceManagerPage: React.FC = () => {
               </button>
               <button
                 onClick={editingInstance ? handleUpdateInstance : handleCreateInstance}
-                disabled={!formData.name || !formData.workingDirectory || !formData.startCommand}
+                disabled={!formData.name || !formData.workingDirectory || !formData.startCommand || (formData.enableStreamForward && !formData.programPath)}
                 className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {editingInstance ? '更新' : '创建'}

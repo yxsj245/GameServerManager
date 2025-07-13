@@ -164,7 +164,7 @@ router.post('/', authenticateToken, async (req: Request, res: Response) => {
       })
     }
     
-    const { name, description, workingDirectory, startCommand, autoStart, stopCommand } = req.body
+    const { name, description, workingDirectory, startCommand, autoStart, stopCommand, enableStreamForward, programPath } = req.body
     
     // 验证必填字段
     if (!name || !workingDirectory || !startCommand) {
@@ -190,7 +190,9 @@ router.post('/', authenticateToken, async (req: Request, res: Response) => {
       workingDirectory: workingDirectory.trim(),
       startCommand: startCommand.trim(),
       autoStart: Boolean(autoStart),
-      stopCommand: stopCommand || 'ctrl+c'
+      stopCommand: stopCommand || 'ctrl+c',
+      enableStreamForward: Boolean(enableStreamForward),
+      programPath: programPath?.trim() || ''
     }
     
     const instance = await instanceManager.createInstance(instanceData)
@@ -223,7 +225,7 @@ router.put('/:id', authenticateToken, async (req: Request, res: Response) => {
     }
     
     const { id } = req.params
-    const { name, description, workingDirectory, startCommand, autoStart, stopCommand } = req.body
+    const { name, description, workingDirectory, startCommand, autoStart, stopCommand, enableStreamForward, programPath } = req.body
     
     // 验证必填字段
     if (!name || !workingDirectory || !startCommand) {
@@ -249,7 +251,9 @@ router.put('/:id', authenticateToken, async (req: Request, res: Response) => {
       workingDirectory: workingDirectory.trim(),
       startCommand: startCommand.trim(),
       autoStart: Boolean(autoStart),
-      stopCommand: stopCommand || 'ctrl+c'
+      stopCommand: stopCommand || 'ctrl+c',
+      enableStreamForward: Boolean(enableStreamForward),
+      programPath: programPath?.trim() || ''
     }
     
     const instance = await instanceManager.updateInstance(id, instanceData)

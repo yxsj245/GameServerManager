@@ -18,7 +18,9 @@ import {
   ChevronRight,
   Edit3,
   Check,
-  Folder
+  Folder,
+  FileText,
+  FolderOpen
 } from 'lucide-react'
 import '@xterm/xterm/css/xterm.css'
 
@@ -42,6 +44,13 @@ const TerminalPage: React.FC = () => {
   const [editingName, setEditingName] = useState('')
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [sessionsLoaded, setSessionsLoaded] = useState(false)
+  const [showCreateModal, setShowCreateModal] = useState(false)
+  const [createModalData, setCreateModalData] = useState({
+    name: '',
+    workingDirectory: '',
+    enableStreamForward: false,
+    programPath: ''
+  })
   
   const terminalContainerRef = useRef<HTMLDivElement>(null)
   // 使用useRef来保存最新的sessions状态，避免重复注册事件监听器
@@ -95,12 +104,39 @@ const TerminalPage: React.FC = () => {
     return { cols: isMobile ? 50 : 100, rows: isMobile ? 25 : 30 }
   }, [isMobile])
   
+  // 打开创建终端模态框
+  const openCreateModal = useCallback((cwd?: string) => {
+    setCreateModalData({
+      name: cwd && typeof cwd === 'string' 
+        ? `终端 - ${cwd.split(/[/\\]/).pop()}` 
+        : `终端 ${sessionsRef.current.length + 1}`,
+      workingDirectory: cwd || '',
+      enableStreamForward: false,
+      programPath: ''
+    })
+    setShowCreateModal(true)
+  }, [])
+
+  // 关闭创建终端模态框
+  const closeCreateModal = useCallback(() => {
+    setShowCreateModal(false)
+    setCreateModalData({
+      name: '',
+      workingDirectory: '',
+      enableStreamForward: false,
+      programPath: ''
+    })
+  }, [])
+
   // 创建新的终端会话
-  const createTerminalSession = useCallback((cwd?: string) => {
+  const createTerminalSession = useCallback((options?: {
+    name?: string
+    cwd?: string
+    enableStreamForward?: boolean
+    programPath?: string
+  }) => {
     const sessionId = `terminal-${Date.now()}`
-    const sessionName = cwd && typeof cwd === 'string' 
-      ? `终端 - ${cwd.split(/[/\\]/).pop()}` 
-      : `终端 ${sessionsRef.current.length + 1}`
+    const sessionName = options?.name || `终端 ${sessionsRef.current.length + 1}`
     
     // 计算初始终端大小
     const { cols, rows } = calculateTerminalSize()
@@ -201,7 +237,9 @@ const TerminalPage: React.FC = () => {
       name: sessionName,
       cols: cols,
       rows: rows,
-      cwd: cwd
+      cwd: options?.cwd,
+      enableStreamForward: options?.enableStreamForward,
+      programPath: options?.programPath
     })
 
     addNotification({
@@ -210,6 +248,74 @@ const TerminalPage: React.FC = () => {
       message: `已创建新的终端会话: ${sessionName}`
     })
   }, [addNotification])
+
+  // 处理创建终端表单提交
+  const handleCreateTerminal = useCallback(() => {
+    // 验证输入
+    if (!createModalData.name.trim()) {
+      addNotification({
+        type: 'error',
+        title: '创建失败',
+        message: '请输入终端名称'
+      })
+      return
+    }
+
+    // 如果启用了输出流转发，验证程序路径
+    if (createModalData.enableStreamForward) {
+      if (!createModalData.programPath.trim()) {
+        addNotification({
+          type: 'error',
+          title: '创建失败',
+          message: '启用输出流转发时必须填写程序启动路径'
+        })
+        return
+      }
+
+      // 检查可执行文件路径是否为绝对路径
+      const commandLine = createModalData.programPath.trim()
+      let executablePath: string
+      
+      if (commandLine.startsWith('"')) {
+        // 处理带引号的可执行文件路径
+        const endQuoteIndex = commandLine.indexOf('"', 1)
+        if (endQuoteIndex === -1) {
+          addNotification({
+            type: 'error',
+            title: '创建失败',
+            message: '未找到匹配的引号'
+          })
+          return
+        }
+        executablePath = commandLine.substring(1, endQuoteIndex)
+      } else {
+        // 处理不带引号的路径
+        const parts = commandLine.split(/\s+/)
+        executablePath = parts[0]
+      }
+      
+      const isAbsolutePath = /^[a-zA-Z]:\\/.test(executablePath) || executablePath.startsWith('/')
+      if (!isAbsolutePath) {
+        addNotification({
+          type: 'error',
+          title: '创建失败',
+          message: '可执行文件路径必须是绝对路径'
+        })
+        return
+      }
+    }
+
+    // 创建终端
+    createTerminalSession({
+      name: createModalData.name.trim(),
+      cwd: createModalData.workingDirectory.trim() || undefined,
+      enableStreamForward: createModalData.enableStreamForward,
+      programPath: createModalData.programPath.trim() || undefined
+    })
+
+    // 关闭模态框
+    closeCreateModal()
+  }, [createModalData, addNotification, createTerminalSession, closeCreateModal])
   
   // 关闭终端会话
   const closeTerminalSession = (sessionId: string) => {
@@ -730,7 +836,7 @@ const TerminalPage: React.FC = () => {
     } else if (cwd) {
       // 延迟创建新终端，确保现有会话加载完成
       setTimeout(() => {
-        createTerminalSession(cwd)
+        createTerminalSession({ cwd })
         
         // 确保新创建的终端获得焦点，延迟时间更长
         setTimeout(() => {
@@ -964,7 +1070,7 @@ const TerminalPage: React.FC = () => {
             {shouldShowSidebar && (
               <div className="p-4 border-b border-gray-700/50">
                 <button
-                  onClick={() => createTerminalSession()}
+                  onClick={() => openCreateModal()}
                   className="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center justify-center space-x-2 transition-colors"
                 >
                   <Plus className="w-4 h-4" />
@@ -1126,7 +1232,7 @@ const TerminalPage: React.FC = () => {
         {isMobile && (
           <div className="absolute top-20 left-4 z-10 flex space-x-2">
             <button
-              onClick={() => createTerminalSession()}
+              onClick={() => openCreateModal()}
               className="bg-blue-600 hover:bg-blue-700 text-white p-3 rounded-full shadow-lg transition-colors"
               title="新建终端"
             >
@@ -1265,7 +1371,7 @@ const TerminalPage: React.FC = () => {
         {shouldShowSidebar && (
           <div className="p-4 border-b border-gray-700/50">
             <button
-              onClick={() => createTerminalSession()}
+              onClick={() => openCreateModal()}
               className="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center justify-center space-x-2 transition-colors"
             >
               <Plus className="w-4 h-4" />
@@ -1439,7 +1545,7 @@ const TerminalPage: React.FC = () => {
               <TerminalIcon className="w-16 h-16 text-gray-500 mx-auto mb-4" />
               <p className="text-gray-400 mb-4">暂无终端会话</p>
               <button
-                onClick={() => createTerminalSession()}
+                onClick={() => openCreateModal()}
                 className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg transition-colors"
               >
                 创建第一个终端
@@ -1495,6 +1601,112 @@ const TerminalPage: React.FC = () => {
           </>
         )}
       </div>
+      
+      {/* 创建终端模态框 */}
+      {showCreateModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-gray-800 rounded-lg shadow-xl w-full max-w-md">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-lg font-semibold text-white">创建新终端</h3>
+                <button
+                  onClick={closeCreateModal}
+                  className="text-gray-400 hover:text-white transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              
+              <div className="space-y-4">
+                {/* 终端名称 */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    终端名称
+                  </label>
+                  <input
+                    type="text"
+                    value={createModalData.name}
+                    onChange={(e) => setCreateModalData(prev => ({ ...prev, name: e.target.value }))}
+                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="输入终端名称"
+                  />
+                </div>
+                
+                {/* 工作目录 */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    工作目录 (可选)
+                  </label>
+                  <div className="relative">
+                    <FolderOpen className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <input
+                      type="text"
+                      value={createModalData.workingDirectory}
+                      onChange={(e) => setCreateModalData(prev => ({ ...prev, workingDirectory: e.target.value }))}
+                      className="w-full pl-10 pr-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="留空使用默认目录"
+                    />
+                  </div>
+                </div>
+                
+                {/* Windows平台输出流转发选项 */}
+                {navigator.platform.toLowerCase().includes('win') && (
+                  <>
+                    <div className="flex items-center space-x-3">
+                      <input
+                        type="checkbox"
+                        id="enableStreamForward"
+                        checked={createModalData.enableStreamForward}
+                        onChange={(e) => setCreateModalData(prev => ({ ...prev, enableStreamForward: e.target.checked }))}
+                        className="w-4 h-4 text-blue-600 bg-gray-700 border-gray-600 rounded focus:ring-blue-500 focus:ring-2"
+                      />
+                      <label htmlFor="enableStreamForward" className="text-sm font-medium text-gray-300">
+                        启用输出流转发 (仅Windows)
+                      </label>
+                    </div>
+                    
+                    {createModalData.enableStreamForward && (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-2">
+                          程序启动命令 <span className="text-red-400">*</span>
+                        </label>
+                        <div className="relative">
+                          <FileText className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                          <input
+                            type="text"
+                            value={createModalData.programPath}
+                            onChange={(e) => setCreateModalData(prev => ({ ...prev, programPath: e.target.value }))}
+                            className="w-full pl-10 pr-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            placeholder='例如: "C:\\Program Files\\MyApp\\app.exe" arg1 arg2'
+                          />
+                        </div>
+                        <p className="text-xs text-gray-400 mt-1">
+                          输入完整的程序启动命令（包含参数），可执行文件路径必须是绝对路径，终端将捕获该程序的输出并转发到当前终端
+                        </p>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+              
+              <div className="flex justify-end space-x-3 mt-6">
+                <button
+                  onClick={closeCreateModal}
+                  className="px-4 py-2 text-gray-300 hover:text-white transition-colors"
+                >
+                  取消
+                </button>
+                <button
+                  onClick={handleCreateTerminal}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+                >
+                  创建终端
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

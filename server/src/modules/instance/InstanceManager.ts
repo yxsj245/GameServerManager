@@ -17,6 +17,8 @@ export interface Instance {
   createdAt: string
   lastStarted?: string
   lastStopped?: string
+  enableStreamForward?: boolean
+  programPath?: string
   terminalSessionId?: string
 }
 
@@ -27,6 +29,8 @@ export interface CreateInstanceRequest {
   startCommand: string
   autoStart: boolean
   stopCommand: 'ctrl+c' | 'stop' | 'exit'
+  enableStreamForward?: boolean
+  programPath?: string
 }
 
 export class InstanceManager extends EventEmitter {
@@ -151,7 +155,9 @@ export class InstanceManager extends EventEmitter {
           ...instanceData,
           status: 'stopped', // 重启后所有实例都是停止状态
           pid: undefined,
-          terminalSessionId: undefined
+          terminalSessionId: undefined,
+          enableStreamForward: instanceData.enableStreamForward ?? false,
+          programPath: instanceData.programPath ?? ''
         }
         this.instances.set(instance.id, instance)
       }
@@ -189,7 +195,9 @@ export class InstanceManager extends EventEmitter {
           stopCommand: instance.stopCommand,
           createdAt: instance.createdAt,
           lastStarted: instance.lastStarted,
-          lastStopped: instance.lastStopped
+          lastStopped: instance.lastStopped,
+          enableStreamForward: instance.enableStreamForward,
+          programPath: instance.programPath
         }))
         
         await fs.writeFile(this.configPath, JSON.stringify(instancesData, null, 2))
@@ -406,7 +414,9 @@ export class InstanceManager extends EventEmitter {
         name: `实例: ${instance.name} (${instance.id})`,
         cols: 100,
         rows: 30,
-        workingDirectory: instance.workingDirectory
+        workingDirectory: instance.workingDirectory,
+        enableStreamForward: instance.enableStreamForward || false,
+        programPath: instance.programPath || ''
       })
       
       // 等待终端创建完成
@@ -415,13 +425,17 @@ export class InstanceManager extends EventEmitter {
       // 保存终端会话ID
       instance.terminalSessionId = terminalSessionId
       
-      // 延迟执行启动命令，确保终端完全初始化
-      setTimeout(() => {
-        this.terminalManager.handleInput(virtualSocket, {
-          sessionId: terminalSessionId,
-          data: instance.startCommand + '\r'
-        })
-      }, 1000)
+      // 只有在未启用输出流转发时才执行启动命令
+      // 启用输出流转发时，程序会通过programPath直接启动，避免重复执行
+      if (!instance.enableStreamForward) {
+        // 延迟执行启动命令，确保终端完全初始化
+        setTimeout(() => {
+          this.terminalManager.handleInput(virtualSocket, {
+            sessionId: terminalSessionId,
+            data: instance.startCommand + '\r'
+          })
+        }, 1000)
+      }
       
       // 更新实例状态
       instance.status = 'running'

@@ -280,6 +280,9 @@ export interface Instance {
   createdAt: string
   lastStarted?: string
   lastStopped?: string
+  enableStreamForward?: boolean
+  programPath?: string
+  terminalSessionId?: string
 }
 
 export interface CreateInstanceRequest {
@@ -289,6 +292,8 @@ export interface CreateInstanceRequest {
   startCommand: string
   autoStart: boolean
   stopCommand: 'ctrl+c' | 'stop' | 'exit'
+  enableStreamForward?: boolean
+  programPath?: string
 }
 
 export interface InstanceState {

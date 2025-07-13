@@ -221,7 +221,7 @@ class SocketClient {
   }
 
   // 终端相关方法
-  createTerminal(data: { sessionId: string; name?: string; cols?: number; rows?: number; cwd?: string }) {
+  createTerminal(data: { sessionId: string; name?: string; cols?: number; rows?: number; cwd?: string; enableStreamForward?: boolean; programPath?: string }) {
     this.emit('create-pty', data)
   }
 
