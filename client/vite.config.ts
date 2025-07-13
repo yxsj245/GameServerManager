@@ -30,6 +30,11 @@ export default defineConfig({
   server: {
     host: '0.0.0.0', // 允许网络访问
     port: clientPort,
+    allowedHosts: [
+      'localhost',
+      '127.0.0.1',
+      'project.server.xiaozhuhouses.asia'
+    ],
     proxy: {
       '/api': {
         target: `http://localhost:${serverPort}`,
