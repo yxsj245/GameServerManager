@@ -4,17 +4,26 @@ volumes:
 
 services:
   management_panel:
-    build: .
+    build:
+      context: .
+      args:
+        DEV_MODE: ${DEV_MODE:-false}  # 通过环境变量控制开发模式，默认为false
     container_name: gsm3_management_panel
     #image: gsm3/management-panel:latest  # 替换为你的镜像名称
-    user: root                       
+    user: steam                       
     ports:
       # GSM3管理面板端口
       - "3001:3001"                   # GSM3 Web管理界面
+      - "5173:5173"                   # Vite开发服务器端口（开发模式）
     volumes:
       - ./game_file:/home/steam/.config # 通用游戏存档路径1。请务必将此宿主目录权限设置为777
       - ./game_file:/home/steam/.local  # 通用游戏存档路径2。请务必将此宿主目录权限设置为777
-      - gsm3_data:/root/server/data     # GSM3数据目录（使用命名卷）
+      - gsm3_data:/home/steam/GSManager/server/data     # GSM3数据目录（使用命名卷）
+      # 开发模式下的源代码挂载（用于热重载）
+      - ./client:/home/steam/GSManager/client          # 前端源代码挂载
+      - ./server:/home/steam/GSManager/server          # 后端源代码挂载
+      - ./package.json:/home/steam/GSManager/package.json # 根package.json挂载
+      - ./package-lock.json:/home/steam/GSManager/package-lock.json # 根package-lock.json挂载
     environment:
       - TZ=Asia/Shanghai              # 设置时区
       - SERVER_PORT=3001              # GSM3服务端口

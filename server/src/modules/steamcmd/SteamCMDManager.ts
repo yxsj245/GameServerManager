@@ -26,7 +26,7 @@ export class SteamCMDManager {
   private logger: winston.Logger
   private configManager: ConfigManager
   private readonly WINDOWS_DOWNLOAD_URL = 'https://steamcdn-a.akamaihd.net/client/installer/steamcmd.zip'
-  private readonly LINUX_DOWNLOAD_URL = 'https://media.st.dl.bscstorage.net/client/installer/steamcmd_linux.tar.gz'
+  private readonly LINUX_DOWNLOAD_URL = 'https://steamcdn-a.akamaihd.net/client/installer/steamcmd_linux.tar.gz'
 
   constructor(logger: winston.Logger, configManager: ConfigManager) {
     this.logger = logger

@@ -1,5 +1,11 @@
 FROM debian:bullseye-slim
 
+# 构建参数：是否为开发模式
+ARG DEV_MODE=false
+
+# 将ARG转换为ENV以确保在所有上下文中可用
+ENV DEV_MODE=${DEV_MODE}
+
 ENV DEBIAN_FRONTEND=noninteractive \
     STEAM_USER=steam \
     STEAM_HOME=/home/steam \
@@ -147,7 +153,7 @@ ENV LANG=zh_CN.UTF-8 \
 
 # 创建steam用户和应用目录
 RUN useradd -m -s /bin/bash ${STEAM_USER} \
-    && mkdir -p ${STEAMCMD_DIR} ${GAMES_DIR} /app \
+    && mkdir -p ${STEAMCMD_DIR} ${GAMES_DIR} /app ${STEAM_HOME}/GSManager \
     && chown -R ${STEAM_USER}:${STEAM_USER} ${STEAM_HOME} \
     && chown -R ${STEAM_USER}:${STEAM_USER} /app
 
@@ -198,25 +204,30 @@ RUN mkdir -p ${STEAMCMD_DIR} \
     && ln -sf ${STEAMCMD_DIR}/steamcmd ${STEAM_HOME}/.steam/steam/steamcmd \
     && chown -R ${STEAM_USER}:${STEAM_USER} ${STEAM_HOME}/.steam
 
-# 安装依赖并构建项目
-RUN npm run install:all \
-    && npm run package:linux:no-zip
+# 安装依赖
+RUN npm run install:all
 
 # 安装Python依赖
 RUN pip3 install --no-cache-dir -r /app/server/src/Python/requirements.txt
 
-# 复制构建好的应用到root目录
-RUN cp -r /app/dist/package/* /root/ \
-    && chmod +x /root/start.sh
+# 根据构建参数决定是否构建生产版本
+RUN if [ "$DEV_MODE" = "false" ]; then \
+        npm run package:linux:no-zip && \
+        cp -r /app/dist/package/* ${STEAM_HOME}/GSManager/ && \
+        chmod +x ${STEAM_HOME}/GSManager/start.sh; \
+    else \
+        cp -r /app/* ${STEAM_HOME}/GSManager/ && \
+        chown -R ${STEAM_USER}:${STEAM_USER} ${STEAM_HOME}/GSManager; \
+    fi
 
-# 复制启动脚本到root目录
-COPY start.sh /root/start.sh
-RUN chmod +x /root/start.sh
+# 复制启动脚本到GSManager目录
+COPY start.sh ${STEAM_HOME}/GSManager/start.sh
+RUN chmod +x ${STEAM_HOME}/GSManager/start.sh
 
 # 创建数据目录并复制默认数据
-RUN mkdir -p /root/server/data \
-    && cp -r /app/server/data/* /root/server/data/ \
-    && chown -R root:root /root/server/data
+RUN mkdir -p ${STEAM_HOME}/GSManager/server/data \
+    && cp -r /app/server/data/* ${STEAM_HOME}/GSManager/server/data/ \
+    && chown -R ${STEAM_USER}:${STEAM_USER} ${STEAM_HOME}/GSManager
 
 # 创建目录用于挂载游戏数据
 VOLUME ["${GAMES_DIR}"]
@@ -224,9 +235,21 @@ VOLUME ["${GAMES_DIR}"]
 # 暴露GSM3管理面板端口
 EXPOSE 3001
 
-# 保持root用户
-USER root
-WORKDIR /root
+# 切换到steam用户
+USER ${STEAM_USER}
+WORKDIR ${STEAM_HOME}/GSManager
 
-# 启动容器时运行start.sh
-ENTRYPOINT ["/root/start.sh"]
+# 根据构建参数设置启动命令
+RUN if [ "$DEV_MODE" = "true" ]; then \
+        echo '#!/bin/bash' > ${STEAM_HOME}/GSManager/start-dev.sh && \
+        echo 'cd /home/steam/GSManager' >> ${STEAM_HOME}/GSManager/start-dev.sh && \
+        echo 'echo "启动开发模式..."' >> ${STEAM_HOME}/GSManager/start-dev.sh && \
+        echo 'echo "前端将在 http://localhost:5173 启动"' >> ${STEAM_HOME}/GSManager/start-dev.sh && \
+        echo 'echo "后端将在 http://localhost:3001 启动"' >> ${STEAM_HOME}/GSManager/start-dev.sh && \
+        echo 'echo "文件修改将自动重载"' >> ${STEAM_HOME}/GSManager/start-dev.sh && \
+        echo 'npm run dev' >> ${STEAM_HOME}/GSManager/start-dev.sh && \
+        chmod +x ${STEAM_HOME}/GSManager/start-dev.sh; \
+    fi
+
+# 启动容器时运行相应的脚本
+ENTRYPOINT ["/bin/bash", "-c", "if [ \"$DEV_MODE\" = \"true\" ]; then /home/steam/GSManager/start-dev.sh; else /home/steam/GSManager/start.sh; fi"]

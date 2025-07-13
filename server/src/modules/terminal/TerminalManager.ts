@@ -75,11 +75,11 @@ export class TerminalManager {
     } else {
       // Linux平台根据架构选择对应的PTY文件
       if (arch === 'arm64' || arch === 'aarch64') {
-        // this.ptyPath = path.resolve(__dirname, '../../../PTY/pty_linux_arm64')
-        this.ptyPath = path.resolve(__dirname, '../../PTY/pty_linux_arm64')
+        this.ptyPath = path.resolve(__dirname, '../../../PTY/pty_linux_arm64')
+        // this.ptyPath = path.resolve(__dirname, '../../PTY/pty_linux_arm64')
       } else {
-        // this.ptyPath = path.resolve(__dirname, '../../../PTY/pty_linux_x64')
-        this.ptyPath = path.resolve(__dirname, '../../PTY/pty_linux_x64')
+        this.ptyPath = path.resolve(__dirname, '../../../PTY/pty_linux_x64')
+        // this.ptyPath = path.resolve(__dirname, '../../PTY/pty_linux_x64')
       }
     }
     
