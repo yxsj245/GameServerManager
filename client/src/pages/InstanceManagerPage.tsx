@@ -615,11 +615,13 @@ const InstanceManagerPage: React.FC = () => {
         // 如果用户选择删除目录，发送删除目录的请求
         if (deleteDirectory) {
           try {
-            // 调用删除目录的API
+            // 调用删除目录的API，使用ApiClient确保包含认证token
+            const token = localStorage.getItem('gsm3_token')
             const deleteResponse = await fetch('/api/files/delete', {
               method: 'DELETE',
               headers: {
                 'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
               },
               body: JSON.stringify({
                 paths: [instanceToDelete.workingDirectory]
