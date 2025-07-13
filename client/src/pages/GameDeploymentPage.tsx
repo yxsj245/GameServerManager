@@ -1491,24 +1491,13 @@ const GameDeploymentPage: React.FC = () => {
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                       安装路径
                     </label>
-                    <div className="flex space-x-2">
-                      <input
-                        type="text"
-                        value={minecraftInstallPath}
-                        onChange={(e) => setMinecraftInstallPath(e.target.value)}
-                        className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                        placeholder="输入服务端安装路径"
-                      />
-                      <button
-                        onClick={() => {
-                          const path = prompt('请输入安装路径:', 'D:\\MinecraftServers\\' + (selectedServer || 'server'))
-                          if (path) setMinecraftInstallPath(path)
-                        }}
-                        className="px-3 py-2 bg-gray-100 dark:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-500 transition-colors"
-                      >
-                        <FolderOpen className="w-4 h-4" />
-                      </button>
-                    </div>
+                    <input
+                      type="text"
+                      value={minecraftInstallPath}
+                      onChange={(e) => setMinecraftInstallPath(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      placeholder="输入服务端安装路径"
+                    />
                   </div>
 
                   {/* 高级选项 */}
