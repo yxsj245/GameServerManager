@@ -1,5 +1,5 @@
 import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios'
-import { LoginRequest, LoginResponse, ApiResponse, User, Instance, CreateInstanceRequest } from '@/types'
+import { LoginRequest, LoginResponse, ApiResponse, User, Instance, CreateInstanceRequest, CaptchaResponse, CheckCaptchaResponse } from '@/types'
 import config from '@/config'
 
 class ApiClient {
@@ -146,6 +146,36 @@ class ApiClient {
       return {
         success: false,
         message: error.message || '登录失败，请检查网络连接',
+      }
+    }
+  }
+
+  async getCaptcha(): Promise<CaptchaResponse> {
+    try {
+      const response = await this.client.get<CaptchaResponse>('/auth/captcha')
+      return response.data
+    } catch (error: any) {
+      if (error.response?.data) {
+        return error.response.data
+      }
+      return {
+        success: false,
+        captcha: { id: '', svg: '' }
+      }
+    }
+  }
+
+  async checkCaptchaRequired(username: string): Promise<CheckCaptchaResponse> {
+    try {
+      const response = await this.client.post<CheckCaptchaResponse>('/auth/check-captcha', { username })
+      return response.data
+    } catch (error: any) {
+      if (error.response?.data) {
+        return error.response.data
+      }
+      return {
+        success: false,
+        requireCaptcha: false
       }
     }
   }

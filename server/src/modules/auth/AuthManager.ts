@@ -4,6 +4,7 @@ import fs from 'fs/promises'
 import path from 'path'
 import winston from 'winston'
 import { ConfigManager } from '../config/ConfigManager.js'
+import { CaptchaManager } from './CaptchaManager.js'
 
 export interface User {
   id: string
@@ -28,6 +29,7 @@ export interface AuthResult {
   token?: string
   user?: Omit<User, 'password'>
   message: string
+  requireCaptcha?: boolean
 }
 
 export class AuthManager {
@@ -37,12 +39,15 @@ export class AuthManager {
   private attemptsFilePath: string
   private logger: winston.Logger
   private configManager: ConfigManager
+  private captchaManager: CaptchaManager
+  private failedAttempts: Map<string, number> = new Map() // 跟踪每个用户名的失败次数
 
   constructor(configManager: ConfigManager, logger: winston.Logger) {
     this.configManager = configManager
     this.logger = logger
     this.usersFilePath = path.join(process.cwd(), 'data', 'users.json')
     this.attemptsFilePath = path.join(process.cwd(), 'data', 'login_attempts.json')
+    this.captchaManager = new CaptchaManager(logger)
   }
 
   async initialize(): Promise<void> {
@@ -50,6 +55,9 @@ export class AuthManager {
       // 确保data目录存在
       const dataDir = path.dirname(this.usersFilePath)
       await fs.mkdir(dataDir, { recursive: true })
+
+      // 初始化验证码管理器
+      await this.captchaManager.initialize()
 
       // 加载用户数据
       await this.loadUsers()
@@ -150,7 +158,7 @@ export class AuthManager {
     this.logger.warn('请立即登录并修改默认密码！')
   }
 
-  async login(username: string, password: string, ip: string): Promise<AuthResult> {
+  async login(username: string, password: string, ip: string, captchaId?: string, captchaCode?: string): Promise<AuthResult> {
     const user = this.users.get(username)
     
     // 记录登录尝试
@@ -161,31 +169,65 @@ export class AuthManager {
       success: false
     }
 
+    // 检查是否需要验证码
+    const failedCount = this.failedAttempts.get(username) || 0
+    const requireCaptcha = failedCount >= 1
+
+    if (requireCaptcha) {
+      if (!captchaId || !captchaCode) {
+        return {
+          success: false,
+          message: '请输入验证码',
+          requireCaptcha: true
+        }
+      }
+
+      // 验证验证码
+      if (!this.captchaManager.verifyCaptcha(captchaId, captchaCode)) {
+        this.loginAttempts.push(attempt)
+        await this.saveLoginAttempts()
+        return {
+          success: false,
+          message: '验证码错误或已过期',
+          requireCaptcha: true
+        }
+      }
+    }
+
     if (!user) {
+      // 增加失败次数
+      this.failedAttempts.set(username, failedCount + 1)
+      
       this.loginAttempts.push(attempt)
       await this.saveLoginAttempts()
       return {
         success: false,
-        message: '用户名或密码错误'
+        message: '用户名或密码错误',
+        requireCaptcha: this.failedAttempts.get(username)! >= 1
       }
     }
-
-    // 账户锁定检查已移除
 
     // 验证密码
     const isValidPassword = await bcrypt.compare(password, user.password)
     
     if (!isValidPassword) {
+      // 增加失败次数
+      this.failedAttempts.set(username, failedCount + 1)
+      
       this.loginAttempts.push(attempt)
       await this.saveLoginAttempts()
       
       return {
         success: false,
-        message: '用户名或密码错误'
+        message: '用户名或密码错误',
+        requireCaptcha: this.failedAttempts.get(username)! >= 1
       }
     }
 
-    // 登录成功，更新最后登录时间
+    // 登录成功，清除失败次数
+    this.failedAttempts.delete(username)
+    
+    // 更新最后登录时间
     user.lastLogin = new Date().toISOString()
     await this.saveUsers()
 
@@ -326,5 +368,14 @@ export class AuthManager {
     return this.loginAttempts
       .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
       .slice(0, limit)
+  }
+
+  generateCaptcha() {
+    return this.captchaManager.generateCaptcha()
+  }
+
+  checkIfRequireCaptcha(username: string): boolean {
+    const failedCount = this.failedAttempts.get(username) || 0
+    return failedCount >= 1
   }
 }

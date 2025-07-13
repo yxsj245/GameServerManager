@@ -12,6 +12,8 @@ export interface User {
 export interface LoginRequest {
   username: string
   password: string
+  captchaId?: string
+  captchaCode?: string
 }
 
 export interface LoginResponse {
@@ -19,6 +21,22 @@ export interface LoginResponse {
   message: string
   token?: string
   user?: User
+  requireCaptcha?: boolean
+}
+
+export interface CaptchaData {
+  id: string
+  svg: string
+}
+
+export interface CaptchaResponse {
+  success: boolean
+  captcha: CaptchaData
+}
+
+export interface CheckCaptchaResponse {
+  success: boolean
+  requireCaptcha: boolean
 }
 
 export interface AuthState {

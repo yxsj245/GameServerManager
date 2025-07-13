@@ -19,7 +19,9 @@ const loginSchema = Joi.object({
   password: Joi.string().min(6).required().messages({
     'string.min': '密码至少6个字符',
     'any.required': '密码是必填项'
-  })
+  }),
+  captchaId: Joi.string().optional(),
+  captchaCode: Joi.string().optional()
 })
 
 const changePasswordSchema = Joi.object({
@@ -43,6 +45,54 @@ const changeUsernameSchema = Joi.object({
 
 // 设置认证路由的函数
 export function setupAuthRoutes(authManager: AuthManager): Router {
+  // 获取验证码接口
+  router.get('/captcha', (req: Request, res: Response) => {
+    try {
+      if (!authManager) {
+        return res.status(500).json({ error: '认证管理器未初始化' })
+      }
+
+      const captcha = authManager.generateCaptcha()
+      res.json({
+        success: true,
+        captcha
+      })
+    } catch (error) {
+      logger.error('获取验证码错误:', error)
+      res.status(500).json({
+        error: '服务器内部错误',
+        message: '获取验证码失败'
+      })
+    }
+  })
+
+  // 检查是否需要验证码接口
+  router.post('/check-captcha', (req: Request, res: Response) => {
+    try {
+      if (!authManager) {
+        return res.status(500).json({ error: '认证管理器未初始化' })
+      }
+
+      const { username } = req.body
+      if (!username) {
+        return res.status(400).json({
+          error: '用户名是必填项'
+        })
+      }
+
+      const requireCaptcha = authManager.checkIfRequireCaptcha(username)
+      res.json({
+        success: true,
+        requireCaptcha
+      })
+    } catch (error) {
+      logger.error('检查验证码需求错误:', error)
+      res.status(500).json({
+        error: '服务器内部错误',
+        message: '检查验证码需求失败'
+      })
+    }
+  })
   // 登录接口
   router.post('/login', async (req: Request, res: Response) => {
     try {
@@ -59,10 +109,10 @@ export function setupAuthRoutes(authManager: AuthManager): Router {
       })
     }
 
-    const { username, password } = value
+    const { username, password, captchaId, captchaCode } = value
     const clientIP = req.ip || req.connection.remoteAddress || 'unknown'
     
-    const result = await authManager.login(username, password, clientIP)
+    const result = await authManager.login(username, password, clientIP, captchaId, captchaCode)
     
     if (result.success) {
       res.json({
@@ -74,7 +124,8 @@ export function setupAuthRoutes(authManager: AuthManager): Router {
     } else {
       res.status(401).json({
         success: false,
-        message: result.message
+        message: result.message,
+        requireCaptcha: result.requireCaptcha
       })
     }
   } catch (error) {

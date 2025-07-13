@@ -1,0 +1,65 @@
+[
+  {
+    "id": "85678e29-c456-4aba-a97b-cddfe2a4ad8e",
+    "code": "1006",
+    "createdAt": "2025-07-13T10:56:43.442Z",
+    "expiresAt": "2025-07-13T11:01:43.442Z",
+    "used": true
+  },
+  {
+    "id": "96da1b6c-675d-49c0-a49e-531653782b7d",
+    "code": "4635",
+    "createdAt": "2025-07-13T10:56:47.522Z",
+    "expiresAt": "2025-07-13T11:01:47.522Z",
+    "used": false
+  },
+  {
+    "id": "01ae35e9-74db-420b-ba04-9dd100ab755c",
+    "code": "1034",
+    "createdAt": "2025-07-13T10:57:03.027Z",
+    "expiresAt": "2025-07-13T11:02:03.027Z",
+    "used": false
+  },
+  {
+    "id": "9d8c386d-cc0d-44f6-a17c-8f76a021459e",
+    "code": "2485",
+    "createdAt": "2025-07-13T10:57:11.364Z",
+    "expiresAt": "2025-07-13T11:02:11.364Z",
+    "used": false
+  },
+  {
+    "id": "c06003ed-2e89-4986-9502-3bf62eede384",
+    "code": "2657",
+    "createdAt": "2025-07-13T10:57:26.709Z",
+    "expiresAt": "2025-07-13T11:02:26.709Z",
+    "used": false
+  },
+  {
+    "id": "6b426971-4243-4a80-b675-6eaea869d5c4",
+    "code": "4311",
+    "createdAt": "2025-07-13T10:57:35.604Z",
+    "expiresAt": "2025-07-13T11:02:35.604Z",
+    "used": false
+  },
+  {
+    "id": "0b709d68-96a4-44ef-b61b-3e6e7511f460",
+    "code": "5316",
+    "createdAt": "2025-07-13T10:57:54.227Z",
+    "expiresAt": "2025-07-13T11:02:54.227Z",
+    "used": true
+  },
+  {
+    "id": "026f1e54-e53d-4f83-b25f-7cdacc416c3c",
+    "code": "3160",
+    "createdAt": "2025-07-13T10:58:01.181Z",
+    "expiresAt": "2025-07-13T11:03:01.181Z",
+    "used": false
+  },
+  {
+    "id": "6916e623-791f-4f6a-9fc5-e835f808b90e",
+    "code": "9551",
+    "createdAt": "2025-07-13T10:58:08.753Z",
+    "expiresAt": "2025-07-13T11:03:08.753Z",
+    "used": false
+  }
+]
