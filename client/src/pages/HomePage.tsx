@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '@/stores/authStore'
 import { SystemStats, SystemInfo, ProcessInfo, WeatherData, ActivePort } from '@/types'
@@ -17,6 +18,168 @@ import {
   Search
 } from 'lucide-react'
 import MusicPlayer from '@/components/MusicPlayer'
+
+// 主机名和IP地址组件
+interface HostnameWithIPProps {
+  systemInfo: SystemInfo
+}
+
+const HostnameWithIP: React.FC<HostnameWithIPProps> = ({ systemInfo }) => {
+  const [showIPs, setShowIPs] = useState(false)
+  const [hoverTimer, setHoverTimer] = useState<NodeJS.Timeout | null>(null)
+  const [hideTimer, setHideTimer] = useState<NodeJS.Timeout | null>(null)
+  const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 })
+  const [copySuccess, setCopySuccess] = useState<string | null>(null)
+  
+  const handleMouseEnter = (e: React.MouseEvent) => {
+    const rect = e.currentTarget.getBoundingClientRect()
+    setMousePosition({ 
+      x: rect.left + rect.width / 2, 
+      y: rect.bottom + 10 
+    })
+    
+    // 清除隐藏定时器
+    if (hideTimer) {
+      clearTimeout(hideTimer)
+      setHideTimer(null)
+    }
+    
+    const timer = setTimeout(() => {
+      setShowIPs(true)
+    }, 1000)
+    setHoverTimer(timer)
+  }
+  
+  const handleMouseLeave = () => {
+    if (hoverTimer) {
+      clearTimeout(hoverTimer)
+      setHoverTimer(null)
+    }
+    
+    // 延迟隐藏，给用户时间移动到弹窗上
+    const timer = setTimeout(() => {
+      setShowIPs(false)
+    }, 300)
+    setHideTimer(timer)
+  }
+  
+  const handlePopupMouseEnter = () => {
+    // 鼠标进入弹窗时，清除隐藏定时器
+    if (hideTimer) {
+      clearTimeout(hideTimer)
+      setHideTimer(null)
+    }
+  }
+  
+  const handlePopupMouseLeave = () => {
+    // 鼠标离开弹窗时，延迟隐藏
+    const timer = setTimeout(() => {
+      setShowIPs(false)
+    }, 200)
+    setHideTimer(timer)
+  }
+  
+  const copyToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopySuccess(text)
+      setTimeout(() => setCopySuccess(null), 2000)
+    } catch (err) {
+      // 降级方案：使用传统的复制方法
+      const textArea = document.createElement('textarea')
+      textArea.value = text
+      document.body.appendChild(textArea)
+      textArea.select()
+      document.execCommand('copy')
+      document.body.removeChild(textArea)
+      setCopySuccess(text)
+      setTimeout(() => setCopySuccess(null), 2000)
+    }
+  }
+  
+  return (
+    <>
+      <div 
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
+        className="relative"
+      >
+        <div className="flex items-center space-x-3">
+          <Network className="w-8 h-8 text-purple-500" />
+          <div className="flex-1">
+            <p className="text-sm text-gray-600 dark:text-gray-400">主机信息</p>
+            <p className="text-lg font-semibold text-black dark:text-white">{systemInfo.hostname}</p>
+          </div>
+        </div>
+      </div>
+      
+      {/* 使用Portal将IP地址信息渲染到body中 */}
+       {showIPs && createPortal(
+         <div 
+           className="fixed w-80 p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl cursor-default"
+           style={{
+             left: `${mousePosition.x - 160}px`,
+             top: `${mousePosition.y}px`,
+             zIndex: 99999
+           }}
+           onMouseEnter={handlePopupMouseEnter}
+           onMouseLeave={handlePopupMouseLeave}
+         >
+           <div className="space-y-3">
+             {systemInfo.ipv4 && systemInfo.ipv4.length > 0 && (
+               <div>
+                 <p className="text-xs text-gray-500 dark:text-gray-500 mb-2">IPv4 地址:</p>
+                 <div className="space-y-1">
+                    {systemInfo.ipv4.map((ip, index) => (
+                      <p 
+                        key={index} 
+                        className={`text-sm font-mono break-all select-text cursor-pointer px-2 py-1 rounded transition-colors ${
+                          copySuccess === ip 
+                            ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' 
+                            : 'text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20'
+                        }`}
+                        title={copySuccess === ip ? '已复制!' : `点击复制: ${ip}`}
+                        onClick={() => copyToClipboard(ip)}
+                        onMouseEnter={handlePopupMouseEnter}
+                      >
+                        {copySuccess === ip ? '✓ 已复制' : ip}
+                      </p>
+                    ))}
+                  </div>
+               </div>
+             )}
+             {systemInfo.ipv6 && systemInfo.ipv6.length > 0 && (
+               <div>
+                 <p className="text-xs text-gray-500 dark:text-gray-500 mb-2">IPv6 地址:</p>
+                 <div className="space-y-1">
+                   {systemInfo.ipv6.map((ip, index) => (
+                     <p 
+                        key={index} 
+                        className={`text-sm font-mono break-all select-text cursor-pointer px-2 py-1 rounded transition-colors ${
+                          copySuccess === ip 
+                            ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' 
+                            : 'text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20'
+                        }`}
+                        title={copySuccess === ip ? '已复制!' : `点击复制: ${ip}`}
+                        onClick={() => copyToClipboard(ip)}
+                        onMouseEnter={handlePopupMouseEnter}
+                      >
+                       {copySuccess === ip ? '✓ 已复制' : ip}
+                     </p>
+                   ))}
+                 </div>
+               </div>
+             )}
+             {(!systemInfo.ipv4 || systemInfo.ipv4.length === 0) && (!systemInfo.ipv6 || systemInfo.ipv6.length === 0) && (
+               <p className="text-sm text-gray-500 dark:text-gray-400">暂无可用IP地址</p>
+             )}
+           </div>
+         </div>,
+         document.body
+       )}
+    </>
+  )
+}
 
 // 城市代码映射
 const cityOptions = [
@@ -370,16 +533,9 @@ const HomePage: React.FC = () => {
             </div>
           </div>
           
-          <div className="card-game p-6">
-            <div className="flex items-center space-x-3">
-              <Network className="w-8 h-8 text-purple-500" />
-              <div>
-                <p className="text-sm text-gray-600 dark:text-gray-400">主机名</p>
-                <p className="text-lg font-semibold text-black dark:text-white">{systemInfo.hostname}</p>
-              </div>
-            </div>
+          <div className="card-game p-6 relative">
+            <HostnameWithIP systemInfo={systemInfo} />
           </div>
-          
 
         </div>
       )}

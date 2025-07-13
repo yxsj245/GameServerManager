@@ -13,6 +13,8 @@ interface SystemInfo {
   platform: string
   arch: string
   hostname: string
+  ipv4: string[]
+  ipv6: string[]
   uptime: number
   totalMemory: number
   freeMemory: number
@@ -185,15 +187,83 @@ export class SystemManager extends EventEmitter {
   }
 
   /**
+   * 获取本地IP地址
+   */
+  private getLocalIpAddresses(): { ipv4: string[], ipv6: string[] } {
+    const interfaces = os.networkInterfaces()
+    const ipv4: string[] = []
+    const ipv6: string[] = []
+    
+    for (const name of Object.keys(interfaces)) {
+      const networkInterface = interfaces[name]
+      if (!networkInterface) continue
+      
+      for (const net of networkInterface) {
+        // 跳过内部地址和非活跃接口
+        if (net.internal || !net.address) continue
+        
+        if (net.family === 'IPv4') {
+          ipv4.push(net.address)
+        } else if (net.family === 'IPv6') {
+          // 过滤掉链路本地地址
+          if (!net.address.startsWith('fe80:')) {
+            ipv6.push(net.address)
+          }
+        }
+      }
+    }
+    
+    return { ipv4, ipv6 }
+  }
+
+  /**
    * 获取系统基本信息
    */
   public async getSystemInfo(): Promise<SystemInfo> {
     const cpus = os.cpus()
+    let platformName: string = os.platform()
+    
+    // 如果是Windows系统，获取具体版本信息
+    if (os.platform() === 'win32') {
+      try {
+        // 使用PowerShell获取Windows版本信息，避免中文编码问题
+        const { stdout } = await execAsync('powershell "(Get-WmiObject -Class Win32_OperatingSystem).Caption"', { encoding: 'utf8' })
+        const versionName = stdout.trim()
+        if (versionName && versionName !== '') {
+          // 简化版本名称显示
+          if (versionName.includes('Windows 11')) {
+            platformName = 'Windows 11'
+          } else if (versionName.includes('Windows 10')) {
+            platformName = 'Windows 10'
+          } else if (versionName.includes('Windows Server 2022')) {
+            platformName = 'Windows Server 2022'
+          } else if (versionName.includes('Windows Server 2019')) {
+            platformName = 'Windows Server 2019'
+          } else if (versionName.includes('Windows Server 2016')) {
+            platformName = 'Windows Server 2016'
+          } else if (versionName.includes('Windows Server')) {
+            platformName = 'Windows Server'
+          } else {
+            platformName = 'Windows'
+          }
+        } else {
+          platformName = 'Windows'
+        }
+      } catch (error) {
+        this.logger.warn('获取Windows版本信息失败:', error)
+        platformName = 'Windows'
+      }
+    }
+    
+    // 获取本地IP地址
+    const { ipv4, ipv6 } = this.getLocalIpAddresses()
     
     return {
-      platform: os.platform(),
+      platform: platformName,
       arch: os.arch(),
       hostname: os.hostname(),
+      ipv4,
+      ipv6,
       uptime: os.uptime(),
       totalMemory: os.totalmem(),
       freeMemory: os.freemem(),

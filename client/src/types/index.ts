@@ -84,6 +84,8 @@ export interface SystemInfo {
   platform: string
   arch: string
   hostname: string
+  ipv4: string[]
+  ipv6: string[]
   version: string
   nodeVersion: string
 }
