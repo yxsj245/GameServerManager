@@ -170,30 +170,12 @@ export class AuthManager {
       }
     }
 
-    // 检查账户是否被锁定
-    if (this.isAccountLocked(user)) {
-      this.loginAttempts.push(attempt)
-      await this.saveLoginAttempts()
-      return {
-        success: false,
-        message: '账户已被锁定，请稍后再试'
-      }
-    }
+    // 账户锁定检查已移除
 
     // 验证密码
     const isValidPassword = await bcrypt.compare(password, user.password)
     
     if (!isValidPassword) {
-      // 增加失败尝试次数
-      user.loginAttempts += 1
-      
-      const authConfig = this.configManager.getAuthConfig()
-      if (user.loginAttempts >= authConfig.maxLoginAttempts) {
-        user.lockedUntil = new Date(Date.now() + authConfig.lockoutDuration).toISOString()
-        this.logger.warn(`用户 ${username} 因多次登录失败被锁定`)
-      }
-      
-      await this.saveUsers()
       this.loginAttempts.push(attempt)
       await this.saveLoginAttempts()
       
@@ -203,9 +185,7 @@ export class AuthManager {
       }
     }
 
-    // 登录成功，重置失败次数
-    user.loginAttempts = 0
-    user.lockedUntil = undefined
+    // 登录成功，更新最后登录时间
     user.lastLogin = new Date().toISOString()
     await this.saveUsers()
 
@@ -243,23 +223,7 @@ export class AuthManager {
     }
   }
 
-  private isAccountLocked(user: User): boolean {
-    if (!user.lockedUntil) return false
-    
-    const lockoutTime = new Date(user.lockedUntil)
-    const now = new Date()
-    
-    if (now < lockoutTime) {
-      return true
-    }
-    
-    // 锁定时间已过，清除锁定状态
-    user.lockedUntil = undefined
-    user.loginAttempts = 0
-    this.saveUsers() // 异步保存，不等待
-    
-    return false
-  }
+  // isAccountLocked方法已移除
 
   verifyToken(token: string): any {
     try {

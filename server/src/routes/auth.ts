@@ -1,5 +1,4 @@
 import { Router, Request, Response } from 'express'
-import rateLimit from 'express-rate-limit'
 import { AuthManager } from '../modules/auth/AuthManager.js'
 import { authenticateToken, AuthenticatedRequest, requireAdmin } from '../middleware/auth.js'
 import logger from '../utils/logger.js'
@@ -7,17 +6,7 @@ import Joi from 'joi'
 
 const router = Router()
 
-// 登录限流
-const loginLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15分钟
-  max: 5, // 最多5次尝试
-  message: {
-    error: '请求过于频繁',
-    message: '登录尝试次数过多，请15分钟后再试'
-  },
-  standardHeaders: true,
-  legacyHeaders: false
-})
+// 登录限流已移除
 
 // 验证schemas
 const loginSchema = Joi.object({
@@ -55,7 +44,7 @@ const changeUsernameSchema = Joi.object({
 // 设置认证路由的函数
 export function setupAuthRoutes(authManager: AuthManager): Router {
   // 登录接口
-  router.post('/login', loginLimiter, async (req: Request, res: Response) => {
+  router.post('/login', async (req: Request, res: Response) => {
     try {
       if (!authManager) {
         return res.status(500).json({ error: '认证管理器未初始化' })
