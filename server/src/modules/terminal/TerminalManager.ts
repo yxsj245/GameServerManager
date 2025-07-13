@@ -28,6 +28,7 @@ interface PtySession {
   streamForwardProcess?: ChildProcess // 输出流转发进程
   enableStreamForward?: boolean // 是否启用输出流转发
   programPath?: string // 程序启动参数的绝对路径
+  autoCloseOnForwardExit?: boolean // 转发进程退出时是否自动关闭终端会话
 }
 
 interface CreatePtyData {
@@ -38,6 +39,7 @@ interface CreatePtyData {
   workingDirectory?: string
   enableStreamForward?: boolean // 是否启用输出流转发
   programPath?: string // 程序启动参数的绝对路径
+  autoCloseOnForwardExit?: boolean // 转发进程退出时是否自动关闭终端会话
 }
 
 interface TerminalInputData {
@@ -106,7 +108,7 @@ export class TerminalManager {
    */
   public createPty(socket: Socket, data: CreatePtyData): void {
     try {
-      const { sessionId, name, cols, rows, workingDirectory = process.cwd(), enableStreamForward = false, programPath } = data
+      const { sessionId, name, cols, rows, workingDirectory = process.cwd(), enableStreamForward = false, programPath, autoCloseOnForwardExit = false } = data
       const sessionName = name || `终端会话 ${sessionId.slice(-8)}`
       
       // 验证输出流转发参数
@@ -209,7 +211,8 @@ export class TerminalManager {
         lastActivity: new Date(),
         outputBuffer: [],
         enableStreamForward,
-        programPath
+        programPath,
+        autoCloseOnForwardExit
       }
       
       // 保存会话到内存
@@ -266,22 +269,54 @@ export class TerminalManager {
       // 处理进程退出
       ptyProcess.on('exit', (code, signal) => {
         this.logger.info(`PTY进程退出: ${sessionId}, 退出码: ${code}, 信号: ${signal}`)
+        
+        // 清理输出流转发进程
+        if (session.streamForwardProcess && !session.streamForwardProcess.killed) {
+          this.logger.info(`PTY退出时清理输出流转发进程: ${sessionId}`)
+          this.forceKillProcess(session.streamForwardProcess, '输出流转发进程', () => {
+            session.streamForwardProcess = undefined
+          })
+        }
+        
         socket.emit('terminal-exit', {
           sessionId,
           code: code || 0,
           signal
         })
+        
+        // 从内存中删除会话
         this.sessions.delete(sessionId)
+        
+        // 从持久化存储中删除会话
+        this.sessionManager.removeSession(sessionId).catch(error => {
+          this.logger.error(`PTY退出时从配置文件删除会话失败: ${sessionId}`, error)
+        })
       })
       
       // 处理进程错误
       ptyProcess.on('error', (error) => {
         this.logger.error(`PTY进程错误 ${sessionId}:`, error)
+        
+        // 清理输出流转发进程
+        if (session.streamForwardProcess && !session.streamForwardProcess.killed) {
+          this.logger.info(`PTY错误时清理输出流转发进程: ${sessionId}`)
+          this.forceKillProcess(session.streamForwardProcess, '输出流转发进程', () => {
+            session.streamForwardProcess = undefined
+          })
+        }
+        
         socket.emit('terminal-error', {
           sessionId,
           error: error.message
         })
+        
+        // 从内存中删除会话
         this.sessions.delete(sessionId)
+        
+        // 从持久化存储中删除会话
+        this.sessionManager.removeSession(sessionId).catch(error => {
+          this.logger.error(`PTY错误时从配置文件删除会话失败: ${sessionId}`, error)
+        })
       })
       
       // 如果启用了输出流转发，启动转发进程
@@ -312,6 +347,107 @@ export class TerminalManager {
         error: error instanceof Error ? error.message : '未知错误'
       })
     }
+  }
+
+  /**
+   * 强制终止进程
+   */
+  private forceKillProcess(process: any, processName: string, onKilled?: () => void): void {
+    if (!process || process.killed) {
+      onKilled?.()
+      return
+    }
+
+    const pid = process.pid
+    this.logger.info(`开始强制终止${processName}，PID: ${pid}`)
+
+    // 监听进程退出事件
+    const onExit = () => {
+      this.logger.info(`${processName}已退出: ${pid}`)
+      onKilled?.()
+    }
+    
+    process.once('exit', onExit)
+
+    try {
+      // 首先尝试发送SIGINT信号
+      process.kill('SIGINT')
+      this.logger.info(`已向${processName}发送SIGINT信号: ${pid}`)
+
+      // 设置2秒超时，如果进程还没退出就强制杀死
+      setTimeout(() => {
+        if (!process.killed) {
+          this.logger.warn(`${processName}未响应SIGINT信号，尝试SIGTERM: ${pid}`)
+          try {
+            process.kill('SIGTERM')
+          } catch (error) {
+            this.logger.warn(`发送SIGTERM信号失败:`, error)
+          }
+
+          // 再等待2秒，如果还没退出就强制杀死
+          setTimeout(() => {
+            if (!process.killed) {
+              this.logger.warn(`${processName}未响应SIGTERM信号，强制杀死: ${pid}`)
+              try {
+                process.kill('SIGKILL')
+              } catch (error) {
+                this.logger.error(`强制杀死进程失败:`, error)
+                
+                // 在Windows上尝试使用taskkill命令
+                if (os.platform() === 'win32' && pid) {
+                  exec(`taskkill /F /PID ${pid}`, (error: any) => {
+                    if (error) {
+                      this.logger.error(`taskkill命令执行失败:`, error)
+                    } else {
+                      this.logger.info(`使用taskkill成功终止${processName}: ${pid}`)
+                    }
+                    // 即使taskkill失败，也调用回调函数清理引用
+                    if (!process.killed) {
+                      process.removeListener('exit', onExit)
+                      onKilled?.()
+                    }
+                  })
+                } else {
+                  // 非Windows平台，如果所有方法都失败，强制清理引用
+                  process.removeListener('exit', onExit)
+                  onKilled?.()
+                }
+              }
+            }
+          }, 2000)
+        }
+      }, 2000)
+
+    } catch (error) {
+      this.logger.error(`强制终止${processName}失败:`, error)
+      process.removeListener('exit', onExit)
+      onKilled?.()
+    }
+  }
+
+  /**
+   * 重启输出流转发进程
+   */
+  public restartStreamForwardProcess(sessionId: string): boolean {
+    const session = this.sessions.get(sessionId)
+    if (!session || !session.enableStreamForward || !session.programPath) {
+      this.logger.warn(`无法重启转发进程: 会话不存在或未启用输出流转发: ${sessionId}`)
+      return false
+    }
+
+    // 先终止现有进程
+    if (session.streamForwardProcess && !session.streamForwardProcess.killed) {
+      this.forceKillProcess(session.streamForwardProcess, '输出流转发进程', () => {
+        session.streamForwardProcess = undefined
+        // 重新启动进程
+        this.startStreamForwardProcess(session, session.programPath!)
+      })
+    } else {
+      // 直接启动新进程
+      this.startStreamForwardProcess(session, session.programPath)
+    }
+
+    return true
   }
 
   /**
@@ -361,6 +497,19 @@ export class TerminalManager {
       
       this.logger.info(`输出流转发进程已启动，PID: ${forwardProcess.pid}`)
       
+      // 添加进程启动成功通知
+      let startupMessage = `\r\n[输出流转发进程已启动，PID: ${forwardProcess.pid}]\r\n`
+      startupMessage += `[程序路径: ${executablePath}]\r\n`
+      if (session.autoCloseOnForwardExit) {
+        startupMessage += `[注意: 转发进程异常退出时将自动关闭终端会话]\r\n`
+      }
+      startupMessage += `[可用命令: restart-forward (重启转发进程), session-status (查看状态)]\r\n`
+      
+      session.socket.emit('terminal-output', {
+        sessionId: session.id,
+        data: startupMessage
+      })
+      
       // 处理转发进程的输出，将其转发到终端
       forwardProcess.stdout?.on('data', (data: Buffer) => {
         session.lastActivity = new Date()
@@ -400,19 +549,69 @@ export class TerminalManager {
       // 处理转发进程退出
       forwardProcess.on('exit', (code, signal) => {
         this.logger.info(`转发进程退出: ${session.id}, 退出码: ${code}, 信号: ${signal}`)
+        
+        let exitMessage: string
+        if (signal) {
+          // 被信号终止
+          exitMessage = `\r\n[转发进程被信号终止: ${signal}]\r\n`
+        } else if (code === null) {
+          // 异常退出，没有退出码
+          exitMessage = `\r\n[转发进程异常退出]\r\n`
+        } else if (code === 0) {
+          // 正常退出
+          exitMessage = `\r\n[转发进程正常退出]\r\n`
+        } else {
+          // 错误退出
+          exitMessage = `\r\n[转发进程退出，错误码: ${code}]\r\n`
+        }
+        
         session.socket.emit('terminal-output', {
           sessionId: session.id,
-          data: `\r\n[转发进程已退出，退出码: ${code}]\r\n`
+          data: exitMessage
         })
+        
+        // 如果配置了自动关闭，且转发进程异常退出，则关闭整个终端会话
+        if (session.autoCloseOnForwardExit && (code !== 0 || signal)) {
+          session.socket.emit('terminal-output', {
+            sessionId: session.id,
+            data: `\r\n[转发进程异常退出，正在关闭终端会话...]\r\n`
+          })
+          
+          // 延迟关闭，让用户看到消息
+          setTimeout(() => {
+            this.closePty(session.socket, { sessionId: session.id })
+          }, 2000)
+        } else {
+          // 如果是异常退出或错误退出，提供重启选项
+          if (code !== 0 || signal) {
+            session.socket.emit('terminal-output', {
+              sessionId: session.id,
+              data: `\r\n[提示: 输入 'restart-forward' 可重启转发进程]\r\n`
+            })
+          }
+        }
+        
         session.streamForwardProcess = undefined
       })
       
       // 处理转发进程错误
-      forwardProcess.on('error', (error) => {
+      forwardProcess.on('error', (error: NodeJS.ErrnoException) => {
         this.logger.error(`转发进程错误 ${session.id}:`, error)
+        
+        let errorMessage: string
+        if (error.code === 'ENOENT') {
+          errorMessage = `\r\n[转发进程启动失败: 找不到可执行文件]\r\n`
+        } else if (error.code === 'EACCES') {
+          errorMessage = `\r\n[转发进程启动失败: 权限不足]\r\n`
+        } else if (error.code === 'EMFILE' || error.code === 'ENFILE') {
+          errorMessage = `\r\n[转发进程启动失败: 系统资源不足]\r\n`
+        } else {
+          errorMessage = `\r\n[转发进程错误: ${error.message}]\r\n`
+        }
+        
         session.socket.emit('terminal-output', {
           sessionId: session.id,
-          data: `\r\n[转发进程错误: ${error.message}]\r\n`
+          data: errorMessage
         })
         session.streamForwardProcess = undefined
       })
@@ -457,11 +656,81 @@ export class TerminalManager {
       // 更新最后活动时间
       session.lastActivity = new Date()
       
+      // 检查是否为重启转发进程命令
+      if (inputData.trim() === 'restart-forward') {
+        if (session.enableStreamForward && session.programPath) {
+          session.socket.emit('terminal-output', {
+            sessionId: session.id,
+            data: `\r\n[正在重启输出流转发进程...]\r\n`
+          })
+          
+          const success = this.restartStreamForwardProcess(sessionId)
+          if (!success) {
+            session.socket.emit('terminal-output', {
+              sessionId: session.id,
+              data: `\r\n[重启转发进程失败]\r\n`
+            })
+          }
+        } else {
+          session.socket.emit('terminal-output', {
+            sessionId: session.id,
+            data: `\r\n[当前会话未启用输出流转发]\r\n`
+          })
+        }
+        return
+      }
+      
+      // 检查是否为查看会话状态命令
+      if (inputData.trim() === 'session-status') {
+        const status = this.getSessionStatusInfo(session)
+        session.socket.emit('terminal-output', {
+          sessionId: session.id,
+          data: status
+        })
+        return
+      }
+      
+      // 检查是否为Ctrl+C信号 (ASCII码3)
+      if (inputData === '\x03') {
+        this.logger.info(`检测到Ctrl+C信号，转发到进程: ${sessionId}`)
+        
+        // 如果有输出流转发进程，强制终止它
+        if (session.streamForwardProcess && !session.streamForwardProcess.killed) {
+          this.forceKillProcess(session.streamForwardProcess, '输出流转发进程', () => {
+            session.streamForwardProcess = undefined
+          })
+        }
+        
+        // 同时向PTY进程发送Ctrl+C
+        if (session.process.stdin && !session.process.stdin.destroyed) {
+          session.process.stdin.write(inputData)
+        }
+        
+        // 如果PTY进程有PID，也尝试发送SIGINT信号
+        if (session.process.pid && !session.process.killed) {
+          try {
+            process.kill(session.process.pid, 'SIGINT')
+            this.logger.info(`已向PTY进程发送SIGINT信号: ${session.process.pid}`)
+          } catch (error) {
+            this.logger.warn(`向PTY进程发送SIGINT信号失败:`, error)
+          }
+        }
+        
+        return
+      }
+      
       // 发送输入到PTY进程
       if (session.process.stdin && !session.process.stdin.destroyed) {
         session.process.stdin.write(inputData)
       } else {
         this.logger.warn(`PTY进程stdin不可用: ${sessionId}`)
+      }
+      
+      // 如果启用了输出流转发，也将输入转发到目标进程
+      if (session.streamForwardProcess && !session.streamForwardProcess.killed) {
+        if (session.streamForwardProcess.stdin && !session.streamForwardProcess.stdin.destroyed) {
+          session.streamForwardProcess.stdin.write(inputData)
+        }
       }
       
     } catch (error) {
@@ -537,23 +806,32 @@ export class TerminalManager {
       // 终止输出流转发进程
       if (session.streamForwardProcess && !session.streamForwardProcess.killed) {
         this.logger.info(`终止输出流转发进程: ${sessionId}`)
-        session.streamForwardProcess.kill('SIGTERM')
         
-        // 如果进程在3秒内没有退出，强制杀死
-        setTimeout(() => {
-          if (session.streamForwardProcess && !session.streamForwardProcess.killed) {
-            session.streamForwardProcess.kill('SIGKILL')
-          }
-        }, 3000)
+        // 关闭输入流
+        if (session.streamForwardProcess.stdin && !session.streamForwardProcess.stdin.destroyed) {
+          session.streamForwardProcess.stdin.end()
+        }
+        
+        // 使用强制终止方法
+        this.forceKillProcess(session.streamForwardProcess, '输出流转发进程', () => {
+          session.streamForwardProcess = undefined
+        })
       }
       
       // 终止PTY进程
       if (!session.process.killed) {
+        // 关闭输入流
+        if (session.process.stdin && !session.process.stdin.destroyed) {
+          session.process.stdin.end()
+        }
+        
+        // 发送SIGTERM信号
         session.process.kill('SIGTERM')
         
         // 如果进程在3秒内没有退出，强制杀死
         setTimeout(() => {
           if (!session.process.killed) {
+            this.logger.warn(`强制终止PTY进程: ${sessionId}`)
             session.process.kill('SIGKILL')
           }
         }, 3000)
@@ -753,6 +1031,73 @@ export class TerminalManager {
   }
   
   /**
+   * 获取所有活跃会话
+   */
+  public getActiveSessions(): Array<{ id: string; name: string; workingDirectory: string; createdAt: Date; lastActivity: Date; hasStreamForward: boolean; streamForwardStatus: string }> {
+    return Array.from(this.sessions.values()).map(session => ({
+      id: session.id,
+      name: session.name,
+      workingDirectory: session.workingDirectory,
+      createdAt: session.createdAt,
+      lastActivity: session.lastActivity,
+      hasStreamForward: session.enableStreamForward || false,
+      streamForwardStatus: this.getStreamForwardStatus(session)
+    }))
+  }
+
+  /**
+   * 获取输出流转发进程状态
+   */
+  private getStreamForwardStatus(session: PtySession): string {
+    if (!session.enableStreamForward) {
+      return '未启用'
+    }
+    
+    if (!session.streamForwardProcess) {
+      return '未运行'
+    }
+    
+    if (session.streamForwardProcess.killed) {
+      return '已终止'
+    }
+    
+    return `运行中 (PID: ${session.streamForwardProcess.pid})`
+  }
+
+  /**
+   * 获取会话状态信息
+   */
+  private getSessionStatusInfo(session: PtySession): string {
+    const now = new Date()
+    const uptime = Math.floor((now.getTime() - session.createdAt.getTime()) / 1000)
+    const lastActivity = Math.floor((now.getTime() - session.lastActivity.getTime()) / 1000)
+    
+    let statusInfo = `\r\n=== 会话状态信息 ===\r\n`
+    statusInfo += `会话ID: ${session.id}\r\n`
+    statusInfo += `会话名称: ${session.name}\r\n`
+    statusInfo += `工作目录: ${session.workingDirectory}\r\n`
+    statusInfo += `运行时间: ${uptime}秒\r\n`
+    statusInfo += `最后活动: ${lastActivity}秒前\r\n`
+    statusInfo += `PTY进程PID: ${session.process.pid}\r\n`
+    statusInfo += `PTY进程状态: ${session.process.killed ? '已终止' : '运行中'}\r\n`
+    
+    if (session.enableStreamForward) {
+      statusInfo += `输出流转发: 已启用\r\n`
+      statusInfo += `转发程序: ${session.programPath || '未设置'}\r\n`
+      statusInfo += `转发进程状态: ${this.getStreamForwardStatus(session)}\r\n`
+      statusInfo += `自动关闭: ${session.autoCloseOnForwardExit ? '是' : '否'}\r\n`
+    } else {
+      statusInfo += `输出流转发: 未启用\r\n`
+    }
+    
+    statusInfo += `输出缓存: ${session.outputBuffer.length}条记录\r\n`
+    statusInfo += `连接状态: ${session.disconnected ? '已断开' : '已连接'}\r\n`
+    statusInfo += `===================\r\n`
+    
+    return statusInfo
+  }
+
+  /**
    * 获取活跃会话统计
    */
   public getSessionStats(): { total: number; sessions: Array<{ id: string; name: string; createdAt: Date; lastActivity: Date; disconnected?: boolean }> } {
@@ -861,12 +1206,37 @@ export class TerminalManager {
         // 清理输出流转发进程
         if (session.streamForwardProcess && !session.streamForwardProcess.killed) {
           this.logger.info(`清理输出流转发进程: ${sessionId}`)
+          
+          // 关闭输入流
+          if (session.streamForwardProcess.stdin && !session.streamForwardProcess.stdin.destroyed) {
+            session.streamForwardProcess.stdin.end()
+          }
+          
           session.streamForwardProcess.kill('SIGTERM')
+          
+          // 延迟强制杀死
+          setTimeout(() => {
+            if (session.streamForwardProcess && !session.streamForwardProcess.killed) {
+              session.streamForwardProcess.kill('SIGKILL')
+            }
+          }, 1000)
         }
         
         // 清理PTY进程
         if (!session.process.killed) {
+          // 关闭输入流
+          if (session.process.stdin && !session.process.stdin.destroyed) {
+            session.process.stdin.end()
+          }
+          
           session.process.kill('SIGTERM')
+          
+          // 延迟强制杀死
+          setTimeout(() => {
+            if (!session.process.killed) {
+              session.process.kill('SIGKILL')
+            }
+          }, 1000)
         }
       } catch (error) {
         this.logger.error(`清理会话 ${sessionId} 失败:`, error)
