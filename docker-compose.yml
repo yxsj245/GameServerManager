@@ -3,7 +3,7 @@ volumes:
     driver: local
 
 services:
-  gsm3-server:
+  management_panel:
     build: .
     container_name: gsm3_management_panel
     #image: gsm3/management-panel:latest  # 替换为你的镜像名称
