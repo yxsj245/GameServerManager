@@ -12,6 +12,7 @@ import {
   Settings
 } from 'lucide-react'
 import apiClient from '@/utils/api'
+import ConfirmDeleteTaskDialog from '@/components/ConfirmDeleteTaskDialog'
 
 interface ScheduledTask {
   id: string
@@ -43,6 +44,8 @@ const ScheduledTasksPage: React.FC = () => {
   const [showModal, setShowModal] = useState(false)
   const [modalAnimating, setModalAnimating] = useState(false)
   const [editingTask, setEditingTask] = useState<ScheduledTask | null>(null)
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false)
+  const [taskToDelete, setTaskToDelete] = useState<ScheduledTask | null>(null)
   const [formData, setFormData] = useState({
     name: '',
     type: 'power' as 'power' | 'command',
@@ -186,13 +189,18 @@ const ScheduledTasksPage: React.FC = () => {
     setTimeout(() => setModalAnimating(true), 10)
   }
 
-  const handleDelete = async (taskId: string) => {
-    if (!confirm('确定要删除这个定时任务吗？')) {
-      return
-    }
+  const handleDelete = (task: ScheduledTask) => {
+    setTaskToDelete(task)
+    setShowDeleteDialog(true)
+  }
 
+  const handleConfirmDelete = async () => {
+    if (!taskToDelete) return
+
+    setShowDeleteDialog(false)
+    
     try {
-      const response = await apiClient.delete(`/scheduled-tasks/${taskId}`)
+      const response = await apiClient.delete(`/scheduled-tasks/${taskToDelete.id}`)
       if (response.success) {
         addNotification({
           type: 'success',
@@ -210,7 +218,14 @@ const ScheduledTasksPage: React.FC = () => {
         title: '删除失败',
         message: error.message || '删除定时任务失败'
       })
+    } finally {
+      setTaskToDelete(null)
     }
+  }
+
+  const handleCancelDelete = () => {
+    setShowDeleteDialog(false)
+    setTaskToDelete(null)
   }
 
   const handleToggleEnabled = async (taskId: string, enabled: boolean) => {
@@ -382,7 +397,7 @@ const ScheduledTasksPage: React.FC = () => {
                       <Edit className="w-4 h-4" />
                     </button>
                     <button
-                      onClick={() => handleDelete(task.id)}
+                      onClick={() => handleDelete(task)}
                       className="p-2 text-gray-400 hover:text-red-500 transition-colors"
                     >
                       <Trash2 className="w-4 h-4" />
@@ -534,6 +549,16 @@ const ScheduledTasksPage: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* 删除确认弹窗 */}
+      <ConfirmDeleteTaskDialog
+        isOpen={showDeleteDialog}
+        taskName={taskToDelete?.name || ''}
+        taskType={taskToDelete?.type || 'power'}
+        instanceName={taskToDelete?.instanceName}
+        onConfirm={handleConfirmDelete}
+        onCancel={handleCancelDelete}
+      />
     </div>
   )
 }
