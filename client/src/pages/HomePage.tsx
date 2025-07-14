@@ -503,7 +503,7 @@ const HomePage: React.FC = () => {
               欢迎回来，{user?.username}！
             </h2>
             <p className="text-gray-700 dark:text-gray-300">
-              GSManager3 游戏服务器管理面板 - 让游戏服务器管理变得简单
+              GSManager 游戏服务器面板 - 让游戏开服变得如此简单
 
             </p>
           </div>

@@ -190,19 +190,21 @@ const LoginPage: React.FC = () => {
           ${isAnimating ? 'opacity-0' : 'opacity-100 animate-form-field-slide-in animate-delay-200'}
         `}>
           <div className="flex justify-center mb-4">
-            <div className={`
-              p-4 glass rounded-full transition-all duration-300
-              ${!isAnimating ? 'animate-logo-float' : ''}
-              ${loginSuccess ? 'animate-success-checkmark' : ''}
-            `}>
-              <Gamepad2 className="w-12 h-12 text-blue-500" />
-            </div>
+            <img 
+              src="/logo/logo2.png" 
+              alt="GSManager3 Logo" 
+              className={`
+                w-20 h-20 object-contain transition-all duration-300
+                ${!isAnimating ? 'animate-logo-float' : ''}
+                ${loginSuccess ? 'animate-success-checkmark' : ''}
+              `}
+            />
           </div>
           <h1 className="text-4xl font-bold font-game neon-text mb-2">
-            GSManager3
+            GameServerManager
           </h1>
           <p className="text-gray-700 dark:text-gray-300 font-display">
-            游戏服务器管理面板
+            专为游戏服务端而设计的开服面板
           </p>
         </div>
         
@@ -378,7 +380,7 @@ const LoginPage: React.FC = () => {
           {/* 底部信息 */}
           <div className="mt-6 text-center">
             <p className="text-sm text-gray-600 dark:text-gray-400">
-              GSManager3 游戏服务器管理面板
+              GSManager3 游戏服务器面板
             </p>
           </div>
         </div>
