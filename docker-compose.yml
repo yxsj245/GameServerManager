@@ -6,7 +6,7 @@ services:
   management_panel:
     build: .
     container_name: gsm3_management_panel
-    image: langlangy.server.xiaozhuhouses.asia:20000/gameservermanager:3.0.2
+    image: langlangy.server.xiaozhuhouses.asia:20000/gameservermanager:3.0.3
     user: root                       
     ports:
       # GSM3管理面板端口
@@ -14,6 +14,7 @@ services:
     volumes:
       - ./game_file:/home/steam/.config # 通用游戏存档路径1。请务必将此宿主目录权限设置为777
       - ./game_file:/home/steam/.local  # 通用游戏存档路径2。请务必将此宿主目录权限设置为777
+      - ./game_data:/home/steam/games  # 通用游戏存档路径2。请务必将此宿主目录权限设置为777
       - gsm3_data:/root/server/data     # GSM3数据目录（使用命名卷）
     environment:
       - TZ=Asia/Shanghai              # 设置时区
