@@ -78,7 +78,7 @@ export class FileApiClient {
   // 创建目录
   async createDirectory(path: string): Promise<FileOperationResult> {
     const response = await this.client.post(`${API_BASE}/mkdir`, {
-      path
+      dirPath: path
     })
     return response.data
   }

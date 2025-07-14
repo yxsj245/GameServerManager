@@ -1098,22 +1098,37 @@ router.post('/mkdir', authenticateToken, async (req: Request, res: Response) => 
       })
     }
     
-    const dataDir = path.join(process.cwd(), 'data')
-    const fullPath = path.resolve(dataDir, dirPath)
-    
-    if (!fullPath.startsWith(dataDir)) {
-      return res.status(403).json({
-        success: false,
-        message: '访问被拒绝：目录路径超出允许范围'
-      })
+    const fullPath = path.resolve(dirPath)
+
+    try {
+      const stats = await fs.stat(fullPath)
+      if (stats.isDirectory()) {
+        // 目录已存在，操作成功
+        return res.json({
+          success: true,
+          message: '目录已存在',
+          data: { dirPath: fullPath }
+        })
+      } else {
+        // 路径存在但不是目录（即文件）
+        return res.status(409).json({
+          success: false,
+          message: '同名文件已存在，无法创建目录'
+        })
+      }
+    } catch (error: any) {
+      if (error.code === 'ENOENT') {
+        // 路径不存在，可以创建
+        await fs.mkdir(fullPath, { recursive })
+        return res.json({
+          success: true,
+          message: '目录创建成功',
+          data: { dirPath: fullPath }
+        })
+      }
+      // 其他 fs.stat 错误
+      throw error
     }
-    
-    await fs.mkdir(fullPath, { recursive })
-    res.json({
-      success: true,
-      message: '目录创建成功',
-      data: { dirPath }
-    })
   } catch (error: any) {
     res.status(500).json({
       success: false,
