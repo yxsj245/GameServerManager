@@ -39,8 +39,8 @@ export class PluginManager {
 
   constructor(logger: winston.Logger) {
     this.logger = logger
-    this.pluginsDir = path.join(__dirname, '../../../data/plugins')
-    // this.pluginsDir = path.join(__dirname, '../../data/plugins')
+    // this.pluginsDir = path.join(__dirname, '../../../data/plugins')
+    this.pluginsDir = path.join(__dirname, '../../data/plugins')
     this.initializePluginsDirectory()
   }
 
