@@ -576,6 +576,47 @@ export class InstanceManager extends EventEmitter {
     }
   }
 
+  // 关闭终端
+  public async closeTerminal(id: string): Promise<boolean> {
+    const instance = this.instances.get(id)
+    if (!instance) {
+      throw new Error('实例不存在')
+    }
+    
+    if (!instance.terminalSessionId) {
+      throw new Error('终端会话不存在')
+    }
+    
+    try {
+      this.logger.info(`关闭实例终端: ${instance.name} (终端会话: ${instance.terminalSessionId})`)
+      
+      // 创建虚拟socket用于终端操作
+      const virtualSocket = {
+        id: instance.terminalSessionId,
+        emit: () => {}
+      } as any
+      
+      // 强制关闭终端会话
+      this.terminalManager.closePty(virtualSocket, {
+        sessionId: instance.terminalSessionId
+      })
+      
+      // 更新实例状态
+      instance.status = 'stopped'
+      instance.pid = undefined
+      instance.terminalSessionId = undefined
+      instance.lastStopped = new Date().toISOString()
+      
+      this.emit('instance-status-changed', { id, status: 'stopped' })
+      await this.saveInstances()
+      
+      return true
+    } catch (error) {
+      this.logger.error(`关闭实例 ${instance.name} 终端失败:`, error)
+      throw error
+    }
+  }
+
   // 获取实例状态
   public getInstanceStatus(id: string): { status: string; pid?: number } | null {
     const instance = this.instances.get(id)

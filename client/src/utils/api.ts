@@ -374,6 +374,10 @@ class ApiClient {
     return this.post(`/instances/${id}/stop`)
   }
 
+  async closeTerminal(id: string) {
+    return this.post(`/instances/${id}/close-terminal`)
+  }
+
   async getInstanceStatus(id: string) {
     return this.get(`/instances/${id}/status`)
   }

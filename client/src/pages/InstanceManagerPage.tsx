@@ -95,6 +95,9 @@ const InstanceManagerPage: React.FC = () => {
     enableStreamForward: false,
     programPath: ''
   })
+  
+  // 停止按钮状态管理
+  const [disabledStopButtons, setDisabledStopButtons] = useState<Set<string>>(new Set())
 
   // 游戏配置相关状态
   const [availableConfigs, setAvailableConfigs] = useState<any[]>([])
@@ -119,7 +122,8 @@ const InstanceManagerPage: React.FC = () => {
       setLoading(true)
       const response = await apiClient.getInstances()
       if (response.success) {
-        setInstances(response.data || [])
+        const instancesData = response.data || []
+        setInstances(instancesData)
       }
     } catch (error) {
       console.error('获取实例列表失败:', error)
@@ -624,6 +628,8 @@ const InstanceManagerPage: React.FC = () => {
           title: '停止成功',
           message: `实例 "${instance.name}" 正在停止`
         })
+        
+        // 刷新实例列表以获取最新状态
         fetchInstances()
       }
     } catch (error: any) {
@@ -640,6 +646,48 @@ const InstanceManagerPage: React.FC = () => {
       addNotification({
         type: 'error',
         title: '停止失败',
+        message: errorMessage
+      })
+    }
+  }
+
+  // 关闭终端
+  const handleCloseTerminal = async (instance: Instance) => {
+    try {
+      // 禁用按钮3秒
+      setDisabledStopButtons(prev => new Set(prev).add(instance.id))
+      setTimeout(() => {
+        setDisabledStopButtons(prev => {
+          const newSet = new Set(prev)
+          newSet.delete(instance.id)
+          return newSet
+        })
+      }, 3000)
+      
+      // 调用关闭终端的API
+      const response = await apiClient.closeTerminal(instance.id)
+      if (response.success) {
+        addNotification({
+          type: 'success',
+          title: '终端已关闭',
+          message: `实例 "${instance.name}" 的终端已关闭`
+        })
+        
+        fetchInstances()
+      }
+    } catch (error: any) {
+      console.error('关闭终端失败:', error)
+      
+      let errorMessage = '无法关闭终端'
+      if (error.message) {
+        errorMessage = error.message
+      } else if (error.error) {
+        errorMessage = error.error
+      }
+      
+      addNotification({
+        type: 'error',
+        title: '关闭失败',
         message: errorMessage
       })
     }
@@ -985,11 +1033,24 @@ const InstanceManagerPage: React.FC = () => {
                       <Square className="w-4 h-4" />
                       <span>停止</span>
                     </button>
+                  ) : instance.status === 'stopping' ? (
+                    <button
+                      onClick={() => handleCloseTerminal(instance)}
+                      disabled={disabledStopButtons.has(instance.id)}
+                      className={`flex items-center space-x-1 px-3 py-1.5 rounded-md transition-colors ${
+                        disabledStopButtons.has(instance.id)
+                          ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                          : 'bg-orange-100 text-orange-700 hover:bg-orange-200'
+                      }`}
+                    >
+                      <Square className="w-4 h-4" />
+                      <span>关闭终端</span>
+                    </button>
                   ) : (
                     <button
                       onClick={() => handleStartInstance(instance)}
                       className="flex items-center space-x-1 px-3 py-1.5 bg-green-100 text-green-700 rounded-md hover:bg-green-200 transition-colors"
-                      disabled={instance.status === 'starting' || instance.status === 'stopping'}
+                      disabled={instance.status === 'starting'}
                     >
                       <Play className="w-4 h-4" />
                       <span>启动</span>

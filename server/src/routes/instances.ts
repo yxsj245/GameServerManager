@@ -400,6 +400,41 @@ router.post('/:id/stop', authenticateToken, async (req: Request, res: Response) 
   }
 })
 
+// 关闭终端
+router.post('/:id/close-terminal', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    if (!instanceManager) {
+      return res.status(500).json({ 
+        success: false, 
+        error: '实例管理器未初始化' 
+      })
+    }
+    
+    const { id } = req.params
+    await instanceManager.closeTerminal(id)
+    
+    logger.info(`用户关闭实例终端: ${id}`)
+    
+    res.json({
+      success: true,
+      message: '终端关闭成功'
+    })
+  } catch (error: any) {
+    logger.error('关闭终端失败:', error)
+    
+    let statusCode = 500
+    if (error.message.includes('不存在') || error.message.includes('终端会话')) {
+      statusCode = 400
+    }
+    
+    res.status(statusCode).json({
+      success: false,
+      error: '关闭终端失败',
+      message: error.message
+    })
+  }
+})
+
 // 获取实例状态
 router.get('/:id/status', authenticateToken, (req: Request, res: Response) => {
   try {
