@@ -85,15 +85,15 @@ export class TerminalManager {
     
     this.logger.info(`终端管理器初始化完成，PTY路径: ${this.ptyPath}`)
     
-    // 定期清理不活跃的会话
-    setInterval(() => {
-      this.cleanupInactiveSessions()
-    }, 5 * 60 * 1000) // 每5分钟检查一次
+    // 定期清理不活跃的会话 - 已禁用
+    // setInterval(() => {
+    //   this.cleanupInactiveSessions()
+    // }, 5 * 60 * 1000) // 每5分钟检查一次
     
-    // 定期清理过期的持久化会话
-    setInterval(() => {
-      this.sessionManager.cleanupExpiredSessions()
-    }, 24 * 60 * 60 * 1000) // 每24小时清理一次
+    // 定期清理过期的持久化会话 - 已禁用
+    // setInterval(() => {
+    //   this.sessionManager.cleanupExpiredSessions()
+    // }, 24 * 60 * 60 * 1000) // 每24小时清理一次
   }
   
   /**
