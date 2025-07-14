@@ -15,7 +15,7 @@ import SettingsPage from '@/pages/SettingsPage'
 import PluginsPage from '@/pages/PluginsPage'
 import FileManagerPage from '@/pages/FileManagerPage'
 import AboutProjectPage from '@/pages/AboutProjectPage'
-import LoadingSpinner from '@/components/LoadingSpinner'
+import LoginTransition from '@/components/LoginTransition'
 import NotificationContainer from '@/components/NotificationContainer'
 import GlobalMusicPlayer from '@/components/GlobalMusicPlayer'
 
@@ -35,29 +35,15 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
   const { isAuthenticated, loading } = useAuthStore()
   
   if (loading) {
-    return <LoadingSpinner />
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+      </div>
+    )
   }
   
   if (!isAuthenticated) {
-    // 不再自动跳转到登录页，显示未认证提示
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900">
-        <div className="text-center p-8 bg-white dark:bg-gray-800 rounded-lg shadow-lg">
-          <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-4">
-            需要登录
-          </h2>
-          <p className="text-gray-600 dark:text-gray-400 mb-6">
-            请登录后访问此页面
-          </p>
-          <button
-            onClick={() => window.location.href = '/login'}
-            className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
-          >
-            前往登录
-          </button>
-        </div>
-      </div>
-    )
+    return <Navigate to="/login" replace />
   }
   
   return <>{children}</>
@@ -68,7 +54,11 @@ const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated, loading } = useAuthStore()
   
   if (loading) {
-    return <LoadingSpinner />
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+      </div>
+    )
   }
   
   if (isAuthenticated) {
@@ -118,7 +108,9 @@ function App() {
               path="/login"
               element={
                 <PublicRoute>
-                  <LoginPage />
+                  <PageTransition>
+                    <LoginPage />
+                  </PageTransition>
                 </PublicRoute>
               }
             />

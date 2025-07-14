@@ -5,6 +5,7 @@ import { useThemeStore } from '@/stores/themeStore'
 import { Eye, EyeOff, Gamepad2, Sun, Moon, Loader2, RefreshCw } from 'lucide-react'
 import apiClient from '@/utils/api'
 import { CaptchaData } from '@/types'
+import LoginTransition from '@/components/LoginTransition'
 
 const LoginPage: React.FC = () => {
   const [username, setUsername] = useState('')
@@ -14,9 +15,21 @@ const LoginPage: React.FC = () => {
   const [captchaData, setCaptchaData] = useState<CaptchaData | null>(null)
   const [requireCaptcha, setRequireCaptcha] = useState(false)
   const [captchaLoading, setCaptchaLoading] = useState(false)
+  const [isLoggingIn, setIsLoggingIn] = useState(false)
+  const [loginSuccess, setLoginSuccess] = useState(false)
+  const [isAnimating, setIsAnimating] = useState(true)
+  const [showLoginTransition, setShowLoginTransition] = useState(false)
   const { login, loading, error } = useAuthStore()
   const { addNotification } = useNotificationStore()
   const { theme, toggleTheme } = useThemeStore()
+
+  // 页面加载动画
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsAnimating(false)
+    }, 100)
+    return () => clearTimeout(timer)
+  }, [])
   
   // 检查是否需要验证码
   const checkCaptchaRequired = async (usernameValue: string) => {
@@ -96,6 +109,8 @@ const LoginPage: React.FC = () => {
       return
     }
     
+    setIsLoggingIn(true)
+    
     const credentials = {
       username: username.trim(),
       password,
@@ -108,12 +123,20 @@ const LoginPage: React.FC = () => {
     const result = await login(credentials)
     
     if (result.success) {
+      setLoginSuccess(true)
+      setShowLoginTransition(true)
       addNotification({
         type: 'success',
         title: '登录成功',
         message: '欢迎回来！'
       })
+      
+      // 延迟一下让用户看到成功动画
+      setTimeout(() => {
+        setIsLoggingIn(false)
+      }, 1000)
     } else {
+      setIsLoggingIn(false)
       addNotification({
         type: 'error',
         title: '登录失败',
@@ -128,20 +151,50 @@ const LoginPage: React.FC = () => {
   }
   
   return (
-    <div className="min-h-screen flex items-center justify-center bg-game-gradient p-4">
+    <>
+      {/* 登录过渡动画 */}
+      <LoginTransition 
+        isVisible={showLoginTransition} 
+        onComplete={() => {
+          setShowLoginTransition(false)
+        }}
+      />
+      
+      <div className={`
+        min-h-screen flex items-center justify-center p-4 transition-all duration-1000
+        ${theme === 'dark' 
+          ? 'bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 animate-background-shift' 
+          : 'bg-gradient-to-br from-blue-50 via-white to-purple-50'
+        }
+      `}>
       {/* 主题切换按钮 */}
       <button
         onClick={toggleTheme}
-        className="fixed top-4 right-4 p-3 glass rounded-full text-black dark:text-white hover:bg-white/20 transition-all duration-200"
+        className={`
+          fixed top-4 right-4 p-3 glass rounded-full text-black dark:text-white 
+          hover:bg-white/20 transition-all duration-200 z-10
+          ${isAnimating ? 'opacity-0 translate-y-[-20px]' : 'opacity-100 translate-y-0 animate-form-field-slide-in animate-delay-500'}
+        `}
       >
         {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
       </button>
       
-      <div className="w-full max-w-md">
+      <div className={`
+        w-full max-w-md transition-all duration-600
+        ${isAnimating ? 'opacity-0 translate-y-10 scale-95' : 'opacity-100 translate-y-0 scale-100 animate-login-slide-in'}
+        ${loginSuccess ? 'animate-page-transition-out' : ''}
+      `}>
         {/* Logo和标题 */}
-        <div className="text-center mb-8">
+        <div className={`
+          text-center mb-8
+          ${isAnimating ? 'opacity-0' : 'opacity-100 animate-form-field-slide-in animate-delay-200'}
+        `}>
           <div className="flex justify-center mb-4">
-            <div className="p-4 glass rounded-full">
+            <div className={`
+              p-4 glass rounded-full transition-all duration-300
+              ${!isAnimating ? 'animate-logo-float' : ''}
+              ${loginSuccess ? 'animate-success-checkmark' : ''}
+            `}>
               <Gamepad2 className="w-12 h-12 text-blue-500" />
             </div>
           </div>
@@ -154,7 +207,11 @@ const LoginPage: React.FC = () => {
         </div>
         
         {/* 登录表单 */}
-        <div className="card-game p-8">
+        <div className={`
+          card-game p-8 transition-all duration-800
+          ${isAnimating ? 'opacity-0' : 'opacity-100 animate-fade-in'}
+          ${loginSuccess ? 'scale-105 shadow-2xl' : ''}
+        `}>
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* 用户名输入 */}
             <div>
@@ -170,10 +227,11 @@ const LoginPage: React.FC = () => {
                   w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg
                   text-black dark:text-white placeholder-gray-400
                   focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent
-                  transition-all duration-200
+                  transition-all duration-200 hover:border-white/30
+                  focus:scale-[1.02] focus:shadow-lg
                 "
                 placeholder="请输入用户名"
-                disabled={loading}
+                disabled={loading || isLoggingIn}
               />
             </div>
             
@@ -192,16 +250,17 @@ const LoginPage: React.FC = () => {
                     w-full px-4 py-3 pr-12 bg-white/10 border border-white/20 rounded-lg
                     text-black dark:text-white placeholder-gray-400
                     focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent
-                    transition-all duration-200
+                    transition-all duration-200 hover:border-white/30
+                    focus:scale-[1.02] focus:shadow-lg
                   "
                   placeholder="请输入密码"
-                  disabled={loading}
+                  disabled={loading || isLoggingIn}
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-black dark:hover:text-white transition-colors"
-                  disabled={loading}
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-black dark:hover:text-white transition-all duration-200 hover:scale-110"
+                  disabled={loading || isLoggingIn}
                 >
                   {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </button>
@@ -224,10 +283,11 @@ const LoginPage: React.FC = () => {
                       flex-1 px-4 py-3 bg-white/10 border border-white/20 rounded-lg
                       text-black dark:text-white placeholder-gray-400
                       focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent
-                      transition-all duration-200
+                      transition-all duration-200 hover:border-white/30
+                      focus:scale-[1.02] focus:shadow-lg
                     "
                     placeholder="请输入验证码"
-                    disabled={loading || captchaLoading}
+                    disabled={loading || captchaLoading || isLoggingIn}
                     maxLength={4}
                   />
                   <div className="flex items-center space-x-2">
@@ -255,12 +315,13 @@ const LoginPage: React.FC = () => {
                     <button
                       type="button"
                       onClick={refreshCaptcha}
-                      disabled={loading || captchaLoading}
+                      disabled={loading || captchaLoading || isLoggingIn}
                       className="
                         p-3 bg-white/10 border border-white/20 rounded-lg
                         text-gray-400 hover:text-black dark:hover:text-white
                         hover:bg-white/20 transition-all duration-200
                         disabled:opacity-50 disabled:cursor-not-allowed
+                        hover:scale-110 active:scale-95
                       "
                       title="刷新验证码"
                     >
@@ -276,7 +337,7 @@ const LoginPage: React.FC = () => {
             
             {/* 错误信息 */}
             {error && (
-              <div className="p-3 bg-red-500/20 border border-red-500/30 rounded-lg">
+              <div className="p-3 bg-red-500/20 border border-red-500/30 rounded-lg transition-all duration-300">
                 <p className="text-red-400 text-sm">{error}</p>
               </div>
             )}
@@ -284,18 +345,30 @@ const LoginPage: React.FC = () => {
             {/* 登录按钮 */}
             <button
               type="submit"
-              disabled={loading}
-              className="
-                w-full btn-game py-3 font-semibold
+              disabled={loading || isLoggingIn}
+              className={`
+                w-full py-3 font-semibold transition-all duration-300
                 disabled:opacity-50 disabled:cursor-not-allowed
                 flex items-center justify-center space-x-2
-              "
+                ${isLoggingIn 
+                  ? 'bg-green-600 hover:bg-green-700 animate-button-pulse' 
+                  : 'btn-game hover:scale-105 active:scale-95'
+                }
+                ${loginSuccess ? 'bg-green-500 scale-110' : ''}
+              `}
             >
-              {loading ? (
-                <>
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                  <span>登录中...</span>
-                </>
+              {isLoggingIn ? (
+                loginSuccess ? (
+                  <>
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    <span>登录成功！</span>
+                  </>
+                ) : (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    <span>登录中...</span>
+                  </>
+                )
               ) : (
                 <span>登录</span>
               )}
@@ -311,6 +384,7 @@ const LoginPage: React.FC = () => {
         </div>
       </div>
     </div>
+    </>
   )
 }
 

@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router-dom'
 import { useAuthStore } from '@/stores/authStore'
 import { useThemeStore } from '@/stores/themeStore'
 import socketClient from '@/utils/socket'
+import LogoutTransition from './LogoutTransition'
 import {
   Home,
   Terminal,
@@ -37,6 +38,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const [reconnecting, setReconnecting] = useState(false)
   const [showLowPowerModal, setShowLowPowerModal] = useState(false)
   const [isLowPowerMode, setIsLowPowerMode] = useState(socketClient.isInLowPowerMode())
+  const [showLogoutTransition, setShowLogoutTransition] = useState(false)
   const location = useLocation()
   const { user, logout } = useAuthStore()
   const { theme, toggleTheme } = useThemeStore()
@@ -54,6 +56,11 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   ]
   
   const handleLogout = async () => {
+    setShowLogoutTransition(true)
+  }
+
+  const handleLogoutComplete = async () => {
+    setShowLogoutTransition(false)
     await logout()
   }
 
@@ -558,6 +565,12 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           </div>
         </div>
       )}
+
+      {/* 登出过渡动画 */}
+      <LogoutTransition 
+        isVisible={showLogoutTransition} 
+        onComplete={handleLogoutComplete} 
+      />
     </div>
   )
 }
