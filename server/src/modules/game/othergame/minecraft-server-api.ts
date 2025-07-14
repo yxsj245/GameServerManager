@@ -210,6 +210,33 @@ export class FileManager {
   private static tempDir = path.join(process.cwd(), 'temp-minecraft-server');
 
   /**
+   * 规范化路径，确保跨平台兼容性
+   */
+  static normalizePath(inputPath: string): string {
+    // 处理相对路径
+    if (!path.isAbsolute(inputPath)) {
+      inputPath = path.resolve(process.cwd(), inputPath);
+    }
+    // 规范化路径分隔符
+    return path.normalize(inputPath);
+  }
+
+  /**
+   * 检查目录权限（Linux/Unix系统）
+   */
+  static async checkDirectoryPermissions(dirPath: string): Promise<boolean> {
+    try {
+      // 尝试在目录中创建一个临时文件来测试写权限
+      const testFile = path.join(dirPath, '.write-test-' + Date.now());
+      await fs.writeFile(testFile, 'test');
+      await fs.remove(testFile);
+      return true;
+    } catch (error) {
+      return false;
+    }
+  }
+
+  /**
    * 创建临时目录
    */
   static async createTempDirectory(): Promise<string> {
@@ -325,23 +352,47 @@ export class FileManager {
    * 移动文件到目标目录
    */
   static async moveFilesToTarget(targetDir: string, onLog?: LogCallback): Promise<void> {
+    // 规范化目标目录路径
+    const normalizedTargetDir = this.normalizePath(targetDir);
+    
     // 确保目标目录存在
-    await fs.ensureDir(targetDir);
+    await fs.ensureDir(normalizedTargetDir);
+    
+    // 检查目录权限（特别是在Linux环境下）
+    const hasPermission = await this.checkDirectoryPermissions(normalizedTargetDir);
+    if (!hasPermission) {
+      throw new Error(`目标目录没有写权限: ${normalizedTargetDir}。请检查目录权限或使用sudo运行。`);
+    }
     
     // 获取临时目录中的所有文件
     const files = await fs.readdir(this.tempDir);
     
     if (onLog) {
-      onLog(`正在移动 ${files.length} 个文件到目标目录...`, 'info');
+      onLog(`正在移动 ${files.length} 个文件到目标目录: ${normalizedTargetDir}`, 'info');
     }
     
     for (const file of files) {
       const sourcePath = path.join(this.tempDir, file);
-      const targetPath = path.join(targetDir, file);
+      const targetPath = path.join(normalizedTargetDir, file);
       
       try {
+        // 检查源文件是否存在
+        const sourceExists = await this.fileExists(sourcePath);
+        if (!sourceExists) {
+          if (onLog) {
+            onLog(`跳过不存在的文件: ${file}`, 'warn');
+          }
+          continue;
+        }
+        
         // 统一使用move操作，无论是文件还是目录
         await fs.move(sourcePath, targetPath, { overwrite: true });
+        
+        // 验证移动是否成功
+        const targetExists = await this.fileExists(targetPath);
+        if (!targetExists) {
+          throw new Error(`文件移动后验证失败: ${file}`);
+        }
         
         const stat = await fs.stat(targetPath);
         if (stat.isFile()) {
@@ -354,10 +405,21 @@ export class FileManager {
           }
         }
       } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
         if (onLog) {
-          onLog(`移动失败: ${file} - ${error}`, 'error');
+          onLog(`移动失败: ${file} - ${errorMessage}`, 'error');
         }
-        throw error;
+        
+        // 在Linux环境下，提供更详细的错误信息
+        if (process.platform !== 'win32' && errorMessage.includes('EACCES')) {
+          throw new Error(`权限被拒绝，无法移动文件 ${file}。请检查文件权限或使用sudo运行。`);
+        } else if (errorMessage.includes('ENOSPC')) {
+          throw new Error(`磁盘空间不足，无法移动文件 ${file}。`);
+        } else if (errorMessage.includes('EXDEV')) {
+          throw new Error(`跨设备移动文件失败 ${file}。尝试复制后删除源文件。`);
+        }
+        
+        throw new Error(`移动文件失败: ${file} - ${errorMessage}`);
       }
     }
   }
@@ -492,6 +554,9 @@ export class MinecraftServerDownloader {
       silent = false
     } = options;
 
+    // 规范化目标目录路径，确保跨平台兼容性
+    const normalizedTargetDirectory = FileManager.normalizePath(targetDirectory);
+
     const log = silent ? undefined : this.onLog;
     this.cancelled = false; // 重置取消状态
 
@@ -566,8 +631,8 @@ export class MinecraftServerDownloader {
         }
 
         // 移动文件到目标目录
-        if (log) log(`正在移动文件到目标目录: ${targetDirectory}`, 'info');
-        await FileManager.moveFilesToTarget(targetDirectory, log);
+        if (log) log(`正在移动文件到目标目录: ${normalizedTargetDirectory}`, 'info');
+        await FileManager.moveFilesToTarget(normalizedTargetDirectory, log);
         if (log) log('文件移动完成。', 'success');
         
       } finally {
@@ -580,7 +645,7 @@ export class MinecraftServerDownloader {
       
       if (!this.cancelled && log) {
         log('=== 所有操作完成 ===', 'success');
-        log(`服务端文件已保存到: ${targetDirectory}`, 'info');
+        log(`服务端文件已保存到: ${normalizedTargetDirectory}`, 'info');
         log('您现在可以在目标目录中找到服务端文件。', 'info');
         if (!skipServerRun) {
           log('如需同意EULA协议，请编辑 eula.txt 文件并将 eula=false 改为 eula=true', 'info');
