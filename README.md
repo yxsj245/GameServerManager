@@ -23,6 +23,7 @@ key 提交赞助者密钥
     "我的世界基岩版": {
       "txt": "我的世界是一款游戏",
       "image": "http://images.server.xiaozhuhouses.asia:40061/i/2025/06/12/t0i9wh.jpg",
+      "type":["我的世界","官方服务端"],
       "download": "http://langlangy.server.xiaozhuhouses.asia:8082/disk1/MC%e5%86%85%e5%ae%b9/%e6%95%b4%e5%90%88%e5%8c%85/%e5%8e%9f%e7%89%88/BE/bedrock-server.zip"
     }
   }

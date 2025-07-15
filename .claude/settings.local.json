@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find \"D:\\Cursor项目\\GSM3\\server\\src\\modules\\onlineGame\" -type f -name \"*.ts\" -o -name \"*.js\")"
+    ],
+    "deny": []
+  }
+}

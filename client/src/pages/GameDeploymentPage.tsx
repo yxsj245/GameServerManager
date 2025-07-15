@@ -130,6 +130,10 @@ const GameDeploymentPage: React.FC = () => {
   const [showOnlineGameInstallModal, setShowOnlineGameInstallModal] = useState(false)
   const [onlineGameInstallModalAnimating, setOnlineGameInstallModalAnimating] = useState(false)
   
+  // 在线部署筛选相关状态
+  const [onlineGameTypeFilter, setOnlineGameTypeFilter] = useState<string>('all')
+  const [onlineGameSearchQuery, setOnlineGameSearchQuery] = useState('')
+  
   const socketRef = useRef<Socket | null>(null)
   const currentDownloadId = useRef<string | null>(null)
   const currentMoreGameDeploymentId = useRef<string | null>(null)
@@ -1209,7 +1213,19 @@ const GameDeploymentPage: React.FC = () => {
       const response = await apiClient.getOnlineGames()
       
       if (response.success) {
-        setOnlineGames(response.data || [])
+        // 后端返回的是数组格式，直接使用
+        const gamesArray = (response.data || []).map((gameData: any) => ({
+          id: gameData.id || gameData.name,
+          name: gameData.name,
+          description: gameData.description || '',
+          image: gameData.image || '',
+          type: gameData.type || [],
+          download: gameData.downloadUrl || gameData.download || '',
+          supportedPlatforms: gameData.supportedPlatforms || [],
+          supported: gameData.supported || false,
+          currentPlatform: gameData.currentPlatform || ''
+        }))
+        setOnlineGames(gamesArray)
       } else {
         throw new Error(response.message || '获取在线游戏列表失败')
       }
@@ -1435,6 +1451,31 @@ const GameDeploymentPage: React.FC = () => {
         return true
     }
   })
+
+  // 筛选在线游戏
+  const filteredOnlineGames = onlineGames.filter((game) => {
+    // 搜索筛选
+    if (onlineGameSearchQuery && !game.name.toLowerCase().includes(onlineGameSearchQuery.toLowerCase())) {
+      return false
+    }
+    
+    // 类型筛选
+    if (onlineGameTypeFilter !== 'all' && game.type) {
+      return game.type.includes(onlineGameTypeFilter)
+    }
+    
+    return true
+  })
+
+  // 获取所有可用的在线游戏类型
+  const availableOnlineGameTypes = Array.from(
+    new Set(
+      onlineGames.flatMap(game => game.type || []).filter(type => type && type.trim())
+    )
+  ).sort()
+
+  // 检查是否有任何游戏包含type信息
+  const hasGameTypes = availableOnlineGameTypes.length > 0
 
   const tabs = [
     { id: 'steamcmd', name: 'SteamCMD', icon: Download },
@@ -1688,6 +1729,78 @@ const GameDeploymentPage: React.FC = () => {
             </div>
           </div>
 
+          {/* 在线游戏筛选器 */}
+          {sponsorKeyValid && onlineGames.length > 0 && (
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
+              <div className="flex flex-col sm:flex-row gap-4">
+                {/* 搜索框 */}
+                <div className="flex-1">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    搜索游戏
+                  </label>
+                  <input
+                    type="text"
+                    value={onlineGameSearchQuery}
+                    onChange={(e) => setOnlineGameSearchQuery(e.target.value)}
+                    placeholder="输入游戏名称搜索..."
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  />
+                </div>
+                
+                {/* 类型筛选 - 只有当有游戏类型时才显示 */}
+                {hasGameTypes && (
+                  <div className="sm:w-48">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      游戏类型
+                    </label>
+                    <select
+                      value={onlineGameTypeFilter}
+                      onChange={(e) => setOnlineGameTypeFilter(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    >
+                      <option value="all">全部类型</option>
+                      {availableOnlineGameTypes.map((type) => (
+                        <option key={type} value={type}>
+                          {type}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                
+                {/* 清除筛选按钮 */}
+                {(onlineGameSearchQuery || (hasGameTypes && onlineGameTypeFilter !== 'all')) && (
+                  <div className="sm:w-auto flex items-end">
+                    <button
+                      onClick={() => {
+                        setOnlineGameSearchQuery('')
+                        setOnlineGameTypeFilter('all')
+                      }}
+                      className="px-4 py-2 text-sm bg-gray-100 dark:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-500 transition-colors"
+                    >
+                      清除筛选
+                    </button>
+                  </div>
+                )}
+              </div>
+              
+              {/* 统计信息 */}
+              <div className="mt-4 text-sm text-gray-600 dark:text-gray-400">
+                显示 {filteredOnlineGames.length} / {onlineGames.length} 个游戏
+                {hasGameTypes && onlineGameTypeFilter !== 'all' && (
+                  <span className="ml-2 text-green-600 dark:text-green-400">
+                    (类型: {onlineGameTypeFilter})
+                  </span>
+                )}
+                {onlineGameSearchQuery && (
+                  <span className="ml-2 text-blue-600 dark:text-blue-400">
+                    (搜索: "{onlineGameSearchQuery}")
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* 在线游戏列表 */}
           {sponsorKeyValid ? (
             onlineGamesLoading ? (
@@ -1697,16 +1810,22 @@ const GameDeploymentPage: React.FC = () => {
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                {onlineGames.length === 0 ? (
+                {filteredOnlineGames.length === 0 ? (
                   <div className="col-span-full text-center py-12">
                     <div className="text-gray-500 dark:text-gray-400">
                       <Server className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                      <p className="text-lg font-medium mb-2">暂无可用的在线游戏</p>
-                      <p className="text-sm">请稍后再试或联系管理员</p>
+                      <p className="text-lg font-medium mb-2">
+                        {onlineGames.length === 0 ? '暂无可用的在线游戏' : '没有找到匹配的游戏'}
+                      </p>
+                      <p className="text-sm">
+                        {onlineGames.length === 0 
+                          ? '请稍后再试或联系管理员' 
+                          : '尝试修改搜索条件或筛选设置'}
+                      </p>
                     </div>
                   </div>
                 ) : (
-                  onlineGames.map((game) => (
+                  filteredOnlineGames.map((game) => (
                     <div
                       key={game.id}
                       className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow"
@@ -1730,6 +1849,20 @@ const GameDeploymentPage: React.FC = () => {
                         <h3 className="font-semibold text-gray-900 dark:text-white mb-2 text-center">
                           {game.name}
                         </h3>
+                        
+                        {/* 游戏类型标签 */}
+                        {game.type && game.type.length > 0 && (
+                          <div className="flex flex-wrap gap-1 justify-center mb-3">
+                            {game.type.map((type, index) => (
+                              <span
+                                key={index}
+                                className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400"
+                              >
+                                {type}
+                              </span>
+                            ))}
+                          </div>
+                        )}
                         
                         {/* 游戏描述 */}
                         {game.description && (

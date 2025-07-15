@@ -35,6 +35,7 @@ export interface OnlineGameInfo {
   description?: string
   image?: string
   downloadUrl?: string
+  type?: string[] // 添加type字段
   category?: string
   supportedPlatforms: Platform[]
   deploymentScript?: string
@@ -150,6 +151,7 @@ router.get('/games', authenticateToken, async (req: Request, res: Response) => {
         description: gameInfo.txt || '',
         image: gameInfo.image || '',
         downloadUrl: gameInfo.download || '',
+        type: gameInfo.type || [], // 添加type字段
         supportedPlatforms: [currentPlatform], // 基于请求的系统类型
         supported: true,
         currentPlatform
