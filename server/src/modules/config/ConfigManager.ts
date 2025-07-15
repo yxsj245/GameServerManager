@@ -25,6 +25,12 @@ export interface AppConfig {
     version?: string
     lastChecked?: string
   }
+  sponsor?: {
+    key: string
+    isValid: boolean
+    expiryTime?: string
+    validatedAt: string
+  }
 }
 
 export class ConfigManager {
@@ -179,5 +185,28 @@ export class ConfigManager {
     this.logger.info('New SteamCMD config is:', this.config.steamcmd)
     await this.saveConfig()
     this.logger.info('SteamCMD配置已更新')
+  }
+
+  getSponsorConfig() {
+    return this.config.sponsor
+  }
+
+  async updateSponsorConfig(sponsorData: {
+    key: string
+    isValid: boolean
+    expiryTime?: string
+  }): Promise<void> {
+    this.config.sponsor = {
+      ...sponsorData,
+      validatedAt: new Date().toISOString()
+    }
+    await this.saveConfig()
+    this.logger.info('赞助者密钥配置已更新')
+  }
+
+  async clearSponsorConfig(): Promise<void> {
+    delete this.config.sponsor
+    await this.saveConfig()
+    this.logger.info('赞助者密钥配置已清除')
   }
 }

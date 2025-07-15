@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { useThemeStore } from '@/stores/themeStore'
 import { useAuthStore } from '@/stores/authStore'
 import { useNotificationStore } from '@/stores/notificationStore'
+import apiClient from '@/utils/api'
 import {
   Settings,
   Monitor,
@@ -106,6 +107,15 @@ const SettingsPage: React.FC = () => {
   const [steamcmdProgress, setSteamcmdProgress] = useState(0)
   const [pathCheckLoading, setPathCheckLoading] = useState(false)
   const [pathExists, setPathExists] = useState<boolean | null>(null)
+
+  // 赞助者密钥状态
+  const [sponsorKey, setSponsorKey] = useState('')
+  const [sponsorKeyLoading, setSponsorKeyLoading] = useState(false)
+  const [sponsorKeyStatus, setSponsorKeyStatus] = useState<{
+    isValid: boolean | null
+    message: string
+    expiryTime?: number
+  }>({ isValid: null, message: '' })
 
   // 处理密码修改
   const handlePasswordChange = async (e: React.FormEvent) => {
@@ -246,6 +256,104 @@ const SettingsPage: React.FC = () => {
       newUsername: '',
       isEditing: false
     })
+  }
+
+  // 处理赞助者密钥校验
+  const handleClearSponsorKey = async () => {
+    try {
+      const result = await apiClient.clearSponsorKey()
+      if (result.success) {
+        setSponsorKey('')
+        setSponsorKeyStatus({
+          isValid: false,
+          message: '',
+          expiryTime: null
+        })
+        addNotification({
+          type: 'success',
+          title: '操作成功',
+          message: '赞助者密钥已清除'
+        })
+      } else {
+        addNotification({
+          type: 'error',
+          title: '操作失败',
+          message: result.message || '清除密钥失败'
+        })
+      }
+    } catch (error) {
+      console.error('清除赞助者密钥失败:', error)
+      addNotification({
+        type: 'error',
+        title: '网络错误',
+        message: '请稍后重试'
+      })
+    }
+  }
+
+  const handleSponsorKeyValidation = async () => {
+    if (!sponsorKey.trim()) {
+      addNotification({
+        type: 'error',
+        title: '输入错误',
+        message: '请输入赞助者密钥'
+      })
+      return
+    }
+
+    setSponsorKeyLoading(true)
+    setSponsorKeyStatus({ isValid: null, message: '' })
+
+    try {
+      const result = await apiClient.validateSponsorKey(sponsorKey)
+
+      if (result.success) {
+        const { data } = result
+        const isExpired = data.is_expired
+        const expiryTime = data.timeData
+        
+        setSponsorKeyStatus({
+          isValid: !isExpired,
+          message: isExpired ? '密钥已过期' : '密钥有效',
+          expiryTime: expiryTime
+        })
+
+        addNotification({
+          type: isExpired ? 'warning' : 'success',
+          title: '密钥校验完成',
+          message: isExpired ? '密钥已过期，请联系管理员更新' : '密钥验证成功'
+        })
+
+        // 密钥已保存到服务器，显示预览格式
+        if (!isExpired) {
+          setSponsorKey(sponsorKey.substring(0, 8) + '...')
+        }
+      } else {
+        setSponsorKeyStatus({
+          isValid: false,
+          message: result.message || '密钥校验失败'
+        })
+
+        addNotification({
+          type: 'error',
+          title: '密钥校验失败',
+          message: result.message || '无效的赞助者密钥'
+        })
+      }
+    } catch (error) {
+      setSponsorKeyStatus({
+        isValid: false,
+        message: '网络错误，请稍后重试'
+      })
+
+      addNotification({
+        type: 'error',
+        title: '校验失败',
+        message: '网络错误，请稍后重试'
+      })
+    } finally {
+      setSponsorKeyLoading(false)
+    }
   }
 
   // SteamCMD相关处理函数
@@ -456,6 +564,27 @@ const SettingsPage: React.FC = () => {
     } catch (error) {
       console.error('加载本地设置失败:', error)
     }
+
+    // 从服务器获取已保存的赞助者密钥信息
+    const loadSponsorKeyInfo = async () => {
+      try {
+        const result = await apiClient.getSponsorKeyInfo()
+        if (result.success && result.data) {
+          // 设置密钥状态信息
+          setSponsorKeyStatus({
+            isValid: result.data.isValid,
+            message: result.data.isValid ? '密钥有效' : '密钥已过期',
+            expiryTime: result.data.expiryTime
+          })
+          // 显示密钥预览
+          setSponsorKey(result.data.keyPreview)
+        }
+      } catch (error) {
+        console.error('获取赞助者密钥信息失败:', error)
+      }
+    }
+    
+    loadSponsorKeyInfo()
   }, [])
 
   // 路径变化时检查
@@ -897,6 +1026,97 @@ const SettingsPage: React.FC = () => {
               >
                 <RotateCcw className="w-4 h-4" />
               </button>
+            </div>
+          </div>
+        </div>
+        
+        {/* 赞助者密钥 */}
+        <div className="card-game p-6">
+          <div className="flex items-center space-x-3 mb-6">
+            <Shield className="w-5 h-5 text-yellow-500" />
+            <h2 className="text-lg font-semibold text-black dark:text-white">赞助者密钥</h2>
+          </div>
+          
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-800 dark:text-gray-200 mb-2">
+                密钥
+              </label>
+              <div className="flex space-x-3">
+                <input
+                  type="text"
+                  value={sponsorKey}
+                  onChange={(e) => setSponsorKey(e.target.value)}
+                  className="flex-1 px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-black dark:text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                  placeholder="请输入赞助者密钥"
+                  disabled={sponsorKeyLoading}
+                />
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleSponsorKeyValidation}
+                    disabled={sponsorKeyLoading || !sponsorKey.trim()}
+                    className="flex-1 px-4 py-2 bg-yellow-600 hover:bg-yellow-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+                  >
+                    {sponsorKeyLoading ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Check className="w-4 h-4" />
+                    )}
+                    <span>{sponsorKeyLoading ? '校验中...' : '校验密钥'}</span>
+                  </button>
+                  {sponsorKeyStatus.isValid && (
+                    <button
+                      onClick={handleClearSponsorKey}
+                      disabled={sponsorKeyLoading}
+                      className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      清除
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+            
+            {/* 密钥状态显示 */}
+            {sponsorKeyStatus.message && (
+              <div className={`p-3 rounded-lg ${
+                sponsorKeyStatus.isValid === true 
+                  ? 'bg-green-500/20 border border-green-500/30' 
+                  : sponsorKeyStatus.isValid === false 
+                  ? 'bg-red-500/20 border border-red-500/30'
+                  : 'bg-yellow-500/20 border border-yellow-500/30'
+              }`}>
+                <div className="flex items-center space-x-2">
+                  {sponsorKeyStatus.isValid === true ? (
+                    <CheckCircle className="w-4 h-4 text-green-500" />
+                  ) : sponsorKeyStatus.isValid === false ? (
+                    <XCircle className="w-4 h-4 text-red-500" />
+                  ) : (
+                    <Loader2 className="w-4 h-4 text-yellow-500" />
+                  )}
+                  <span className={`text-sm font-medium ${
+                    sponsorKeyStatus.isValid === true 
+                      ? 'text-green-500' 
+                      : sponsorKeyStatus.isValid === false 
+                      ? 'text-red-500'
+                      : 'text-yellow-500'
+                  }`}>
+                    {sponsorKeyStatus.message}
+                  </span>
+                </div>
+                
+                {sponsorKeyStatus.expiryTime && (
+                  <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                    到期时间: {new Date(sponsorKeyStatus.expiryTime).toLocaleString()}
+                  </p>
+                )}
+              </div>
+            )}
+            
+            <div className="text-xs text-gray-600 dark:text-gray-400">
+              <p>• 赞助者密钥用于验证您的赞助者身份</p>
+              <p>• 密钥验证成功后将自动保存到本地</p>
+              <p>• 如需获取密钥，请联系管理员</p>
             </div>
           </div>
         </div>

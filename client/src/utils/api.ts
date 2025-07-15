@@ -207,6 +207,21 @@ class ApiClient {
     }
   }
 
+  // 校验赞助者密钥
+  async validateSponsorKey(key: string): Promise<ApiResponse<any>> {
+    return this.post('/sponsor/validate-key', { key })
+  }
+
+  // 获取已保存的赞助者密钥信息
+  async getSponsorKeyInfo(): Promise<ApiResponse<any>> {
+    return this.get('/sponsor/key-info')
+  }
+
+  // 清除已保存的赞助者密钥
+  async clearSponsorKey(): Promise<ApiResponse<any>> {
+    return this.delete('/sponsor/clear-key')
+  }
+
   async changePassword(
     oldPassword: string,
     newPassword: string
