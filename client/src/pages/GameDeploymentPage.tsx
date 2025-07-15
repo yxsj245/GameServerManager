@@ -115,10 +115,26 @@ const GameDeploymentPage: React.FC = () => {
   const [mrpackInstanceDescription, setMrpackInstanceDescription] = useState('')
   const [creatingMrpackInstance, setCreatingMrpackInstance] = useState(false)
   
+  // 在线部署相关状态
+  const [onlineGames, setOnlineGames] = useState<any[]>([])
+  const [onlineGamesLoading, setOnlineGamesLoading] = useState(false)
+  const [sponsorKeyValid, setSponsorKeyValid] = useState<boolean | null>(null)
+  const [sponsorKeyChecking, setSponsorKeyChecking] = useState(false)
+  const [selectedOnlineGame, setSelectedOnlineGame] = useState<any>(null)
+  const [onlineGameInstallPath, setOnlineGameInstallPath] = useState('')
+  const [onlineGameDeploying, setOnlineGameDeploying] = useState(false)
+  const [onlineGameDeployProgress, setOnlineGameDeployProgress] = useState<any>(null)
+  const [onlineGameDeployLogs, setOnlineGameDeployLogs] = useState<string[]>([])
+  const [onlineGameDeployComplete, setOnlineGameDeployComplete] = useState(false)
+  const [onlineGameDeployResult, setOnlineGameDeployResult] = useState<any>(null)
+  const [showOnlineGameInstallModal, setShowOnlineGameInstallModal] = useState(false)
+  const [onlineGameInstallModalAnimating, setOnlineGameInstallModalAnimating] = useState(false)
+  
   const socketRef = useRef<Socket | null>(null)
   const currentDownloadId = useRef<string | null>(null)
   const currentMoreGameDeploymentId = useRef<string | null>(null)
   const currentMrpackDeploymentId = useRef<string | null>(null)
+  const currentOnlineGameDeploymentId = useRef<string | null>(null)
 
   // 获取游戏列表
   const fetchGames = async () => {
@@ -165,6 +181,34 @@ const GameDeploymentPage: React.FC = () => {
       setMoreGamesLoading(false)
     }
   }
+
+  // 检查赞助者密钥
+  const checkSponsorKey = async () => {
+    try {
+      setSponsorKeyChecking(true)
+      const response = await apiClient.getSponsorKeyInfo()
+      
+      if (response.success && response.data) {
+        setSponsorKeyValid(response.data.isValid)
+        if (!response.data.isValid) {
+          addNotification({
+            type: 'warning',
+            title: '密钥已过期',
+            message: '您的赞助者密钥已过期，请前往设置页面更新密钥'
+          })
+        }
+      } else {
+        setSponsorKeyValid(false)
+      }
+    } catch (error: any) {
+      console.error('检查赞助者密钥失败:', error)
+      setSponsorKeyValid(false)
+    } finally {
+      setSponsorKeyChecking(false)
+    }
+  }
+
+
 
   // 部署更多游戏
   const deployMoreGame = async () => {
@@ -622,6 +666,36 @@ const GameDeploymentPage: React.FC = () => {
         })
       }
     })
+
+    // 监听在线游戏部署日志
+    socketRef.current.on('online-deploy-log', (data) => {
+      if (data.deploymentId === currentOnlineGameDeploymentId.current) {
+        const message = typeof data.message === 'string' ? data.message : JSON.stringify(data.message)
+        setOnlineGameDeployLogs(prev => [...prev, message])
+      }
+    })
+
+    // 监听在线游戏部署进度
+    socketRef.current.on('online-deploy-progress', (data) => {
+      console.log('收到在线部署进度:', data)
+      if (data.deploymentId === currentOnlineGameDeploymentId.current) {
+        setOnlineGameDeployProgress(data)
+      }
+    })
+
+    // 监听在线游戏部署完成
+    socketRef.current.on('online-deploy-complete', (data) => {
+      console.log('收到在线部署完成事件:', data)
+      if (data.deploymentId === currentOnlineGameDeploymentId.current) {
+        setOnlineGameDeploying(false)
+        setOnlineGameDeployComplete(true)
+        setOnlineGameDeployResult(data.result)
+        currentOnlineGameDeploymentId.current = null
+        
+        // 不显示通知，让用户在模态框中看到结果
+        // 成功或失败的状态会在UI中显示
+      }
+    })
   }
 
   // 下载Minecraft服务端
@@ -926,7 +1000,13 @@ const GameDeploymentPage: React.FC = () => {
     if (activeTab === 'more-games') {
       fetchMoreGames()
     }
-  }, [activeTab])
+    if (activeTab === 'online-deploy') {
+      checkSponsorKey()
+      if (sponsorKeyValid) {
+        fetchOnlineGames()
+      }
+    }
+  }, [activeTab, sponsorKeyValid])
 
   // 清理WebSocket连接和定时器
   useEffect(() => {
@@ -1122,6 +1202,172 @@ const GameDeploymentPage: React.FC = () => {
     }
   }
 
+  // 获取在线游戏列表
+  const fetchOnlineGames = async () => {
+    try {
+      setOnlineGamesLoading(true)
+      const response = await apiClient.getOnlineGames()
+      
+      if (response.success) {
+        setOnlineGames(response.data || [])
+      } else {
+        throw new Error(response.message || '获取在线游戏列表失败')
+      }
+    } catch (error: any) {
+      console.error('获取在线游戏列表失败:', error)
+      addNotification({
+        type: 'error',
+        title: '获取失败',
+        message: error.message || '无法获取在线游戏列表'
+      })
+    } finally {
+      setOnlineGamesLoading(false)
+    }
+  }
+
+  // 打开在线游戏安装对话框
+  const handleOpenOnlineGameInstallModal = (game: any) => {
+    setSelectedOnlineGame(game)
+    setOnlineGameInstallPath('')
+    setShowOnlineGameInstallModal(true)
+    setTimeout(() => setOnlineGameInstallModalAnimating(true), 10)
+  }
+
+  // 关闭在线游戏安装对话框
+  const handleCloseOnlineGameInstallModal = () => {
+    setOnlineGameInstallModalAnimating(false)
+    setTimeout(() => {
+      setShowOnlineGameInstallModal(false)
+      setSelectedOnlineGame(null)
+      setOnlineGameInstallPath('')
+      // 重置部署相关状态
+      setOnlineGameDeploying(false)
+      setOnlineGameDeployProgress(null)
+      setOnlineGameDeployLogs([])
+      setOnlineGameDeployComplete(false)
+      setOnlineGameDeployResult(null)
+      currentOnlineGameDeploymentId.current = null
+    }, 300)
+  }
+
+  // 开始在线游戏部署
+  const startOnlineGameDeployment = async () => {
+    if (!selectedOnlineGame || !onlineGameInstallPath.trim()) {
+      addNotification({
+        type: 'error',
+        title: '参数错误',
+        message: '请选择游戏并填写安装路径'
+      })
+      return
+    }
+
+    try {
+      // 重置状态
+      setOnlineGameDeploying(true)
+      setOnlineGameDeployProgress(null)
+      setOnlineGameDeployLogs([])
+      setOnlineGameDeployComplete(false)
+      setOnlineGameDeployResult(null)
+      
+      // 初始化WebSocket连接
+      initializeSocket()
+      
+      // 等待WebSocket连接建立
+      const waitForConnection = () => {
+        return new Promise<string>((resolve, reject) => {
+          if (socketRef.current?.connected && socketRef.current?.id) {
+            resolve(socketRef.current.id)
+            return
+          }
+          
+          const timeout = setTimeout(() => {
+            reject(new Error('WebSocket连接超时'))
+          }, 10000)
+          
+          const checkConnection = () => {
+            if (socketRef.current?.connected && socketRef.current?.id) {
+              clearTimeout(timeout)
+              resolve(socketRef.current.id)
+            } else {
+              setTimeout(checkConnection, 100)
+            }
+          }
+          
+          checkConnection()
+        })
+      }
+      
+      const socketId = await waitForConnection()
+      
+      // 调用部署API
+      const response = await apiClient.deployOnlineGame({
+        gameId: selectedOnlineGame.id,
+        installPath: onlineGameInstallPath.trim(),
+        socketId
+      })
+      
+      if (response.success && response.data?.deploymentId) {
+        currentOnlineGameDeploymentId.current = response.data.deploymentId
+        
+        addNotification({
+          type: 'success',
+          title: '部署已启动',
+          message: `${selectedOnlineGame.name} 部署已开始`
+        })
+        
+        // 不关闭模态框，保持打开状态以显示部署进度
+      } else {
+        throw new Error(response.message || '启动部署失败')
+      }
+    } catch (error: any) {
+      console.error('启动在线游戏部署失败:', error)
+      setOnlineGameDeploying(false)
+      
+      addNotification({
+        type: 'error',
+        title: '部署失败',
+        message: error.message || '无法启动在线游戏部署'
+      })
+    }
+  }
+
+  // 取消在线游戏部署
+  const cancelOnlineGameDeployment = async () => {
+    if (!currentOnlineGameDeploymentId.current) {
+      addNotification({
+        type: 'warning',
+        title: '无法取消',
+        message: '没有正在进行的在线游戏部署'
+      })
+      return
+    }
+
+    try {
+      const response = await apiClient.cancelOnlineGameDeployment(currentOnlineGameDeploymentId.current)
+      
+      if (response.success) {
+        setOnlineGameDeploying(false)
+        setOnlineGameDeployProgress(null)
+        currentOnlineGameDeploymentId.current = null
+        
+        addNotification({
+          type: 'info',
+          title: '部署已取消',
+          message: '在线游戏部署已取消'
+        })
+      } else {
+        throw new Error(response.message || '取消部署失败')
+      }
+    } catch (error: any) {
+      console.error('取消在线游戏部署失败:', error)
+      addNotification({
+        type: 'error',
+        title: '取消失败',
+        message: error.message || '无法取消在线游戏部署'
+      })
+    }
+  }
+
   // 筛选游戏
   const filteredGames = Object.entries(games).filter(([gameKey, gameInfo]) => {
     // 搜索筛选
@@ -1148,7 +1394,8 @@ const GameDeploymentPage: React.FC = () => {
     { id: 'steamcmd', name: 'SteamCMD', icon: Download },
     { id: 'minecraft', name: 'Minecraft部署', icon: Pickaxe },
     { id: 'mrpack', name: 'Minecraft整合包部署', icon: Package },
-    { id: 'more-games', name: '更多游戏部署', icon: Server }
+    { id: 'more-games', name: '更多游戏部署', icon: Server },
+    { id: 'online-deploy', name: '在线部署', icon: ExternalLink }
   ]
 
   if (loading) {
@@ -1358,6 +1605,124 @@ const GameDeploymentPage: React.FC = () => {
               ))
             )}
           </div>
+        </div>
+      )}
+
+      {/* 在线部署标签页内容 */}
+      {activeTab === 'online-deploy' && (
+        <div className="space-y-6">
+          {/* 赞助者密钥状态 */}
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
+            <div className="flex items-center space-x-3">
+              {sponsorKeyChecking ? (
+                <Loader className="w-5 h-5 animate-spin text-blue-500" />
+              ) : sponsorKeyValid ? (
+                <CheckCircle className="w-5 h-5 text-green-500" />
+              ) : (
+                <AlertCircle className="w-5 h-5 text-red-500" />
+              )}
+              <div>
+                <h3 className="font-medium text-gray-900 dark:text-white">
+                  赞助者密钥状态
+                </h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  {sponsorKeyChecking
+                    ? '检查中...'
+                    : sponsorKeyValid
+                    ? '密钥有效，可以使用在线部署功能'
+                    : '密钥无效或未设置，请前往设置页面配置赞助者密钥'}
+                </p>
+              </div>
+              <button
+                onClick={checkSponsorKey}
+                className="ml-auto px-3 py-1 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors"
+              >
+                重新检查
+              </button>
+            </div>
+          </div>
+
+          {/* 在线游戏列表 */}
+          {sponsorKeyValid ? (
+            onlineGamesLoading ? (
+              <div className="flex items-center justify-center h-64">
+                <Loader className="w-8 h-8 animate-spin text-blue-500" />
+                <span className="ml-2 text-gray-600 dark:text-gray-400">加载在线游戏列表中...</span>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                {onlineGames.length === 0 ? (
+                  <div className="col-span-full text-center py-12">
+                    <div className="text-gray-500 dark:text-gray-400">
+                      <Server className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                      <p className="text-lg font-medium mb-2">暂无可用的在线游戏</p>
+                      <p className="text-sm">请稍后再试或联系管理员</p>
+                    </div>
+                  </div>
+                ) : (
+                  onlineGames.map((game) => (
+                    <div
+                      key={game.id}
+                      className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow"
+                    >
+                      {/* 游戏图片 */}
+                      <div className="aspect-video bg-gray-200 dark:bg-gray-700 relative">
+                        <img
+                          src={game.image || 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZGRkIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxNCIgZmlsbD0iIzk5OSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPuaXoOazleWKoOi9veWbvueJhzwvdGV4dD48L3N2Zz4='}
+                          alt={game.name}
+                          className="w-full h-full object-cover"
+                        />
+                        <div className="absolute top-2 right-2">
+                          <div className="bg-black/50 text-white px-2 py-1 rounded text-xs">
+                            在线部署
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* 游戏信息 */}
+                      <div className="p-4">
+                        <h3 className="font-semibold text-gray-900 dark:text-white mb-2 text-center">
+                          {game.name}
+                        </h3>
+                        
+                        {/* 游戏描述 */}
+                        {game.description && (
+                          <p className="text-sm text-gray-600 dark:text-gray-400 mb-4 text-center line-clamp-2">
+                            {game.description}
+                          </p>
+                        )}
+
+                        {/* 操作按钮 */}
+                        <button
+                          onClick={() => handleOpenOnlineGameInstallModal(game)}
+                          className="w-full bg-green-600 hover:bg-green-700 text-white py-2 px-4 rounded-lg transition-colors flex items-center justify-center space-x-2"
+                        >
+                          <Download className="w-4 h-4" />
+                          <span>部署游戏</span>
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            )
+          ) : (
+            <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-6 text-center">
+              <AlertCircle className="w-12 h-12 mx-auto mb-4 text-yellow-600 dark:text-yellow-400" />
+              <h3 className="text-lg font-medium text-yellow-800 dark:text-yellow-200 mb-2">
+                需要赞助者密钥
+              </h3>
+              <p className="text-yellow-700 dark:text-yellow-300 mb-4">
+                在线部署功能需要有效的赞助者密钥才能使用。请前往设置页面配置您的密钥。
+              </p>
+              <button
+                onClick={() => navigate('/settings')}
+                className="bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-2 rounded-lg transition-colors"
+              >
+                前往设置
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -2566,6 +2931,179 @@ const GameDeploymentPage: React.FC = () => {
                   </>
                 )}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 在线游戏安装对话框 */}
+      {showOnlineGameInstallModal && selectedOnlineGame && (
+        <div className={`fixed inset-0 bg-black/50 flex items-center justify-center z-50 transition-opacity duration-300 ${
+          onlineGameInstallModalAnimating ? 'opacity-100' : 'opacity-0'
+        }`}>
+          <div className={`bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md mx-4 transform transition-all duration-300 ${
+            onlineGameInstallModalAnimating ? 'scale-100 opacity-100' : 'scale-95 opacity-0'
+          }`}>
+            <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                部署 {selectedOnlineGame.name}
+              </h3>
+              <button
+                onClick={handleCloseOnlineGameInstallModal}
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="p-6 space-y-4">
+              {/* 游戏信息 */}
+              <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
+                <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  游戏信息
+                </h4>
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  <strong>名称:</strong> {selectedOnlineGame.name}
+                </p>
+                {selectedOnlineGame.description && (
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                    <strong>描述:</strong> {selectedOnlineGame.description}
+                  </p>
+                )}
+              </div>
+              
+              {/* 安装路径 */}
+              {!onlineGameDeploying && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    安装路径 *
+                  </label>
+                  <input
+                    type="text"
+                    value={onlineGameInstallPath}
+                    onChange={(e) => setOnlineGameInstallPath(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    placeholder="输入游戏安装路径"
+                  />
+                </div>
+              )}
+              
+              {/* 部署进度 */}
+              {onlineGameDeploying && onlineGameDeployProgress && (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                      部署进度
+                    </span>
+                    <span className="text-sm text-gray-500 dark:text-gray-400">
+                      {onlineGameDeployProgress.percentage}%
+                    </span>
+                  </div>
+                  <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                    <div 
+                      className="bg-green-600 h-2 rounded-full transition-all duration-300"
+                      style={{ width: `${onlineGameDeployProgress.percentage}%` }}
+                    ></div>
+                  </div>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    {onlineGameDeployProgress.currentStep}
+                  </p>
+                </div>
+              )}
+              
+              {/* 部署日志 */}
+              {onlineGameDeploying && onlineGameDeployLogs.length > 0 && (
+                <div>
+                  <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    部署日志
+                  </h4>
+                  <div className="bg-gray-900 text-green-400 p-3 rounded-lg text-xs font-mono max-h-32 overflow-y-auto">
+                    {onlineGameDeployLogs.map((log, index) => (
+                      <div key={index} className="mb-1">
+                        {log}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              
+              {/* 部署完成结果 */}
+              {onlineGameDeployComplete && (
+                <div className={`rounded-lg p-3 ${
+                  onlineGameDeployResult?.success !== false 
+                    ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800'
+                    : 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800'
+                }`}>
+                  <div className="flex items-center space-x-2">
+                    {onlineGameDeployResult?.success !== false ? (
+                      <CheckCircle className="w-5 h-5 text-green-600" />
+                    ) : (
+                      <AlertCircle className="w-5 h-5 text-red-600" />
+                    )}
+                    <h4 className={`text-sm font-medium ${
+                      onlineGameDeployResult?.success !== false
+                        ? 'text-green-800 dark:text-green-400'
+                        : 'text-red-800 dark:text-red-400'
+                    }`}>
+                      {onlineGameDeployResult?.success !== false ? '部署完成' : '部署失败'}
+                    </h4>
+                  </div>
+                  <p className={`text-sm mt-1 ${
+                    onlineGameDeployResult?.success !== false
+                      ? 'text-green-700 dark:text-green-300'
+                      : 'text-red-700 dark:text-red-300'
+                  }`}>
+                    {onlineGameDeployResult?.message || (onlineGameDeployResult?.success !== false ? '在线游戏部署完成！' : '部署过程中发生错误')}
+                  </p>
+                  {onlineGameDeployResult?.installPath && (
+                    <p className={`text-xs mt-1 ${
+                      onlineGameDeployResult?.success !== false
+                        ? 'text-green-600 dark:text-green-400'
+                        : 'text-red-600 dark:text-red-400'
+                    }`}>
+                      安装路径: {onlineGameDeployResult.installPath}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+            
+            <div className="flex space-x-3 p-6 border-t border-gray-200 dark:border-gray-700">
+              {onlineGameDeployComplete ? (
+                <button
+                  onClick={handleCloseOnlineGameInstallModal}
+                  className="w-full px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors flex items-center justify-center space-x-2"
+                >
+                  <CheckCircle className="w-4 h-4" />
+                  <span>完成</span>
+                </button>
+              ) : (
+                <>
+                  <button
+                    onClick={onlineGameDeploying ? cancelOnlineGameDeployment : handleCloseOnlineGameInstallModal}
+                    className="flex-1 px-4 py-2 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-600 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-500 transition-colors"
+                  >
+                    {onlineGameDeploying ? '取消部署' : '取消'}
+                  </button>
+                  <button
+                    onClick={startOnlineGameDeployment}
+                    disabled={!onlineGameInstallPath.trim() || onlineGameDeploying}
+                    className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white rounded-lg transition-colors flex items-center justify-center space-x-2"
+                  >
+                    {onlineGameDeploying ? (
+                      <>
+                        <Loader className="w-4 h-4 animate-spin" />
+                        <span>部署中...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Download className="w-4 h-4" />
+                        <span>开始部署</span>
+                      </>
+                    )}
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>

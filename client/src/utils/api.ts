@@ -591,6 +591,23 @@ class ApiClient {
   async checkPythonEnvironment() {
     return this.get('/instances/python/check')
   }
+
+  // 在线部署API
+  async getOnlineGames() {
+    return this.get('/online-deploy/games')
+  }
+
+  async deployOnlineGame(data: {
+    gameId: string
+    installPath: string
+    socketId?: string
+  }) {
+    return this.post('/online-deploy/deploy', data)
+  }
+
+  async cancelOnlineGameDeployment(deploymentId: string) {
+    return this.post('/online-deploy/cancel', { deploymentId })
+  }
 }
 
 // 创建单例实例
