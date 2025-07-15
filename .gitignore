@@ -8,6 +8,7 @@ lerna-debug.log*
 panel/public/
 *.code-workspace
 .vscode
+.claude/*
 
 config.json
 instances.json

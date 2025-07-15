@@ -126,7 +126,10 @@ export class ConfigManager {
       steamcmd: {
         ...defaultConfig.steamcmd,
         ...savedConfig.steamcmd
-      }
+      },
+      sponsor: savedConfig.sponsor ? {
+        ...savedConfig.sponsor
+      } : undefined
     }
   }
 
