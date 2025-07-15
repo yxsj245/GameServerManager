@@ -8,6 +8,7 @@ import os from 'os'
 import { promisify } from 'util'
 import { exec } from 'child_process'
 import { TerminalSessionManager, PersistedTerminalSession } from './TerminalSessionManager.js'
+import { ConfigManager } from '../config/ConfigManager.js'
 
 const execAsync = promisify(exec)
 
@@ -59,10 +60,12 @@ export class TerminalManager {
   private logger: winston.Logger
   private ptyPath: string
   private sessionManager: TerminalSessionManager
+  private configManager: ConfigManager
 
-  constructor(io: SocketIOServer, logger: winston.Logger) {
+  constructor(io: SocketIOServer, logger: winston.Logger, configManager: ConfigManager) {
     this.io = io
     this.logger = logger
+    this.configManager = configManager
     this.sessionManager = new TerminalSessionManager(logger)
     
     // 根据操作系统和架构选择PTY程序路径
@@ -70,16 +73,16 @@ export class TerminalManager {
     const arch = os.arch()
     
     if (platform === 'win32') {
-      // this.ptyPath = path.resolve(__dirname, '../../../PTY/pty_win32_x64.exe')
-      this.ptyPath = path.resolve(__dirname, '../../PTY/pty_win32_x64.exe')
+      this.ptyPath = path.resolve(__dirname, '../../../PTY/pty_win32_x64.exe')
+      // this.ptyPath = path.resolve(__dirname, '../../PTY/pty_win32_x64.exe')
     } else {
       // Linux平台根据架构选择对应的PTY文件
       if (arch === 'arm64' || arch === 'aarch64') {
-        // this.ptyPath = path.resolve(__dirname, '../../../PTY/pty_linux_arm64')
-        this.ptyPath = path.resolve(__dirname, '../../PTY/pty_linux_arm64')
+        this.ptyPath = path.resolve(__dirname, '../../../PTY/pty_linux_arm64')
+        // this.ptyPath = path.resolve(__dirname, '../../PTY/pty_linux_arm64')
       } else {
-        // this.ptyPath = path.resolve(__dirname, '../../../PTY/pty_linux_x64')
-        this.ptyPath = path.resolve(__dirname, '../../PTY/pty_linux_x64')
+        this.ptyPath = path.resolve(__dirname, '../../../PTY/pty_linux_x64')
+        // this.ptyPath = path.resolve(__dirname, '../../PTY/pty_linux_x64')
       }
     }
     
@@ -106,7 +109,7 @@ export class TerminalManager {
   /**
    * 创建新的PTY会话
    */
-  public createPty(socket: Socket, data: CreatePtyData): void {
+  public async createPty(socket: Socket, data: CreatePtyData): Promise<void> {
     try {
       const { sessionId, name, cols, rows, workingDirectory = process.cwd(), enableStreamForward = false, programPath, autoCloseOnForwardExit = false } = data
       const sessionName = name || `终端会话 ${sessionId.slice(-8)}`
@@ -182,7 +185,26 @@ export class TerminalManager {
       if (os.platform() === 'win32') {
         args.push('-cmd', JSON.stringify(['powershell.exe']))
       } else {
-        args.push('-cmd', JSON.stringify(['/bin/bash']))
+        // Linux下检查是否配置了默认用户
+        const terminalConfig = this.configManager.getTerminalConfig()
+        const defaultUser = terminalConfig.defaultUser
+        
+        if (defaultUser && defaultUser.trim() !== '') {
+          // 检查用户是否存在
+          const userExists = await this.checkUserExists(defaultUser)
+          if (userExists) {
+            // 如果配置了默认用户且用户存在，使用su命令切换到该用户
+            args.push('-cmd', JSON.stringify(['su', '-', defaultUser]))
+            this.logger.info(`使用默认用户启动终端: ${defaultUser}`)
+          } else {
+            // 用户不存在，记录警告并使用默认bash
+            this.logger.warn(`配置的默认用户 '${defaultUser}' 不存在，使用默认bash`)
+            args.push('-cmd', JSON.stringify(['/bin/bash']))
+          }
+        } else {
+          // 没有配置默认用户，使用默认bash
+          args.push('-cmd', JSON.stringify(['/bin/bash']))
+        }
       }
       
       this.logger.info(`启动PTY进程: ${this.ptyPath} ${args.join(' ')}`)
@@ -1211,6 +1233,26 @@ export class TerminalManager {
     }
     
     return { cpu: 0, memory: 0 }
+  }
+
+  /**
+   * 检查Linux用户是否存在
+   */
+  private async checkUserExists(username: string): Promise<boolean> {
+    try {
+      // 在Linux系统中使用id命令检查用户是否存在
+      if (os.platform() !== 'linux') {
+        return false
+      }
+      
+      const { stdout } = await execAsync(`id -u ${username}`)
+      // 如果命令成功执行且返回了用户ID，说明用户存在
+      return stdout.trim() !== ''
+    } catch (error) {
+      // 如果命令执行失败，说明用户不存在
+      this.logger.debug(`检查用户 '${username}' 是否存在时出错:`, error)
+      return false
+    }
   }
 
   /**

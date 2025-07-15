@@ -117,6 +117,12 @@ const SettingsPage: React.FC = () => {
     expiryTime?: number
   }>({ isValid: null, message: '' })
 
+  // 终端设置状态
+  const [terminalSettings, setTerminalSettings] = useState({
+    defaultUser: ''
+  })
+  const [terminalLoading, setTerminalLoading] = useState(false)
+
   // 处理密码修改
   const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -600,7 +606,22 @@ const SettingsPage: React.FC = () => {
       }
     }
     
+    // 从服务器加载终端配置
+    const loadTerminalSettings = async () => {
+      try {
+        const result = await apiClient.getTerminalConfig()
+        if (result.success && result.data) {
+          setTerminalSettings({
+            defaultUser: result.data.defaultUser || ''
+          })
+        }
+      } catch (error) {
+        console.error('加载终端配置失败:', error)
+      }
+    }
+    
     loadSponsorKeyInfo()
+    loadTerminalSettings()
   }, [])
 
   // 路径变化时检查
@@ -616,11 +637,43 @@ const SettingsPage: React.FC = () => {
     return () => clearTimeout(timer)
   }, [steamcmdSettings.installPath])
   
+  // 保存终端设置
+  const saveTerminalSettings = async () => {
+    setTerminalLoading(true)
+    try {
+      const response = await apiClient.updateTerminalConfig(terminalSettings)
+      if (response.success) {
+        addNotification({
+          type: 'success',
+          title: '终端设置已保存',
+          message: '终端配置已成功更新'
+        })
+      } else {
+        addNotification({
+          type: 'error',
+          title: '保存失败',
+          message: response.message || '终端设置保存失败'
+        })
+      }
+    } catch (error) {
+      addNotification({
+        type: 'error',
+        title: '保存失败',
+        message: '网络错误，请稍后重试'
+      })
+    } finally {
+      setTerminalLoading(false)
+    }
+  }
+
   // 保存设置
-  const saveSettings = () => {
+  const saveSettings = async () => {
     try {
       // 保存网页设置到localStorage
       localStorage.setItem('webSettings', JSON.stringify(webSettings))
+      
+      // 保存终端设置到服务器
+      await saveTerminalSettings()
       
       addNotification({
         type: 'success',
@@ -646,7 +699,12 @@ const SettingsPage: React.FC = () => {
       weatherCity: '101010100'
     }
     
+    const defaultTerminalSettings = {
+      defaultUser: ''
+    }
+    
     setWebSettings(defaultWebSettings)
+    setTerminalSettings(defaultTerminalSettings)
     
     // 清除localStorage中的设置
     localStorage.removeItem('webSettings')
@@ -1133,6 +1191,59 @@ const SettingsPage: React.FC = () => {
               <p>• 赞助者密钥用于验证您的赞助者身份</p>
               <p>• 密钥验证成功后将自动保存到本地</p>
               <p>• 如需获取密钥，请联系管理员</p>
+            </div>
+          </div>
+        </div>
+        
+        {/* 终端选项 */}
+        <div className="card-game p-6">
+          <div className="flex items-center space-x-3 mb-6">
+            <Monitor className="w-5 h-5 text-green-500" />
+            <h2 className="text-lg font-semibold text-black dark:text-white">终端选项</h2>
+          </div>
+          
+          <div className="space-y-4">
+            {/* 默认用户设置 */}
+            <div>
+              <label className="block text-sm font-medium text-gray-800 dark:text-gray-200 mb-2">
+                默认用户 (仅Linux有效)
+              </label>
+              <input
+                type="text"
+                value={terminalSettings.defaultUser}
+                onChange={(e) => setTerminalSettings(prev => ({
+                  ...prev,
+                  defaultUser: e.target.value
+                }))}
+                className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-black dark:text-white focus:outline-none focus:ring-2 focus:ring-green-500"
+                placeholder="输入默认用户名（留空使用当前用户）"
+                disabled={terminalLoading}
+              />
+              <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                • 设置后，新建终端将自动切换到指定用户
+              </p>
+              <p className="text-xs text-gray-600 dark:text-gray-400">
+                • 此功能仅在Linux系统下生效，Windows系统将忽略此设置
+              </p>
+              <p className="text-xs text-gray-600 dark:text-gray-400">
+                • 请确保指定的用户存在且当前用户有权限切换到该用户
+              </p>
+            </div>
+            
+            {/* 保存按钮 */}
+            <div className="flex justify-end">
+              <button
+                onClick={saveTerminalSettings}
+                disabled={terminalLoading}
+                className="btn-game px-4 py-2 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+              >
+                {terminalLoading ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Save className="w-4 h-4" />
+                )}
+                <span>{terminalLoading ? '保存中...' : '保存终端设置'}</span>
+              </button>
             </div>
           </div>
         </div>

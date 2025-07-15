@@ -24,6 +24,7 @@ import { setupGameRoutes } from './routes/games.js'
 import { setupSystemRoutes } from './routes/system.js'
 import { setupAuthRoutes } from './routes/auth.js'
 import { setupScheduledTaskRoutes } from './routes/scheduledTasks.js'
+import { setupConfigRoutes } from './routes/config.js'
 import { setAuthManager } from './middleware/auth.js'
 import filesRouter from './routes/files.js'
 import { setupInstanceRoutes } from './routes/instances.js'
@@ -441,7 +442,7 @@ async function startServer() {
     // 初始化管理器
     configManager = new ConfigManager(logger)
     authManager = new AuthManager(configManager, logger)
-    terminalManager = new TerminalManager(io, logger)
+    terminalManager = new TerminalManager(io, logger, configManager)
     gameManager = new GameManager(io, logger)
     systemManager = new SystemManager(io, logger)
     instanceManager = new InstanceManager(terminalManager, logger)
@@ -481,6 +482,7 @@ async function startServer() {
     app.use('/api/files', filesRouter)
     app.use('/api/instances', setupInstanceRoutes(instanceManager))
     app.use('/api/scheduled-tasks', setupScheduledTaskRoutes(schedulerManager))
+    app.use('/api/config', setupConfigRoutes(configManager))
     
     // 设置SteamCMD管理器和路由
     setSteamCMDManager(steamcmdManager, logger)
@@ -563,14 +565,14 @@ async function startServer() {
       logger.info(`客户端连接: ${socket.id} - 用户: ${socket.data.user?.username}`)
       
       // 终端相关事件
-      socket.on('create-pty', (data) => {
+      socket.on('create-pty', async (data) => {
         // 将前端的cwd参数映射到后端的workingDirectory
         const mappedData = {
           ...data,
           workingDirectory: data.cwd || data.workingDirectory
         }
         delete mappedData.cwd
-        terminalManager.createPty(socket, mappedData)
+        await terminalManager.createPty(socket, mappedData)
       })
       
       socket.on('terminal-input', (data) => {

@@ -25,6 +25,9 @@ export interface AppConfig {
     version?: string
     lastChecked?: string
   }
+  terminal: {
+    defaultUser: string // 默认用户（仅Linux下有效）
+  }
   sponsor?: {
     key: string
     isValid: boolean
@@ -64,6 +67,9 @@ export class ConfigManager {
         installMode: 'online',
         installPath: '',
         isInstalled: false
+      },
+      terminal: {
+        defaultUser: '' // 默认为空，表示不切换用户
       }
     }
   }
@@ -127,6 +133,10 @@ export class ConfigManager {
         ...defaultConfig.steamcmd,
         ...savedConfig.steamcmd
       },
+      terminal: {
+        ...defaultConfig.terminal,
+        ...savedConfig.terminal
+      },
       sponsor: savedConfig.sponsor ? {
         ...savedConfig.sponsor
       } : undefined
@@ -188,6 +198,19 @@ export class ConfigManager {
     this.logger.info('New SteamCMD config is:', this.config.steamcmd)
     await this.saveConfig()
     this.logger.info('SteamCMD配置已更新')
+  }
+
+  getTerminalConfig() {
+    return this.config.terminal
+  }
+
+  async updateTerminalConfig(updates: Partial<AppConfig['terminal']>): Promise<void> {
+    this.config.terminal = {
+      ...this.config.terminal,
+      ...updates
+    }
+    await this.saveConfig()
+    this.logger.info('终端配置已更新')
   }
 
   getSponsorConfig() {

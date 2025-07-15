@@ -608,6 +608,15 @@ class ApiClient {
   async cancelOnlineGameDeployment(deploymentId: string) {
     return this.post('/online-deploy/cancel', { deploymentId })
   }
+
+  // 终端配置API
+  async getTerminalConfig() {
+    return this.get('/config/terminal')
+  }
+
+  async updateTerminalConfig(config: { defaultUser: string }) {
+    return this.put('/config/terminal', config)
+  }
 }
 
 // 创建单例实例
