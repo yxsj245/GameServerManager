@@ -5,6 +5,7 @@
 import axios from 'axios';
 import * as fs from 'fs-extra';
 import { createWriteStream, mkdtemp } from 'fs';
+import { promises as fsPromises } from 'fs';
 import * as path from 'path';
 import * as yauzl from 'yauzl';
 import { spawn, ChildProcess } from 'child_process';
@@ -1413,72 +1414,276 @@ export async function extractTarXzFile(filePath: string, extractPath: string): P
 }
 
 /**
+ * 验证文件是否为有效的tar.xz格式
+ */
+async function validateTarXzFile(filePath: string): Promise<{ isValid: boolean; fileSize: number; error?: string }> {
+  try {
+    const stats = await fsPromises.stat(filePath);
+    const fileSize = stats.size;
+    
+    // 检查文件大小
+    if (fileSize === 0) {
+      return { isValid: false, fileSize, error: '文件为空 (0字节)，可能下载失败或被中断' };
+    }
+    
+    if (fileSize < 100) {
+      return { isValid: false, fileSize, error: '文件过小，可能不是有效的tar.xz文件或下载不完整' };
+    }
+    
+    // 检查文件大小是否合理（Factorio服务端通常大于50MB）
+    if (fileSize < 50 * 1024 * 1024) {
+      return { isValid: false, fileSize, error: `文件大小异常小 (${Math.round(fileSize / 1024 / 1024)}MB)，Factorio服务端通常大于50MB，可能下载不完整` };
+    }
+    
+    // 读取文件头部分析魔数
+    const buffer = Buffer.alloc(12);
+    const fd = await fsPromises.open(filePath, 'r');
+    
+    try {
+      await fd.read(buffer, 0, 12, 0);
+      
+      // XZ文件头魔数: FD 37 7A 58 5A 00
+      const xzMagic = Buffer.from([0xFD, 0x37, 0x7A, 0x58, 0x5A, 0x00]);
+      if (buffer.subarray(0, 6).equals(xzMagic)) {
+        return { isValid: true, fileSize };
+      }
+      
+      // 检查是否为其他常见格式
+      const fileHeader = buffer.toString('hex').toUpperCase();
+      let detectedFormat = 'unknown';
+      
+      if (buffer.subarray(0, 2).equals(Buffer.from([0x1F, 0x8B]))) {
+        detectedFormat = 'gzip';
+      } else if (buffer.subarray(0, 3).equals(Buffer.from([0x42, 0x5A, 0x68]))) {
+        detectedFormat = 'bzip2';
+      } else if (buffer.subarray(0, 4).equals(Buffer.from([0x50, 0x4B, 0x03, 0x04])) || 
+                 buffer.subarray(0, 4).equals(Buffer.from([0x50, 0x4B, 0x05, 0x06]))) {
+        detectedFormat = 'zip';
+      } else if (buffer.subarray(0, 8).toString() === 'ustar\x00\x00\x00' || 
+                 buffer.subarray(257, 262).toString() === 'ustar') {
+        detectedFormat = 'tar';
+      }
+      
+      return { 
+        isValid: false, 
+        fileSize, 
+        error: `文件不是有效的tar.xz格式。检测到的格式: ${detectedFormat}，文件头: ${fileHeader}` 
+      };
+    } finally {
+      await fd.close();
+    }
+  } catch (error) {
+    return { 
+      isValid: false, 
+      fileSize: 0, 
+      error: `文件验证失败: ${error instanceof Error ? error.message : String(error)}` 
+    };
+  }
+}
+
+/**
+ * 检查系统是否支持tar.xz解压
+ */
+async function checkSystemTarXzSupport(): Promise<boolean> {
+  
+  try {
+    // 检查tar命令是否可用
+    await new Promise<void>((resolve, reject) => {
+      const tarCheck = spawn('tar', ['--version'], { stdio: 'pipe' });
+      tarCheck.on('close', (code) => {
+        if (code === 0) {
+          resolve();
+        } else {
+          reject(new Error('tar not available'));
+        }
+      });
+      tarCheck.on('error', reject);
+      setTimeout(() => reject(new Error('timeout')), 5000);
+    });
+    
+    // 检查xz命令是否可用
+    await new Promise<void>((resolve, reject) => {
+      const xzCheck = spawn('xz', ['--version'], { stdio: 'pipe' });
+      xzCheck.on('close', (code) => {
+        if (code === 0) {
+          resolve();
+        } else {
+          reject(new Error('xz not available'));
+        }
+      });
+      xzCheck.on('error', reject);
+      setTimeout(() => reject(new Error('timeout')), 5000);
+    });
+    
+    return true;
+  } catch (error) {
+    return false;
+  }
+}
+
+/**
+ * 使用系统命令解压tar.xz文件
+ */
+async function extractTarXzWithSystemCommand(filePath: string, extractPath: string, deployment: ActiveDeployment): Promise<void> {
+  
+  return new Promise((resolve, reject) => {
+    const isWindows = process.platform === 'win32';
+    let command: string;
+    let args: string[];
+    
+    if (isWindows) {
+      // Windows: 尝试使用tar命令（Windows 10 1803+支持）
+      command = 'tar';
+      args = ['-xf', filePath, '-C', extractPath];
+    } else {
+      // Linux/Mac: 使用tar + xz组合
+      command = 'sh';
+      args = ['-c', `xz -dc "${filePath}" | tar -xf - -C "${extractPath}"`];
+    }
+    
+    if (deployment.onProgress) {
+      deployment.onProgress(`执行解压命令: ${command} ${args.join(' ')}`, 'info');
+    }
+    
+    const extractProcess = spawn(command, args, {
+      stdio: ['pipe', 'pipe', 'pipe']
+    });
+    
+    // 注册到部署管理器
+    deployment.processes.push(extractProcess);
+    
+    let stdout = '';
+    let stderr = '';
+    let isResolved = false;
+    
+    // 注册取消回调
+    deployment.cancellationToken.onCancelled(() => {
+      if (!extractProcess.killed && !isResolved) {
+        extractProcess.kill('SIGTERM');
+        setTimeout(() => {
+          if (!extractProcess.killed) {
+            extractProcess.kill('SIGKILL');
+          }
+        }, 5000);
+        isResolved = true;
+        reject(new Error('操作已被取消'));
+      }
+    });
+    
+    extractProcess.stdout?.on('data', (data) => {
+      stdout += data.toString();
+    });
+    
+    extractProcess.stderr?.on('data', (data) => {
+      stderr += data.toString();
+    });
+    
+    extractProcess.on('close', (code: number) => {
+      if (isResolved) return;
+      isResolved = true;
+      
+      // 从进程列表中移除
+      const processIndex = deployment.processes.indexOf(extractProcess);
+      if (processIndex > -1) {
+        deployment.processes.splice(processIndex, 1);
+      }
+      
+      if (deployment.cancellationToken.isCancelled) {
+        reject(new Error('操作已被取消'));
+        return;
+      }
+      
+      if (code === 0) {
+        if (deployment.onProgress) {
+          deployment.onProgress('tar.xz文件解压完成', 'success');
+        }
+        resolve();
+      } else {
+        const errorMsg = `tar.xz解压失败，退出码: ${code}\n标准输出: ${stdout}\n错误输出: ${stderr}`;
+        if (deployment.onProgress) {
+          deployment.onProgress(errorMsg, 'error');
+        }
+        reject(new Error(errorMsg));
+      }
+    });
+    
+    extractProcess.on('error', (error: Error) => {
+      if (isResolved) return;
+      isResolved = true;
+      
+      // 从进程列表中移除
+      const processIndex = deployment.processes.indexOf(extractProcess);
+      if (processIndex > -1) {
+        deployment.processes.splice(processIndex, 1);
+      }
+      
+      reject(new Error(`执行解压命令失败: ${error.message}`));
+    });
+  });
+}
+
+/**
  * 支持取消的解压tar.xz文件函数
  */
 export async function extractTarXzFileWithCancellation(filePath: string, extractPath: string, deployment: ActiveDeployment): Promise<void> {
   try {
     (deployment.cancellationToken as CancellationTokenImpl).throwIfCancelled();
     
-    // 创建一个Promise来包装tar.extract，以便支持取消
-    await new Promise<void>((resolve, reject) => {
-      let isResolved = false;
+    // 验证文件格式
+    if (deployment.onProgress) {
+      deployment.onProgress('正在验证tar.xz文件格式...', 'info');
+    }
+    
+    const validation = await validateTarXzFile(filePath);
+    if (!validation.isValid) {
+      let errorMsg = `Factorio服务器部署失败: 解压tar.xz文件失败: TAR_BAD_ARCHIVE: ${validation.error || 'Unrecognized archive format'}. 文件大小: ${validation.fileSize} bytes, 文件路径: ${filePath}`;
       
-      // 注册取消回调
-      deployment.cancellationToken.onCancelled(() => {
-        if (!isResolved) {
-          isResolved = true;
-          reject(new Error('操作已被取消'));
+      if (deployment.onProgress) {
+        deployment.onProgress(errorMsg, 'error');
+        
+        // 根据文件大小提供不同的建议
+        if (validation.fileSize === 0) {
+          deployment.onProgress('建议: 1) 检查网络连接是否稳定 2) 重新尝试下载 3) 检查磁盘空间是否充足 4) 验证下载URL是否有效', 'warn');
+        } else if (validation.fileSize < 50 * 1024 * 1024) {
+          deployment.onProgress('建议: 1) 重新下载完整文件 2) 检查网络连接稳定性 3) 验证下载过程是否被中断', 'warn');
+        } else {
+          deployment.onProgress('建议: 1) 检查文件格式是否正确 2) 重新下载文件 3) 验证Factorio下载链接是否有效', 'warn');
         }
-      });
-      
-      // 执行解压
-      tar.extract({
-        file: filePath,
-        cwd: extractPath,
-        strip: 1 // 去掉顶层目录
-      })
-      .then(() => {
-        if (!isResolved) {
-          isResolved = true;
-          resolve();
-        }
-      })
-      .catch((error: any) => {
-        if (!isResolved) {
-          isResolved = true;
-          reject(error);
-        }
-      });
-      
-      // 定期检查取消状态
-      const checkInterval = setInterval(() => {
-        if (deployment.cancellationToken.isCancelled && !isResolved) {
-          clearInterval(checkInterval);
-          isResolved = true;
-          reject(new Error('操作已被取消'));
-        }
-      }, 100);
-      
-      // 清理定时器
-      const cleanup = () => clearInterval(checkInterval);
-      resolve = ((originalResolve) => {
-        return () => {
-          cleanup();
-          originalResolve();
-        };
-      })(resolve);
-      reject = ((originalReject) => {
-        return (error: any) => {
-          cleanup();
-          originalReject(error);
-        };
-      })(reject);
-    });
+      }
+      throw new Error(errorMsg);
+    }
+    
+    if (deployment.onProgress) {
+      deployment.onProgress(`文件验证通过，大小: ${validation.fileSize} bytes`, 'success');
+      deployment.onProgress('注意: Node.js tar库不原生支持xz压缩，将尝试系统命令解压', 'warn');
+    }
+    
+    // 由于Node.js的tar库不支持xz压缩，我们需要使用系统命令
+    // 首先尝试检查系统是否有必要的工具
+    const hasSystemSupport = await checkSystemTarXzSupport();
+    if (!hasSystemSupport) {
+      const errorMsg = `系统不支持tar.xz解压: 缺少必要的工具 (tar, xz)。请安装相应的软件包：
+        - Ubuntu/Debian: sudo apt-get install tar xz-utils
+        - CentOS/RHEL: sudo yum install tar xz
+        - Windows: 安装 7-Zip 或 Git for Windows`;
+      if (deployment.onProgress) {
+        deployment.onProgress(errorMsg, 'error');
+      }
+      throw new Error(errorMsg);
+    }
+    
+    // 使用系统命令解压
+    await extractTarXzWithSystemCommand(filePath, extractPath, deployment);
+    
   } catch (error) {
     if (error instanceof Error && error.message === '操作已被取消') {
       throw error;
     }
-    throw new Error(`解压tar.xz文件失败: ${error instanceof Error ? error.message : String(error)}`);
+    // 如果包含 "TAR_BAD_ARCHIVE" 就直接抛出，否则包装错误
+    if (error instanceof Error && error.message.includes('TAR_BAD_ARCHIVE')) {
+      throw error;
+    }
+    throw new Error(`Factorio服务器部署失败: 解压tar.xz文件失败: TAR_BAD_ARCHIVE: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 

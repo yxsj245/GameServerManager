@@ -448,17 +448,26 @@ export class FactorioDeployer {
         case 'xz':
         case 'tar.xz':
           // 对于tar.xz文件，直接使用系统命令，因为Node.js原生不支持xz
-          console.log('检测到tar.xz格式，使用系统命令解压...');
+          console.log('检测到tar.xz格式，优先使用系统命令解压...');
           await this.extractWithSystemCommand(archivePath, extractPath);
           break;
         default:
-          // 尝试使用系统命令作为后备方案
-          console.log(`未知格式 ${format}，尝试使用系统命令...`);
+          // 对于未知格式，直接尝试系统命令（通常是tar.xz）
+          console.log(`未知格式 ${format}，直接使用系统命令解压...`);
           await this.extractWithSystemCommand(archivePath, extractPath);
       }
     } catch (error) {
       console.error(`使用 ${format} 解压器失败:`, error);
-      // 如果特定格式解压失败，尝试系统命令
+      
+      // 对于tar.xz文件，如果第一次失败了，不要再次尝试系统命令
+      if (format === 'tar.xz' || format === 'xz') {
+        const errorMsg = `tar.xz文件解压失败: ${error instanceof Error ? error.message : String(error)}\n` +
+          `文件路径: ${archivePath}\n` +
+          `这通常是因为系统缺少必要的解压工具。请检查是否已安装 tar 和 xz-utils 包。`;
+        throw new Error(errorMsg);
+      }
+      
+      // 对于其他格式，尝试系统命令作为后备方案
       console.log('尝试使用系统命令作为后备方案...');
       try {
         await this.extractWithSystemCommand(archivePath, extractPath);
