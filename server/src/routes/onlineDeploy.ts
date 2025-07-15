@@ -369,9 +369,8 @@ router.post('/deploy', authenticateToken, async (req: Request, res: Response) =>
 
         // 解压ZIP文件
         const zip = new AdmZip(downloadPath)
-        const extractPath = path.join(installPath, 'game')
-        await fs.mkdir(extractPath, { recursive: true })
-        zip.extractAllTo(extractPath, true)
+        // 直接解压到用户指定的根目录
+        zip.extractAllTo(installPath, true)
         
         // 删除下载的ZIP文件
         await fs.unlink(downloadPath)
@@ -401,7 +400,7 @@ router.post('/deploy', authenticateToken, async (req: Request, res: Response) =>
             deploymentId,
             success: true,
             result: {
-              installPath: extractPath,
+              installPath: installPath,
               gameId,
               gameName,
               message: `${gameName} 部署成功！`
