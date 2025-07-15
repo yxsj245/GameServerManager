@@ -1368,6 +1368,52 @@ const GameDeploymentPage: React.FC = () => {
     }
   }
 
+  // 创建在线游戏实例
+  const createOnlineGameInstance = async () => {
+    if (!onlineGameDeployResult || !selectedOnlineGame) {
+      addNotification({
+        type: 'error',
+        title: '参数错误',
+        message: '没有可用的部署结果'
+      })
+      return
+    }
+
+    try {
+      const response = await apiClient.createInstance({
+        name: selectedOnlineGame.name || '在线游戏实例',
+        description: `在线部署的游戏实例 - ${selectedOnlineGame.name}`,
+        workingDirectory: onlineGameDeployResult.installPath,
+        startCommand: 'none',
+        autoStart: false,
+        stopCommand: 'ctrl+c' as const
+      })
+      
+      if (response.success) {
+        addNotification({
+          type: 'success',
+          title: '创建成功',
+          message: `实例 "${selectedOnlineGame.name}" 创建成功！`
+        })
+        
+        // 关闭模态框
+        handleCloseOnlineGameInstallModal()
+        
+        // 跳转到实例管理页面
+        navigate('/instances')
+      } else {
+        throw new Error(response.message || '创建实例失败')
+      }
+    } catch (error: any) {
+      console.error('创建在线游戏实例失败:', error)
+      addNotification({
+        type: 'error',
+        title: '创建失败',
+        message: error.message || '创建实例时发生错误'
+      })
+    }
+  }
+
   // 筛选游戏
   const filteredGames = Object.entries(games).filter(([gameKey, gameInfo]) => {
     // 搜索筛选
@@ -3070,13 +3116,31 @@ const GameDeploymentPage: React.FC = () => {
             
             <div className="flex space-x-3 p-6 border-t border-gray-200 dark:border-gray-700">
               {onlineGameDeployComplete ? (
-                <button
-                  onClick={handleCloseOnlineGameInstallModal}
-                  className="w-full px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors flex items-center justify-center space-x-2"
-                >
-                  <CheckCircle className="w-4 h-4" />
-                  <span>完成</span>
-                </button>
+                onlineGameDeployResult?.success !== false ? (
+                  <>
+                    <button
+                      onClick={handleCloseOnlineGameInstallModal}
+                      className="flex-1 px-4 py-2 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-600 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-500 transition-colors"
+                    >
+                      完成
+                    </button>
+                    <button
+                      onClick={createOnlineGameInstance}
+                      className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors flex items-center justify-center space-x-2"
+                    >
+                      <Server className="w-4 h-4" />
+                      <span>创建到实例</span>
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    onClick={handleCloseOnlineGameInstallModal}
+                    className="w-full px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors flex items-center justify-center space-x-2"
+                  >
+                    <CheckCircle className="w-4 h-4" />
+                    <span>完成</span>
+                  </button>
+                )
               ) : (
                 <>
                   <button
