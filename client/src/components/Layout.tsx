@@ -3,27 +3,29 @@ import { Link, useLocation } from 'react-router-dom'
 import { useAuthStore } from '@/stores/authStore'
 import { useThemeStore } from '@/stores/themeStore'
 import socketClient from '@/utils/socket'
+import apiClient from '@/utils/api'
 import LogoutTransition from './LogoutTransition'
 import {
   Home,
   Terminal,
+  Server,
+  Download,
+  Clock,
+  FolderOpen,
   Settings,
+  User,
   LogOut,
+  Gamepad2,
   Menu,
   X,
   Sun,
   Moon,
-  User,
-  Gamepad2,
-  FolderOpen,
-  Server,
-  Download,
-  Clock,
-  Info,
-  Wifi,
   WifiOff,
-  AlertTriangle,
+  Wifi,
   RefreshCw,
+  AlertTriangle,
+  Info,
+  Crown,
   Puzzle
 } from 'lucide-react'
 
@@ -39,6 +41,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const [showLowPowerModal, setShowLowPowerModal] = useState(false)
   const [isLowPowerMode, setIsLowPowerMode] = useState(socketClient.isInLowPowerMode())
   const [showLogoutTransition, setShowLogoutTransition] = useState(false)
+  const [isSponsor, setIsSponsor] = useState(false)
   const location = useLocation()
   const { user, logout } = useAuthStore()
   const { theme, toggleTheme } = useThemeStore()
@@ -254,6 +257,25 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     }
   }, [])
 
+  // 获取赞助者状态
+  useEffect(() => {
+    const fetchSponsorStatus = async () => {
+      try {
+        const response = await apiClient.getSponsorKeyInfo()
+        if (response.success && response.data) {
+          setIsSponsor(response.data.isValid && !response.data.isExpired)
+        }
+      } catch (error) {
+        console.error('获取赞助者状态失败:', error)
+        setIsSponsor(false)
+      }
+    }
+
+    if (user) {
+      fetchSponsorStatus()
+    }
+  }, [user])
+
   // 手动重连
   const handleReconnect = () => {
     setReconnecting(true)
@@ -359,9 +381,19 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                 <p className="text-sm font-medium text-black dark:text-white truncate">
                   {user?.username}
                 </p>
-                <p className="text-xs text-gray-600 dark:text-gray-400">
-                  {user?.role === 'admin' ? '管理员' : '用户'}
-                </p>
+                <div className="flex items-center space-x-1">
+                  <p className="text-xs text-gray-600 dark:text-gray-400">
+                    {user?.role === 'admin' ? '管理员' : '用户'}
+                  </p>
+                  {isSponsor && (
+                    <div className="flex items-center space-x-1">
+                      <Crown className="w-3 h-3 text-yellow-500" />
+                      <span className="text-xs text-yellow-600 dark:text-yellow-400 font-medium">
+                        赞助者
+                      </span>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
             

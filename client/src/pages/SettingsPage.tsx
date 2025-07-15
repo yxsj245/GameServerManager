@@ -340,17 +340,33 @@ const SettingsPage: React.FC = () => {
           message: result.message || '无效的赞助者密钥'
         })
       }
-    } catch (error) {
-      setSponsorKeyStatus({
-        isValid: false,
-        message: '网络错误，请稍后重试'
-      })
+    } catch (error: any) {
+      // 检查是否是API响应错误（包含具体错误信息）
+      if (error.success === false && error.message) {
+        // 这是从API返回的错误响应
+        setSponsorKeyStatus({
+          isValid: false,
+          message: error.message
+        })
 
-      addNotification({
-        type: 'error',
-        title: '校验失败',
-        message: '网络错误，请稍后重试'
-      })
+        addNotification({
+          type: 'error',
+          title: '密钥校验失败',
+          message: '请检查密钥是否正确且在有效期内，如有问题请联系项目开发者'
+        })
+      } else {
+        // 真正的网络错误
+        setSponsorKeyStatus({
+          isValid: false,
+          message: '网络错误，请稍后重试'
+        })
+
+        addNotification({
+          type: 'error',
+          title: '网络错误',
+          message: '请稍后重试'
+        })
+      }
     } finally {
       setSponsorKeyLoading(false)
     }
