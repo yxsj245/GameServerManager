@@ -973,7 +973,7 @@ const SettingsPage: React.FC = () => {
               
               {steamcmdSettings.installMode === 'manual' && pathExists === false && (
                 <p className="text-xs text-red-500 mt-1">
-                  在指定路径下未找到steamcmd.exe或steamcmd.sh文件
+                  在指定路径下未找到steamcmd.exe或steamcmd.sh文件。容器中请填写为/home/steam/steamcmd
                 </p>
               )}
               
