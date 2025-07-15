@@ -1228,6 +1228,12 @@ const SettingsPage: React.FC = () => {
               <p className="text-xs text-gray-600 dark:text-gray-400">
                 • 请确保指定的用户存在且当前用户有权限切换到该用户
               </p>
+              <p className="text-xs text-gray-600 dark:text-gray-400">
+                • 如果当用户不存在或切换错误，终端将会自动切换回当前用户
+              </p>
+              <p className="text-xs text-gray-600 dark:text-gray-400">
+                • Docker中将此值填写为steam
+              </p>              
             </div>
             
             {/* 保存按钮 */}
