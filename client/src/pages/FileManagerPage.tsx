@@ -314,8 +314,10 @@ const FileManagerPage: React.FC = () => {
   
   // 处理路径输入
   const handlePathSubmit = () => {
-    if (pathInput.trim()) {
-      navigateToPath(pathInput.trim())
+    const trimmedInput = normalizePath(pathInput.trim())
+    const current = normalizePath(currentPath)
+    if (trimmedInput && trimmedInput !== current) {
+      navigateToPath(trimmedInput)
     }
     setIsEditingPath(false)
   }
