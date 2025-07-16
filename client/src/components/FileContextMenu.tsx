@@ -73,6 +73,9 @@ export const FileContextMenu: React.FC<FileContextMenuProps> = ({
   const isMultipleSelected = selectedCount > 1
   const contextMenuVisible = globalContextMenuInfo?.file?.path === file.path;
   const contextMenuPosition = globalContextMenuInfo?.position || { x: 0, y: 0 };
+  // 解决右键菜单溢出问题
+  const menuRef = React.useRef<HTMLDivElement>(null);
+  const [adjustedPosition, setAdjustedPosition] = React.useState(contextMenuPosition);
 
   const getSelectedFiles = (): FileItem[] => {
     if (isSelected && isMultipleSelected) {
@@ -116,6 +119,36 @@ export const FileContextMenu: React.FC<FileContextMenuProps> = ({
       return () => document.removeEventListener('click', handleClickOutside);
     }
   }, [contextMenuVisible, setGlobalContextMenuInfo]);
+  
+  // 解决菜单溢出问题
+  React.useLayoutEffect(() => {
+    if (contextMenuVisible && menuRef.current) {
+      const { x, y } = contextMenuPosition;
+      const menuRect = menuRef.current.getBoundingClientRect();
+      const menuWidth = menuRect.width;
+      const menuHeight = menuRect.height;
+      const winWidth = window.innerWidth;
+      const winHeight = window.innerHeight;
+
+      let adjustedX = x;
+      let adjustedY = y;
+
+      // 判断是否溢出右边或下边，需修正
+      if (x + menuWidth > winWidth) {
+        adjustedX = Math.max(0, x - menuWidth);
+      }
+      if (y + menuHeight > winHeight) {
+        adjustedY = Math.max(0, y - menuHeight);
+      }
+      if (adjustedX !== adjustedPosition.x || adjustedY !== adjustedPosition.y) {
+        setAdjustedPosition({ x: adjustedX, y: adjustedY });
+      }
+    }
+    // 菜单关闭时回到初始坐标
+    if (!contextMenuVisible && (adjustedPosition.x !== contextMenuPosition.x || adjustedPosition.y !== contextMenuPosition.y)) {
+      setAdjustedPosition(contextMenuPosition);
+    }
+  }, [contextMenuVisible, contextMenuPosition, file.path, menuRef.current]);
 
   return (
     <>
@@ -126,10 +159,13 @@ export const FileContextMenu: React.FC<FileContextMenuProps> = ({
       {contextMenuVisible && (
         <div
           className="fixed bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-2 min-w-[160px]"
+          ref={menuRef}
           style={{
-            left: contextMenuPosition.x,
-            top: contextMenuPosition.y,
-            zIndex: 1000
+            left: adjustedPosition.x,
+            top: adjustedPosition.y,
+            zIndex: 1000,
+            opacity: adjustedPosition === contextMenuPosition ? 0 : 1,
+            pointerEvents: adjustedPosition === contextMenuPosition ? 'none' : 'auto'
           }}
           onClick={handleMenuClick}
         >
