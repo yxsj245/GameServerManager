@@ -24,6 +24,11 @@ interface FileContextMenuProps {
     items: string[]
     operation: 'copy' | 'cut' | null
   }
+  // 菜单全局状态props
+  globalContextMenuInfo: {
+    file: FileItem | null
+    position: { x: number; y: number }
+  } | null
   onOpen: (file: FileItem) => void
   onRename: (file: FileItem) => void
   onDelete: (files: FileItem[]) => void
@@ -36,6 +41,11 @@ interface FileContextMenuProps {
   onExtract: (file: FileItem) => void
   onOpenTerminal: (file: FileItem) => void
   onAddToPlaylist?: (files: FileItem[]) => void
+  // 菜单全局状态props
+  setGlobalContextMenuInfo: React.Dispatch<React.SetStateAction<{
+    file: FileItem | null
+    position: { x: number; y: number }
+  } | null>>
 }
 
 export const FileContextMenu: React.FC<FileContextMenuProps> = ({
@@ -43,6 +53,7 @@ export const FileContextMenu: React.FC<FileContextMenuProps> = ({
   file,
   selectedFiles,
   clipboard,
+  globalContextMenuInfo,
   onOpen,
   onRename,
   onDelete,
@@ -54,13 +65,14 @@ export const FileContextMenu: React.FC<FileContextMenuProps> = ({
   onCompress,
   onExtract,
   onOpenTerminal,
-  onAddToPlaylist
+  onAddToPlaylist,
+  setGlobalContextMenuInfo
 }) => {
   const isSelected = selectedFiles.has(file.path)
   const selectedCount = selectedFiles.size
   const isMultipleSelected = selectedCount > 1
-  const [contextMenuVisible, setContextMenuVisible] = React.useState(false)
-  const [contextMenuPosition, setContextMenuPosition] = React.useState({ x: 0, y: 0 })
+  const contextMenuVisible = globalContextMenuInfo?.file?.path === file.path;
+  const contextMenuPosition = globalContextMenuInfo?.position || { x: 0, y: 0 };
 
   const getSelectedFiles = (): FileItem[] => {
     if (isSelected && isMultipleSelected) {
@@ -87,26 +99,23 @@ export const FileContextMenu: React.FC<FileContextMenuProps> = ({
   }
 
   const handleContextMenu = (event: React.MouseEvent) => {
-    event.preventDefault()
-    setContextMenuPosition({ x: event.clientX, y: event.clientY })
-    setContextMenuVisible(true)
-    console.log('显示右键菜单:', file.name)
-  }
+  event.preventDefault();
+  setGlobalContextMenuInfo({file, position: { x: event.clientX, y: event.clientY }});
+  //日志
+  console.log('显示右键菜单:', file.name);
+  };
 
   const handleMenuClick = () => {
-    setContextMenuVisible(false)
-  }
+  setGlobalContextMenuInfo(null);
+  };
 
   React.useEffect(() => {
-    const handleClickOutside = () => {
-      setContextMenuVisible(false)
-    }
-    
     if (contextMenuVisible) {
-      document.addEventListener('click', handleClickOutside)
-      return () => document.removeEventListener('click', handleClickOutside)
+      const handleClickOutside = () => setGlobalContextMenuInfo(null);
+      document.addEventListener('click', handleClickOutside);
+      return () => document.removeEventListener('click', handleClickOutside);
     }
-  }, [contextMenuVisible])
+  }, [contextMenuVisible, setGlobalContextMenuInfo]);
 
   return (
     <>
