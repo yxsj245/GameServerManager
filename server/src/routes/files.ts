@@ -48,10 +48,6 @@ const upload = multer({
       cb(null, cleanedName)
     }
   }),
-  limits: {
-    fileSize: 100 * 1024 * 1024, // 100MB
-    files: 10 // 最多10个文件
-  },
   fileFilter: (req, file, cb) => {
     // 处理文件名编码
     let originalName = file.originalname
