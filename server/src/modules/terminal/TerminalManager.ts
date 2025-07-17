@@ -194,8 +194,9 @@ export class TerminalManager {
           const userExists = await this.checkUserExists(defaultUser)
           if (userExists) {
             // 如果配置了默认用户且用户存在，使用su命令切换到该用户
-            args.push('-cmd', JSON.stringify(['su', '-', defaultUser]))
-            this.logger.info(`使用默认用户启动终端: ${defaultUser}`)
+            // 使用 su -c 来在指定的工作目录中启动bash
+            args.push('-cmd', JSON.stringify(['su', defaultUser, '-c', `cd '${workingDirectory}' && exec /bin/bash`]))
+            this.logger.info(`使用默认用户启动终端: ${defaultUser}，工作目录: ${workingDirectory}`)
           } else {
             // 用户不存在，记录警告并使用默认bash
             this.logger.warn(`配置的默认用户 '${defaultUser}' 不存在，使用默认bash`)
