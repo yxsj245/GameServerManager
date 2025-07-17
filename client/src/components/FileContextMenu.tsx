@@ -112,6 +112,18 @@ export const FileContextMenu: React.FC<FileContextMenuProps> = ({
   setGlobalContextMenuInfo(null);
   };
 
+  // 添加路径复制
+  const handleCopyAbsolutePath = (file: FileItem) => {
+    const absolutePath = file.path; // Assuming `file.path` contains the absolute path
+    navigator.clipboard.writeText(absolutePath)
+      .then(() => {
+        console.log("路径已复制到剪贴板:", absolutePath);
+      })
+      .catch((err) => {
+        console.error("无法复制路径:", err);
+      });
+  };
+
   React.useEffect(() => {
     if (contextMenuVisible) {
       const handleClickOutside = () => setGlobalContextMenuInfo(null);
@@ -203,6 +215,15 @@ export const FileContextMenu: React.FC<FileContextMenuProps> = ({
             </div>
           )}
           
+          {/* 复制绝对路径 */}
+          <div
+            className="px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer flex items-center"
+            onClick={() => handleCopyAbsolutePath(file)}
+          >
+            <CopyOutlined className="mr-2" />
+            复制绝对路径
+          </div>
+
           {/* 添加到播放列表（仅音频文件） */}
           {onAddToPlaylist && hasAudioFiles() && (
             <div
