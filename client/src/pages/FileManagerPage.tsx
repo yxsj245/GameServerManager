@@ -779,59 +779,53 @@ const FileManagerPage: React.FC = () => {
                 上传
               </Button>
             </Tooltip>
-            {/* 剪贴板操作按钮 */}
-            {selectedFiles.size > 0 && (
-              <>
-                <Tooltip title="复制选中项 (Ctrl+C)">
+            
+            {/* 文件操作按钮 - 固定显示在右上角 */}
+            <div className="border-l border-gray-300 dark:border-gray-600 pl-2 ml-2">
+              <Space>
+                <Tooltip title={selectedFiles.size > 0 ? `复制选中项 (${selectedFiles.size}) (Ctrl+C)` : "复制 (Ctrl+C)"}>
                   <Button 
                     icon={<CopyOutlined />}
+                    disabled={selectedFiles.size === 0}
                     onClick={() => {
                       const selectedFileItems = Array.from(selectedFiles).map(path => 
                         files.find(f => f.path === path)
                       ).filter(Boolean) as FileItem[]
                       handleContextMenuCopy(selectedFileItems)
                     }}
-                  >
-                    复制
-                  </Button>
+                  />
                 </Tooltip>
-                <Tooltip title="剪切选中项 (Ctrl+X)">
+                <Tooltip title={selectedFiles.size > 0 ? `剪切选中项 (${selectedFiles.size}) (Ctrl+X)` : "剪切 (Ctrl+X)"}>
                   <Button 
                     icon={<ScissorOutlined />}
+                    disabled={selectedFiles.size === 0}
                     onClick={() => {
                       const selectedFileItems = Array.from(selectedFiles).map(path => 
                         files.find(f => f.path === path)
                       ).filter(Boolean) as FileItem[]
                       handleContextMenuCut(selectedFileItems)
                     }}
-                  >
-                    剪切
-                  </Button>
+                  />
                 </Tooltip>
-              </>
-            )}
-            {clipboard.operation && clipboard.items.length > 0 && (
-              <Tooltip title={`粘贴 ${clipboard.items.length} 个项目 (Ctrl+V)`}>
-                <Button 
-                  type="primary"
-                  icon={<SnippetsOutlined />}
-                  onClick={handlePaste}
-                >
-                  粘贴 ({clipboard.items.length})
-                </Button>
-              </Tooltip>
-            )}
-            {selectedFiles.size > 0 && (
-              <Tooltip title="删除选中项">
-                <Button 
-                  danger
-                  icon={<DeleteOutlined />}
-                  onClick={() => setDeleteDialog(true)}
-                >
-                  删除 ({selectedFiles.size})
-                </Button>
-              </Tooltip>
-            )}
+                <Tooltip title={clipboard.operation && clipboard.items.length > 0 ? `粘贴 ${clipboard.items.length} 个项目 (Ctrl+V)` : "粘贴 (Ctrl+V)"}>
+                  <Button 
+                    icon={<SnippetsOutlined />}
+                    disabled={!clipboard.operation || clipboard.items.length === 0}
+                    type={clipboard.operation && clipboard.items.length > 0 ? "primary" : "default"}
+                    onClick={handlePaste}
+                  />
+                </Tooltip>
+                <Tooltip title={selectedFiles.size > 0 ? `删除选中项 (${selectedFiles.size}) (Delete)` : "删除 (Delete)"}>
+                  <Button 
+                    icon={<DeleteOutlined />}
+                    disabled={selectedFiles.size === 0}
+                    danger
+                    onClick={() => setDeleteDialog(true)}
+                  />
+                </Tooltip>
+              </Space>
+            </div>
+            
             {/* 任务状态按钮 */}
             <Tooltip title="查看任务状态">
               <Badge count={activeTasks.length} size="small">
