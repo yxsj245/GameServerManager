@@ -93,10 +93,6 @@ const upload = multer({
     file.originalname = fixChineseFilename(file.originalname)
     console.log('FileFilter - processed filename:', file.originalname)
     cb(null, true)
-  },
-  limits: {
-    fileSize: 100 * 1024 * 1024, // 100MB 限制
-    files: 20 // 最多20个文件
   }
 })
 
@@ -122,6 +118,20 @@ const isValidPath = (filePath: string): boolean => {
   
   return isAbsolute
 }
+// 修复Windows路径格式的工具函数
+const fixWindowsPath = (filePath: string): string => {
+  if (!filePath) return filePath
+  
+  // 解码URL编码的路径
+  let decodedPath = decodeURIComponent(filePath)
+  
+  // 在Windows系统中，如果路径以 /C: 或 \C: 或 /D: 或 \D: 等格式开头，移除前面的斜杠
+  if (process.platform === 'win32' && /^[\/\\][A-Za-z]:/.test(decodedPath)) {
+    decodedPath = decodedPath.substring(1)
+  }
+  
+  return decodedPath
+}
 
 // 获取目录列表
 router.get('/list', authenticateToken, async (req: Request, res: Response) => {
@@ -135,7 +145,10 @@ router.get('/list', authenticateToken, async (req: Request, res: Response) => {
       })
     }
 
-    const stats = await fs.stat(dirPath as string)
+    // 修复Windows路径格式
+    const fixedDirPath = fixWindowsPath(dirPath as string)
+
+    const stats = await fs.stat(fixedDirPath)
     if (!stats.isDirectory()) {
       return res.status(400).json({
         status: 'error',
@@ -143,11 +156,11 @@ router.get('/list', authenticateToken, async (req: Request, res: Response) => {
       })
     }
 
-    const items = await fs.readdir(dirPath as string)
+    const items = await fs.readdir(fixedDirPath)
     const files = []
 
     for (const item of items) {
-      const itemPath = path.join(dirPath as string, item)
+      const itemPath = path.join(fixedDirPath, item)
       try {
         const itemStats = await fs.stat(itemPath)
         files.push({
@@ -168,14 +181,14 @@ router.get('/list', authenticateToken, async (req: Request, res: Response) => {
       data: files
     })
   } catch (error: any) {
-    console.error('Preview request - Error occurred:', error)
-    console.error('Preview request - Error stack:', error.stack)
+    console.error('List request - Error occurred:', error)
+    console.error('List request - Error stack:', error.stack)
     
     // 确保响应还没有发送
     if (!res.headersSent) {
       res.status(500).json({
         status: 'error',
-        message: error.message || '文件预览失败'
+        message: error.message || '文件列表获取失败'
       })
     }
   }
@@ -193,7 +206,10 @@ router.get('/read', authenticateToken, async (req: Request, res: Response) => {
       })
     }
 
-    const stats = await fs.stat(filePath as string)
+    // 修复Windows路径格式
+    const fixedFilePath = fixWindowsPath(filePath as string)
+
+    const stats = await fs.stat(fixedFilePath)
     if (!stats.isFile()) {
       return res.status(400).json({
         status: 'error',
@@ -202,12 +218,12 @@ router.get('/read', authenticateToken, async (req: Request, res: Response) => {
     }
 
     // 使用 mime-types 获取 Content-Type
-    const contentType = mime.lookup(filePath as string) || 'application/octet-stream'
+    const contentType = mime.lookup(fixedFilePath) || 'application/octet-stream'
     res.setHeader('Content-Type', contentType)
     res.setHeader('Content-Length', stats.size.toString())
 
     // 创建文件流并 pipe 到响应
-    const stream = createReadStream(filePath as string)
+    const stream = createReadStream(fixedFilePath)
     stream.pipe(res)
   } catch (error: any) {
     if (error.code === 'ENOENT') {
@@ -232,7 +248,10 @@ router.get('/read-content', authenticateToken, async (req: Request, res: Respons
       })
     }
 
-    const stats = await fs.stat(filePath as string)
+    // 修复Windows路径格式
+    const fixedFilePath = fixWindowsPath(filePath as string)
+
+    const stats = await fs.stat(fixedFilePath)
     if (!stats.isFile()) {
       return res.status(400).json({
         status: 'error',
@@ -241,7 +260,7 @@ router.get('/read-content', authenticateToken, async (req: Request, res: Respons
     }
 
     // 读取文件内容
-    const content = await fs.readFile(filePath as string, 'utf-8')
+    const content = await fs.readFile(fixedFilePath, 'utf-8')
     
     res.json({
       status: 'success',
@@ -387,9 +406,12 @@ router.post('/create', authenticateToken, async (req: Request, res: Response) =>
       })
     }
 
+    // 修复Windows路径格式
+    const fixedFilePath = fixWindowsPath(filePath)
+
     // 检查文件是否已存在
     try {
-      await fs.access(filePath)
+      await fs.access(fixedFilePath)
       return res.status(400).json({
         status: 'error',
         message: '文件已存在'
@@ -399,11 +421,11 @@ router.post('/create', authenticateToken, async (req: Request, res: Response) =>
     }
 
     // 确保父目录存在
-    const parentDir = path.dirname(filePath)
+    const parentDir = path.dirname(fixedFilePath)
     await fs.mkdir(parentDir, { recursive: true })
     
     // 创建文件
-    await fs.writeFile(filePath, content, encoding)
+    await fs.writeFile(fixedFilePath, content, encoding)
     
     res.json({
       status: 'success',
@@ -429,7 +451,10 @@ router.post('/save', authenticateToken, async (req: Request, res: Response) => {
       })
     }
 
-    await fs.writeFile(filePath, content, encoding)
+    // 修复Windows路径格式
+    const fixedFilePath = fixWindowsPath(filePath)
+
+    await fs.writeFile(fixedFilePath, content, encoding)
     
     res.json({
       status: 'success',
@@ -466,11 +491,14 @@ router.delete('/delete', authenticateToken, async (req: Request, res: Response) 
         })
       }
 
-      const stats = await fs.stat(filePath)
+      // 修复Windows路径格式
+      const fixedFilePath = fixWindowsPath(filePath)
+
+      const stats = await fs.stat(fixedFilePath)
       if (stats.isDirectory()) {
-        await fs.rm(filePath, { recursive: true, force: true })
+        await fs.rm(fixedFilePath, { recursive: true, force: true })
       } else {
-        await fs.unlink(filePath)
+        await fs.unlink(fixedFilePath)
       }
     }
     
@@ -510,7 +538,11 @@ router.post('/rename', authenticateToken, async (req: Request, res: Response) =>
       })
     }
 
-    await fs.rename(oldPath, newPath)
+    // 修复Windows路径格式
+    const fixedOldPath = fixWindowsPath(oldPath)
+    const fixedNewPath = fixWindowsPath(newPath)
+
+    await fs.rename(fixedOldPath, fixedNewPath)
     
     res.json({
       status: 'success',
@@ -536,13 +568,17 @@ router.post('/copy', authenticateToken, async (req: Request, res: Response) => {
       })
     }
 
-    const stats = await fs.stat(sourcePath)
+    // 修复Windows路径格式
+    const fixedSourcePath = fixWindowsPath(sourcePath)
+    const fixedTargetPath = fixWindowsPath(targetPath)
+
+    const stats = await fs.stat(fixedSourcePath)
     
     if (stats.isFile()) {
-      await fs.copyFile(sourcePath, targetPath)
+      await fs.copyFile(fixedSourcePath, fixedTargetPath)
     } else {
       // 递归复制目录
-      await copyDirectory(sourcePath, targetPath)
+      await copyDirectory(fixedSourcePath, fixedTargetPath)
     }
     
     res.json({
@@ -569,7 +605,48 @@ router.post('/move', authenticateToken, async (req: Request, res: Response) => {
       })
     }
 
-    await fs.rename(sourcePath, targetPath)
+    // 修复Windows路径格式
+    const fixedSourcePath = fixWindowsPath(sourcePath)
+    const fixedTargetPath = fixWindowsPath(targetPath)
+
+    try {
+      await fs.rename(fixedSourcePath, fixedTargetPath)
+    } catch (renameError: any) {
+      // 如果是跨设备链接错误，使用复制+删除的方式
+      if (renameError.code === 'EXDEV') {
+        console.log(`Cross-device move failed, using copy+unlink from ${fixedSourcePath} to ${fixedTargetPath}`)
+        
+        // 检查源路径是文件还是目录
+        const stats = await fs.stat(fixedSourcePath)
+        if (stats.isDirectory()) {
+          // 对于目录，需要递归复制
+          const copyDirectory = async (src: string, dest: string) => {
+            await fs.mkdir(dest, { recursive: true })
+            const entries = await fs.readdir(src, { withFileTypes: true })
+            
+            for (const entry of entries) {
+              const srcPath = path.join(src, entry.name)
+              const destPath = path.join(dest, entry.name)
+              
+              if (entry.isDirectory()) {
+                await copyDirectory(srcPath, destPath)
+              } else {
+                await fs.copyFile(srcPath, destPath)
+              }
+            }
+          }
+          
+          await copyDirectory(fixedSourcePath, fixedTargetPath)
+          await fs.rm(fixedSourcePath, { recursive: true })
+        } else {
+          // 对于文件，直接复制
+          await fs.copyFile(fixedSourcePath, fixedTargetPath)
+          await fs.unlink(fixedSourcePath)
+        }
+      } else {
+        throw renameError
+      }
+    }
     
     res.json({
       status: 'success',
@@ -608,8 +685,11 @@ router.get('/search', authenticateToken, async (req: Request, res: Response) => 
       })
     }
 
+    // 修复Windows路径格式
+    const fixedSearchPath = fixWindowsPath(searchPath as string)
+
     const results = await searchFiles(
-      searchPath as string,
+      fixedSearchPath,
       query as string,
       type as string,
       case_sensitive === 'true',
@@ -642,7 +722,10 @@ router.get('/download', authenticateToken, async (req: Request, res: Response) =
       })
     }
 
-    const stats = await fs.stat(filePath as string)
+    // 修复Windows路径格式
+    const fixedFilePath = fixWindowsPath(filePath as string)
+
+    const stats = await fs.stat(fixedFilePath)
     if (!stats.isFile()) {
       return res.status(400).json({
         status: 'error',
@@ -650,7 +733,7 @@ router.get('/download', authenticateToken, async (req: Request, res: Response) =
       })
     }
 
-    const fileName = path.basename(filePath as string)
+    const fileName = path.basename(fixedFilePath)
     
     // 处理中文文件名的下载头
     // 使用 RFC 5987 标准编码中文文件名
@@ -662,7 +745,7 @@ router.get('/download', authenticateToken, async (req: Request, res: Response) =
     res.setHeader('Content-Type', 'application/octet-stream')
     res.setHeader('Content-Length', stats.size.toString())
     
-    const fileStream = createReadStream(filePath as string)
+    const fileStream = createReadStream(fixedFilePath)
     fileStream.pipe(res)
   } catch (error: any) {
     res.status(500).json({
@@ -693,13 +776,18 @@ router.post('/upload', authenticateToken, upload.array('files'), async (req: Req
       return res.status(400).json({ success: false, message: 'No files uploaded' })
     }
 
+    // 修复Windows路径格式
+    const fixedTargetPath = fixWindowsPath(targetPath)
+    console.log('Original target path:', targetPath)
+    console.log('Fixed target path:', fixedTargetPath)
+    
     // 处理Windows路径格式，确保使用绝对路径
     let fullTargetPath: string
-    if (path.isAbsolute(targetPath)) {
-      fullTargetPath = targetPath
+    if (path.isAbsolute(fixedTargetPath)) {
+      fullTargetPath = fixedTargetPath
     } else {
       // 如果是相对路径，转换为绝对路径（基于当前工作目录）
-      fullTargetPath = path.resolve(process.cwd(), targetPath.replace(/^\//, ''))
+      fullTargetPath = path.resolve(process.cwd(), fixedTargetPath.replace(/^\//, ''))
     }
     
     console.log('Resolved target path:', fullTargetPath)
@@ -738,7 +826,18 @@ router.post('/upload', authenticateToken, upload.array('files'), async (req: Req
         console.log(`Moving file from ${file.path} to ${targetFilePath}`)
         
         // 使用diskStorage时，文件已经在临时目录中，需要移动到目标目录
-        await fs.rename(file.path, targetFilePath)
+        try {
+          await fs.rename(file.path, targetFilePath)
+        } catch (renameError: any) {
+          // 如果是跨设备链接错误，使用复制+删除的方式
+          if (renameError.code === 'EXDEV') {
+            console.log(`Cross-device rename failed, using copy+unlink for ${file.originalname}`)
+            await fs.copyFile(file.path, targetFilePath)
+            await fs.unlink(file.path)
+          } else {
+            throw renameError
+          }
+        }
         results.push({ name: finalFileName, success: true })
       } catch (error: any) {
         console.error(`Failed to move file ${file.originalname}:`, error)
@@ -785,7 +884,11 @@ router.post('/compress', authenticateToken, async (req: Request, res: Response) 
       })
     }
 
-    for (const sourcePath of sourcePaths) {
+    // 修复Windows路径格式
+    const fixedSourcePaths = sourcePaths.map(sourcePath => fixWindowsPath(sourcePath))
+    const fixedTargetPath = fixWindowsPath(targetPath)
+
+    for (const sourcePath of fixedSourcePaths) {
       if (!isValidPath(sourcePath)) {
         return res.status(400).json({
           status: 'error',
@@ -794,25 +897,25 @@ router.post('/compress', authenticateToken, async (req: Request, res: Response) 
       }
     }
 
-    if (!isValidPath(targetPath)) {
+    if (!isValidPath(fixedTargetPath)) {
       return res.status(400).json({
         status: 'error',
         message: '无效的目标路径'
       })
     }
 
-    const archivePath = path.join(targetPath, archiveName)
+    const archivePath = path.join(fixedTargetPath, archiveName)
     
     // 创建异步任务
     const taskId = taskManager.createTask('compress', {
-      sourcePaths,
+      sourcePaths: fixedSourcePaths,
       archivePath,
       format,
       compressionLevel
     })
     
     // 异步执行压缩
-    compressionWorker.compressFiles(taskId, sourcePaths, archivePath, format, compressionLevel)
+    compressionWorker.compressFiles(taskId, fixedSourcePaths, archivePath, format, compressionLevel)
       .catch(error => {
         console.error('压缩任务失败:', error)
       })
@@ -836,7 +939,11 @@ router.post('/extract', authenticateToken, async (req: Request, res: Response) =
   try {
     const { archivePath, targetPath } = req.body
     
-    if (!isValidPath(archivePath) || !isValidPath(targetPath)) {
+    // 修复Windows路径格式
+    const fixedArchivePath = fixWindowsPath(archivePath)
+    const fixedTargetPath = fixWindowsPath(targetPath)
+    
+    if (!isValidPath(fixedArchivePath) || !isValidPath(fixedTargetPath)) {
       return res.status(400).json({
         status: 'error',
         message: '无效的路径'
@@ -845,12 +952,12 @@ router.post('/extract', authenticateToken, async (req: Request, res: Response) =
 
     // 创建异步任务
     const taskId = taskManager.createTask('extract', {
-      archivePath,
-      targetPath
+      archivePath: fixedArchivePath,
+      targetPath: fixedTargetPath
     })
     
     // 异步执行解压
-    compressionWorker.extractArchive(taskId, archivePath, targetPath)
+    compressionWorker.extractArchive(taskId, fixedArchivePath, fixedTargetPath)
       .catch(error => {
         console.error('解压任务失败:', error)
       })
