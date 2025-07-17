@@ -89,8 +89,12 @@ export const useFileStore = create<FileStore>((set, get) => ({
 
   // 设置当前路径
   setCurrentPath: (path: string) => {
-    set({ currentPath: path })
-    get().loadFiles(path)
+    const currentState = get()
+    // 只有当路径真正改变时才更新状态和加载文件
+    if (currentState.currentPath !== path) {
+      set({ currentPath: path })
+      get().loadFiles(path)
+    }
   },
 
   // 加载文件列表

@@ -14,8 +14,11 @@ export function normalizePath(pathStr: string): string {
   // 将反斜杠转换为正斜杠
   let normalized = pathStr.replace(/\\/g, '/')
   
-  // 确保以/开头
-  if (!normalized.startsWith('/')) {
+  // 检查是否是 Windows 绝对路径（如 C:/ 或 D:/）
+  const isWindowsAbsolute = /^[A-Za-z]:/.test(normalized)
+  
+  // 只有在不是 Windows 绝对路径且不以/开头时才添加前缀/
+  if (!isWindowsAbsolute && !normalized.startsWith('/')) {
     normalized = '/' + normalized
   }
   
@@ -37,8 +40,19 @@ export function normalizePath(pathStr: string): string {
   }
   
   // 重新构建路径
-  const result = '/' + stack.join('/')
-  return result === '/' ? '/' : result
+  if (isWindowsAbsolute) {
+    // Windows 绝对路径不需要前缀 /
+    const result = stack.join('/')
+    // 确保 Windows 盘符路径以 / 结尾（如 C:/ 而不是 C:）
+    if (result.match(/^[A-Za-z]:$/) && !result.endsWith('/')) {
+      return result + '/'
+    }
+    return result
+  } else {
+    // Unix 风格路径需要前缀 /
+    const result = '/' + stack.join('/')
+    return result === '/' ? '/' : result
+  }
 }
 
 /**
@@ -50,13 +64,31 @@ export function getDirectoryPath(pathStr: string): string {
   if (!pathStr || pathStr === '/') return '/'
   
   const normalized = normalizePath(pathStr)
+  
+  // 检查是否是 Windows 绝对路径
+  const isWindowsAbsolute = /^[A-Za-z]:/.test(normalized)
+  
   const lastSlashIndex = normalized.lastIndexOf('/')
   
-  if (lastSlashIndex === 0) {
-    return '/'
+  if (isWindowsAbsolute) {
+    // Windows 路径处理
+    if (lastSlashIndex === -1) {
+      // 如果没有斜杠，返回盘符根目录
+      return normalized.match(/^[A-Za-z]:/)![0] + '/'
+    } else if (lastSlashIndex === 2 && normalized.charAt(1) === ':') {
+      // 如果是盘符根目录（如 C:/），返回自身
+      return normalized
+    } else {
+      // 返回父目录
+      return normalized.substring(0, lastSlashIndex)
+    }
+  } else {
+    // Unix 风格路径处理
+    if (lastSlashIndex === 0) {
+      return '/'
+    }
+    return normalized.substring(0, lastSlashIndex)
   }
-  
-  return normalized.substring(0, lastSlashIndex)
 }
 
 /**
@@ -118,7 +150,15 @@ export function getExtension(pathStr: string): string {
  * @returns 是否为绝对路径
  */
 export function isAbsolute(pathStr: string): boolean {
-  return pathStr && pathStr.startsWith('/')
+  if (!pathStr) return false
+  
+  // 检查是否是 Windows 绝对路径（如 C:/ 或 D:/）
+  const isWindowsAbsolute = /^[A-Za-z]:/.test(pathStr)
+  
+  // 检查是否是 Unix 绝对路径（以 / 开头）
+  const isUnixAbsolute = pathStr.startsWith('/')
+  
+  return isWindowsAbsolute || isUnixAbsolute
 }
 
 /**

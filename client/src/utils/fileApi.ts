@@ -296,6 +296,12 @@ export class FileApiClient {
     const response = await this.client.delete(`${API_BASE}/tasks/${taskId}`)
     return response.data
   }
+
+  // 获取系统盘符
+  async getDrives(): Promise<Array<{ label: string; value: string; type: string }>> {
+    const response = await this.client.get(`${API_BASE}/drives`)
+    return response.data.data
+  }
 }
 
 export const fileApiClient = new FileApiClient()

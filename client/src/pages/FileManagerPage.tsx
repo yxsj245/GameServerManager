@@ -15,7 +15,8 @@ import {
   Modal,
   Progress,
   Badge,
-  Drawer
+  Drawer,
+  Select
 } from 'antd'
 import {
   HomeOutlined,
@@ -40,7 +41,8 @@ import {
   ClockCircleOutlined,
   BellOutlined,
   AppstoreOutlined,
-  UnorderedListOutlined
+  UnorderedListOutlined,
+  HddOutlined
 } from '@ant-design/icons'
 import { useFileStore } from '@/stores/fileStore'
 import { useNotificationStore } from '@/stores/notificationStore'
@@ -169,6 +171,88 @@ const FileManagerPage: React.FC = () => {
     position: { x: number; y: number }
   } | null>(null);
   
+  // 盘符选择状态
+  const [drives, setDrives] = useState<Array<{ label: string; value: string; type: string }>>([])
+  const [selectedDrive, setSelectedDrive] = useState<string>('')
+  const [drivesLoading, setDrivesLoading] = useState(false)
+  
+  // 查找当前路径对应的盘符
+  const findDriveForPath = useCallback((path: string, driveList: Array<{ label: string; value: string; type: string }>) => {
+    if (!path || !driveList.length) return null
+    
+    const normalizedPath = normalizePath(path)
+    
+    // 对每个盘符进行匹配
+    for (const drive of driveList) {
+      const normalizedDriveValue = normalizePath(drive.value)
+      
+      // 确保盘符路径以 / 结尾进行比较
+      const driveRoot = normalizedDriveValue.endsWith('/') ? normalizedDriveValue : normalizedDriveValue + '/'
+      const pathToCheck = normalizedPath.endsWith('/') ? normalizedPath : normalizedPath + '/'
+      
+      // 检查路径是否以盘符开头
+      if (pathToCheck.startsWith(driveRoot) || normalizedPath === normalizedDriveValue) {
+        return drive
+      }
+      
+      // 特殊处理：如果是 Windows 盘符格式（如 D: 和 D:/），也要匹配
+      if (normalizedDriveValue.match(/^[A-Za-z]:\/?\/?$/)) {
+        const drivePrefix = normalizedDriveValue.charAt(0) + ':'
+        if (normalizedPath.startsWith(drivePrefix)) {
+          return drive
+        }
+      }
+    }
+    
+    return null
+  }, [])
+
+  // 加载系统盘符
+  const loadDrives = useCallback(async () => {
+    try {
+      setDrivesLoading(true)
+      const driveList = await fileApiClient.getDrives()
+      setDrives(driveList)
+      
+      // 如果当前路径匹配某个盘符，设置为选中状态
+      if (currentPath) {
+        const currentDrive = findDriveForPath(currentPath, driveList)
+        if (currentDrive) {
+          setSelectedDrive(currentDrive.value)
+        }
+      }
+    } catch (error: any) {
+      console.error('加载盘符失败:', error)
+      addNotification({
+        type: 'error',
+        title: '加载盘符失败',
+        message: error.message || '无法获取系统盘符'
+      })
+    } finally {
+      setDrivesLoading(false)
+    }
+  }, [currentPath, addNotification, findDriveForPath])
+  
+  // 导航到指定路径
+  const navigateToPath = useCallback((newPath: string) => {
+    const normalizedPath = normalizePath(newPath)
+    
+    // 更新历史记录
+    const newHistory = history.slice(0, historyIndex + 1)
+    newHistory.push(normalizedPath)
+    setHistory(newHistory)
+    setHistoryIndex(newHistory.length - 1)
+    
+    // 只更新 URL 参数，让 useEffect 监听 URL 变化来更新状态
+    navigate(`/files?path=${encodeURIComponent(normalizedPath)}`, { replace: true })
+  }, [history, historyIndex, navigate])
+  
+  // 切换盘符
+  const handleDriveChange = useCallback((driveValue: string) => {
+    setSelectedDrive(driveValue)
+    navigateToPath(driveValue)
+  }, [navigateToPath])
+  
   // 初始化
   useEffect(() => {
     // 检查 URL 参数中的路径
@@ -183,7 +267,20 @@ const FileManagerPage: React.FC = () => {
     
     // 初始加载任务列表
     loadActiveTasks()
-  }, [searchParams, setCurrentPath, loadFiles, loadActiveTasks])
+    
+    // 加载系统盘符
+    loadDrives()
+  }, [searchParams, setCurrentPath, loadFiles])
+  
+  // 当路径变化时更新选中的盘符
+  useEffect(() => {
+    if (drives.length > 0 && currentPath) {
+      const currentDrive = findDriveForPath(currentPath, drives)
+      if (currentDrive && currentDrive.value !== selectedDrive) {
+        setSelectedDrive(currentDrive.value)
+      }
+    }
+  }, [currentPath, drives, selectedDrive, findDriveForPath])
   
   // 定期刷新活动任务
   useEffect(() => {
@@ -201,7 +298,7 @@ const FileManagerPage: React.FC = () => {
     }, 2000) // 每2秒刷新一次
     
     return () => clearInterval(interval)
-  }, [activeTasks, loadActiveTasks, loadFiles])
+  }, [activeTasks, loadFiles])
   
   // 键盘快捷键
   useEffect(() => {
@@ -268,30 +365,40 @@ const FileManagerPage: React.FC = () => {
     }
   }, [error, addNotification, setError])
   
+  // 获取显示路径（相对于当前盘符的路径）
+  const getDisplayPath = () => {
+    if (selectedDrive && currentPath) {
+      const normalizedCurrentPath = normalizePath(currentPath)
+      const normalizedDriveValue = normalizePath(selectedDrive)
+      
+      // 确保盘符路径以 / 结尾进行比较
+      const driveRoot = normalizedDriveValue.endsWith('/') ? normalizedDriveValue : normalizedDriveValue + '/'
+      
+      if (normalizedCurrentPath.startsWith(driveRoot) || normalizedCurrentPath === normalizedDriveValue) {
+        let relativePath = normalizedCurrentPath.slice(normalizedDriveValue.length)
+        // 移除开头的斜杠
+        if (relativePath.startsWith('/')) {
+          relativePath = relativePath.slice(1)
+        }
+        // 如果是根目录，显示盘符
+        return relativePath || normalizedDriveValue
+      }
+    }
+    return currentPath
+  }
+
   // 更新路径输入
   useEffect(() => {
-    setPathInput(currentPath)
-  }, [currentPath])
-  
-  // 导航到指定路径
-  const navigateToPath = useCallback((newPath: string) => {
-    const normalizedPath = normalizePath(newPath)
-    
-    // 更新历史记录
-    const newHistory = history.slice(0, historyIndex + 1)
-    newHistory.push(normalizedPath)
-    setHistory(newHistory)
-    setHistoryIndex(newHistory.length - 1)
-    
-    setCurrentPath(normalizedPath)
-  }, [history, historyIndex, setCurrentPath])
+    setPathInput(getDisplayPath())
+  }, [currentPath, selectedDrive])
   
   // 后退
   const goBack = () => {
     if (historyIndex > 0) {
       const newIndex = historyIndex - 1
       setHistoryIndex(newIndex)
-      setCurrentPath(history[newIndex])
+      const targetPath = history[newIndex]
+      navigate(`/files?path=${encodeURIComponent(targetPath)}`, { replace: true })
     }
   }
   
@@ -300,7 +407,8 @@ const FileManagerPage: React.FC = () => {
     if (historyIndex < history.length - 1) {
       const newIndex = historyIndex + 1
       setHistoryIndex(newIndex)
-      setCurrentPath(history[newIndex])
+      const targetPath = history[newIndex]
+      navigate(`/files?path=${encodeURIComponent(targetPath)}`, { replace: true })
     }
   }
   
@@ -314,7 +422,19 @@ const FileManagerPage: React.FC = () => {
   
   // 处理路径输入
   const handlePathSubmit = () => {
-    const trimmedInput = normalizePath(pathInput.trim())
+    let inputPath = pathInput.trim()
+    
+    // 如果输入的是相对路径且有选中的盘符，转换为绝对路径
+    if (selectedDrive && !inputPath.includes(':') && !inputPath.startsWith('/')) {
+      // 确保盘符路径以正确的分隔符结尾
+      let basePath = selectedDrive
+      if (!basePath.endsWith('/') && !basePath.endsWith('\\')) {
+        basePath += '/'
+      }
+      inputPath = basePath + inputPath
+    }
+    
+    const trimmedInput = normalizePath(inputPath)
     const current = normalizePath(currentPath)
     if (trimmedInput && trimmedInput !== current) {
       navigateToPath(trimmedInput)
@@ -607,21 +727,42 @@ const FileManagerPage: React.FC = () => {
   
   // 生成面包屑
   const generateBreadcrumbs = () => {
-    const parts = currentPath.split('/').filter(Boolean)
+    // 获取相对于当前盘符的路径
+    let relativePath = currentPath
+    let rootTitle = '根目录'
+    let rootPath = '/'
+    
+    // 如果有选中的盘符，计算相对路径
+    if (selectedDrive && currentPath.startsWith(selectedDrive)) {
+      relativePath = currentPath.slice(selectedDrive.length)
+      rootTitle = selectedDrive.replace(':', '')
+      rootPath = selectedDrive
+      
+      // 移除开头的斜杠或反斜杠
+      if (relativePath.startsWith('/') || relativePath.startsWith('\\')) {
+        relativePath = relativePath.slice(1)
+      }
+    }
+    
+    const parts = relativePath.split(/[/\\]/).filter(Boolean)
     const items = [
       {
         title: (
-          <span className="flex items-center cursor-pointer" onClick={() => navigateToPath('/')}>
-            <HomeOutlined className="mr-1" />
-            根目录
+          <span className="flex items-center cursor-pointer" onClick={() => navigateToPath(rootPath)}>
+            <HddOutlined className="mr-1" />
+            {rootTitle}
           </span>
         )
       }
     ]
     
-    let currentBreadcrumbPath = ''
+    let currentBreadcrumbPath = rootPath
     parts.forEach((part, index) => {
-      currentBreadcrumbPath += '/' + part
+      // 确保路径分隔符正确
+      if (!currentBreadcrumbPath.endsWith('/') && !currentBreadcrumbPath.endsWith('\\')) {
+        currentBreadcrumbPath += '/'
+      }
+      currentBreadcrumbPath += part
       const breadcrumbPath = currentBreadcrumbPath
       
       items.push({
@@ -681,6 +822,20 @@ const FileManagerPage: React.FC = () => {
       {/* 工具栏 */}
       <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
         <div className="flex items-center space-x-2">
+          {/* 盘符选择 */}
+          <div className="mr-2">
+            <Select
+              value={selectedDrive}
+              onChange={handleDriveChange}
+              loading={drivesLoading}
+              placeholder="盘符"
+              size="small"
+              style={{ width: 80, height: 25 }}
+              suffixIcon={<HddOutlined />}
+              options={drives}
+            />
+          </div>
+          
           {/* 导航按钮 */}
           <Space>
             <Tooltip title="后退">

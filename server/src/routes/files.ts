@@ -9,9 +9,13 @@ import unzipper from 'unzipper'
 import * as tar from 'tar'
 import * as zlib from 'zlib'
 import mime from 'mime-types'
+import { exec } from 'child_process'
+import { promisify } from 'util'
 import { authenticateToken } from '../middleware/auth.js'
 import { taskManager } from '../modules/task/taskManager.js'
 import { compressionWorker } from '../modules/task/compressionWorker.js'
+
+const execAsync = promisify(exec)
 
 const router = Router()
 
@@ -116,7 +120,10 @@ const isValidPath = (filePath: string): boolean => {
   // 在Unix系统上，绝对路径以 / 开头
   const isAbsolute = path.isAbsolute(normalizedPath)
   
-  return isAbsolute
+  // 特殊处理 Windows 盘符路径（如 D: 或 D:/）
+  const isWindowsDrive = process.platform === 'win32' && /^[A-Za-z]:[\\/]?$/.test(normalizedPath)
+  
+  return isAbsolute || isWindowsDrive
 }
 // 修复Windows路径格式的工具函数
 const fixWindowsPath = (filePath: string): string => {
@@ -128,6 +135,17 @@ const fixWindowsPath = (filePath: string): string => {
   // 在Windows系统中，如果路径以 /C: 或 \C: 或 /D: 或 \D: 等格式开头，移除前面的斜杠
   if (process.platform === 'win32' && /^[\/\\][A-Za-z]:/.test(decodedPath)) {
     decodedPath = decodedPath.substring(1)
+  }
+  
+  // 在Windows系统中，如果路径是盘符格式（如 D: 或 D:/），转换为根目录格式（如 D:\）
+  if (process.platform === 'win32') {
+    if (/^[A-Za-z]:$/.test(decodedPath)) {
+      // D: -> D:\
+      decodedPath = decodedPath + '\\'
+    } else if (/^[A-Za-z]:\/+$/.test(decodedPath)) {
+      // D:/ 或 D:/// -> D:\
+      decodedPath = decodedPath.charAt(0) + decodedPath.charAt(1) + '\\'
+    }
   }
   
   return decodedPath
@@ -1823,6 +1841,95 @@ router.delete('/tasks/:taskId', authenticateToken, async (req: Request, res: Res
     res.status(500).json({
       status: 'error',
       message: error.message
+    })
+  }
+})
+
+// 获取系统盘符
+router.get('/drives', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const drives: Array<{ label: string; value: string; type: string }> = []
+    
+    if (process.platform === 'win32') {
+      // Windows系统 - 获取所有盘符
+      try {
+        const { stdout } = await execAsync('wmic logicaldisk get size,freespace,caption,description,drivetype')
+        const lines = stdout.split('\n').filter(line => line.trim() && !line.includes('Caption'))
+        
+        for (const line of lines) {
+          const parts = line.trim().split(/\s+/)
+          if (parts.length >= 5) {
+            const caption = parts[0] // 盘符 (如 C:)
+            const driveType = parseInt(parts[2]) // 驱动器类型
+            
+            if (caption && caption.match(/^[A-Z]:$/)) {
+              let type = 'unknown'
+              switch (driveType) {
+                case 2: type = 'removable'; break  // 可移动磁盘
+                case 3: type = 'fixed'; break      // 固定磁盘
+                case 4: type = 'network'; break    // 网络磁盘
+                case 5: type = 'cdrom'; break      // 光盘
+                default: type = 'unknown'; break
+              }
+              
+              drives.push({
+                label: `${caption}\\`,
+                value: `${caption}\\`,
+                type: type
+              })
+            }
+          }
+        }
+      } catch (error) {
+        // 如果wmic命令失败，使用备用方法
+        console.warn('wmic命令失败，使用备用方法获取盘符:', error)
+        
+        // 尝试常见的盘符
+        const commonDrives = ['C:', 'D:', 'E:', 'F:', 'G:', 'H:', 'I:', 'J:', 'K:', 'L:', 'M:', 'N:', 'O:', 'P:', 'Q:', 'R:', 'S:', 'T:', 'U:', 'V:', 'W:', 'X:', 'Y:', 'Z:']
+        
+        for (const drive of commonDrives) {
+          try {
+            const drivePath = `${drive}\\`
+            await fs.access(drivePath)
+            drives.push({
+              label: drivePath,
+              value: drivePath,
+              type: 'fixed'
+            })
+          } catch (error) {
+            // 盘符不存在，跳过
+          }
+        }
+      }
+    } else {
+      // Linux/Unix系统 - 只显示根目录
+      drives.push({
+        label: '根目录 (/)',
+        value: '/',
+        type: 'fixed'
+      })
+    }
+    
+    // 如果没有找到任何盘符，至少返回当前工作目录
+    if (drives.length === 0) {
+      const cwd = process.cwd()
+      const rootPath = process.platform === 'win32' ? path.parse(cwd).root : '/'
+      drives.push({
+        label: process.platform === 'win32' ? rootPath : '根目录 (/)',
+        value: rootPath,
+        type: 'fixed'
+      })
+    }
+    
+    res.json({
+      status: 'success',
+      data: drives
+    })
+  } catch (error: any) {
+    console.error('获取盘符失败:', error)
+    res.status(500).json({
+      status: 'error',
+      message: error.message || '获取盘符失败'
     })
   }
 })
