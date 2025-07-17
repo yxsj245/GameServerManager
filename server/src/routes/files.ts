@@ -13,6 +13,54 @@ import { compressionWorker } from '../modules/task/compressionWorker.js'
 
 const router = Router()
 
+// 处理中文文件名编码的工具函数
+const fixChineseFilename = (filename: string): string => {
+  if (!filename) return filename
+  
+  try {
+    // 如果文件名包含乱码字符，尝试多种编码方式修复
+    if (filename.includes('�') || /[\x80-\xFF]/.test(filename)) {
+      // 尝试从 latin1 转换为 utf8
+      const buffer = Buffer.from(filename, 'latin1')
+      const utf8Name = buffer.toString('utf8')
+      
+      // 验证转换后的文件名是否有效
+      if (!utf8Name.includes('�') && utf8Name.length > 0) {
+        return utf8Name
+      }
+      
+      // 如果 latin1 转换失败，尝试 binary 转换
+      const binaryBuffer = Buffer.from(filename, 'binary')
+      const binaryUtf8 = binaryBuffer.toString('utf8')
+      
+      if (!binaryUtf8.includes('�') && binaryUtf8.length > 0) {
+        return binaryUtf8
+      }
+    }
+    
+    // 如果没有编码问题，直接返回原文件名
+    return filename
+  } catch (error) {
+    console.warn('Failed to fix filename encoding:', error)
+    return filename
+  }
+}
+
+// 验证文件名是否安全
+const isSafeFilename = (filename: string): boolean => {
+  if (!filename || filename.length === 0) return false
+  
+  // 检查是否包含危险字符
+  const dangerousChars = /[<>:"/\\|?*\x00-\x1f]/
+  if (dangerousChars.test(filename)) return false
+  
+  // 检查是否为保留名称（Windows）
+  const reservedNames = /^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(\.|$)/i
+  if (reservedNames.test(filename)) return false
+  
+  return true
+}
+
 // 配置文件上传
 const upload = multer({
   storage: multer.diskStorage({
@@ -22,49 +70,31 @@ const upload = multer({
     },
     filename: (req, file, cb) => {
       // 处理中文文件名编码问题
-      let originalName = file.originalname
+      let originalName = fixChineseFilename(file.originalname)
       
-      // 检测并修复文件名编码
-      if (originalName && originalName.includes('�')) {
-        // 如果包含乱码字符，尝试重新编码
-        try {
-          const buffer = Buffer.from(originalName, 'binary')
-          originalName = buffer.toString('utf8')
-        } catch (error) {
-          console.warn('Failed to decode filename, using fallback')
-        }
-      }
+      console.log('Original filename:', file.originalname)
+      console.log('Fixed filename:', originalName)
       
-      // 如果仍然有问题，使用安全的文件名
-      if (!originalName || originalName.includes('�') || !/^[\u4e00-\u9fa5\w\s.-]+$/u.test(originalName)) {
+      // 如果文件名仍然不安全，生成安全的文件名
+      if (!isSafeFilename(originalName)) {
         const timestamp = Date.now()
         const ext = path.extname(file.originalname) || '.tmp'
         originalName = `upload-${timestamp}${ext}`
+        console.log('Using fallback filename:', originalName)
       }
       
-      // 直接使用原文件名，清理特殊字符
-      let cleanedName = originalName.replace(/[^\u4e00-\u9fa5\w\s.-]/g, '_')
-      
-      cb(null, cleanedName)
+      cb(null, originalName)
     }
   }),
   fileFilter: (req, file, cb) => {
-    // 处理文件名编码
-    let originalName = file.originalname
-    
-    // 检测并修复文件名编码
-    if (originalName && originalName.includes('�')) {
-      try {
-        const buffer = Buffer.from(originalName, 'binary')
-        originalName = buffer.toString('utf8')
-      } catch (error) {
-        console.warn('Failed to decode filename in filter, keeping original')
-      }
-    }
-    
-    // 更新文件名
-    file.originalname = originalName
+    // 在过滤器中也处理文件名编码
+    file.originalname = fixChineseFilename(file.originalname)
+    console.log('FileFilter - processed filename:', file.originalname)
     cb(null, true)
+  },
+  limits: {
+    fileSize: 100 * 1024 * 1024, // 100MB 限制
+    files: 20 // 最多20个文件
   }
 })
 
@@ -619,8 +649,16 @@ router.get('/download', authenticateToken, async (req: Request, res: Response) =
     }
 
     const fileName = path.basename(filePath as string)
-    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`)
+    
+    // 处理中文文件名的下载头
+    // 使用 RFC 5987 标准编码中文文件名
+    const encodedFileName = encodeURIComponent(fileName)
+    const asciiFileName = fileName.replace(/[^\x00-\x7F]/g, '_') // 替换非ASCII字符为下划线作为fallback
+    
+    res.setHeader('Content-Disposition', 
+      `attachment; filename="${asciiFileName}"; filename*=UTF-8''${encodedFileName}`)
     res.setHeader('Content-Type', 'application/octet-stream')
+    res.setHeader('Content-Length', stats.size.toString())
     
     const fileStream = createReadStream(filePath as string)
     fileStream.pipe(res)
@@ -671,35 +709,35 @@ router.post('/upload', authenticateToken, upload.array('files'), async (req: Req
     const results = []
     for (const file of files) {
       try {
-        // 处理中文文件名编码问题
-        let originalName = file.originalname
+        // 使用改进的文件名处理函数
+        let originalName = fixChineseFilename(file.originalname)
         
-        // 检测并修复文件名编码
-        if (originalName && originalName.includes('�')) {
-          try {
-            const buffer = Buffer.from(originalName, 'binary')
-            originalName = buffer.toString('utf8')
-          } catch (error) {
-            console.warn('Failed to decode filename in upload, using fallback')
-          }
-        }
+        console.log(`Processing file: ${file.originalname} -> ${originalName}`)
         
-        // 如果仍然有问题，使用安全的文件名
-        if (!originalName || originalName.includes('�') || !/^[\u4e00-\u9fa5\w\s.-]+$/u.test(originalName)) {
+        // 如果文件名仍然不安全，生成安全的文件名
+        if (!isSafeFilename(originalName)) {
           const timestamp = Date.now()
           const ext = path.extname(file.originalname) || '.tmp'
           originalName = `upload-${timestamp}${ext}`
+          console.log(`Using fallback filename: ${originalName}`)
         }
         
-        // 清理文件名中的特殊字符
-        originalName = originalName.replace(/[^\u4e00-\u9fa5\w\s.-]/g, '_')
+        // 检查目标文件是否已存在，如果存在则添加序号
+        let finalFileName = originalName
+        let counter = 1
+        while (await fs.access(path.join(fullTargetPath, finalFileName)).then(() => true).catch(() => false)) {
+          const ext = path.extname(originalName)
+          const nameWithoutExt = path.basename(originalName, ext)
+          finalFileName = `${nameWithoutExt}(${counter})${ext}`
+          counter++
+        }
         
-        const targetFilePath = path.join(fullTargetPath, originalName)
+        const targetFilePath = path.join(fullTargetPath, finalFileName)
         console.log(`Moving file from ${file.path} to ${targetFilePath}`)
         
         // 使用diskStorage时，文件已经在临时目录中，需要移动到目标目录
         await fs.rename(file.path, targetFilePath)
-        results.push({ name: originalName, success: true })
+        results.push({ name: finalFileName, success: true })
       } catch (error: any) {
         console.error(`Failed to move file ${file.originalname}:`, error)
         results.push({ name: file.originalname, success: false, error: error.message })
