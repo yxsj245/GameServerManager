@@ -15,7 +15,9 @@ import {
   Terminal,
   ArrowRight,
   Wifi,
-  Search
+  Search,
+  Maximize2,
+  X
 } from 'lucide-react'
 import MusicPlayer from '@/components/MusicPlayer'
 
@@ -234,6 +236,11 @@ const HomePage: React.FC = () => {
   const [isFirstPortsLoad, setIsFirstPortsLoad] = useState(true)
   const [portSearchQuery, setPortSearchQuery] = useState('')
   const [filteredPorts, setFilteredPorts] = useState<ActivePort[]>([])
+  const [showPortsModal, setShowPortsModal] = useState(false)
+  const [isPortsModalClosing, setIsPortsModalClosing] = useState(false)
+  const [isPortsModalOpening, setIsPortsModalOpening] = useState(false)
+  const [modalPortSearchQuery, setModalPortSearchQuery] = useState('')
+  const [modalFilteredPorts, setModalFilteredPorts] = useState<ActivePort[]>([])
   
   useEffect(() => {
     // 获取系统信息
@@ -406,6 +413,40 @@ const HomePage: React.FC = () => {
       setFilteredPorts(filtered)
     }
   }, [activePorts, portSearchQuery])
+  
+  // 处理弹窗端口搜索过滤
+  useEffect(() => {
+    if (modalPortSearchQuery.trim() === '') {
+      setModalFilteredPorts(activePorts)
+    } else {
+      const filtered = activePorts.filter(port => 
+        port.port.toString().includes(modalPortSearchQuery) ||
+        port.protocol.toLowerCase().includes(modalPortSearchQuery.toLowerCase()) ||
+        port.address.toLowerCase().includes(modalPortSearchQuery.toLowerCase())
+      )
+      setModalFilteredPorts(filtered)
+    }
+  }, [activePorts, modalPortSearchQuery])
+  
+  // 处理弹窗打开动画
+  const handleOpenPortsModal = () => {
+    setShowPortsModal(true)
+    setIsPortsModalOpening(true)
+    // 短暂延迟后开始淡入动画
+    setTimeout(() => {
+      setIsPortsModalOpening(false)
+    }, 50) // 50ms 后开始淡入
+  }
+  
+  // 处理弹窗关闭动画
+  const handleClosePortsModal = () => {
+    setIsPortsModalClosing(true)
+    setTimeout(() => {
+      setShowPortsModal(false)
+      setIsPortsModalClosing(false)
+      setModalPortSearchQuery('') // 关闭时清空搜索
+    }, 300) // 300ms 动画时间
+  }
   
   const formatBytes = (bytes: number) => {
     if (bytes === 0) return '0 B'
@@ -676,6 +717,13 @@ const HomePage: React.FC = () => {
               <h3 className="text-lg font-semibold text-black dark:text-white">活跃端口</h3>
               <span className="text-sm text-gray-600 dark:text-gray-400">({filteredPorts.length}/{activePorts.length} 个端口)</span>
             </div>
+            <button
+              onClick={handleOpenPortsModal}
+              className="p-2 text-gray-500 dark:text-gray-400 hover:text-cyan-500 dark:hover:text-cyan-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+              title="查看所有端口"
+            >
+              <Maximize2 className="w-5 h-5" />
+            </button>
           </div>
           
           {/* 搜索框 */}
@@ -747,6 +795,128 @@ const HomePage: React.FC = () => {
         {/* 音乐播放器 */}
         <MusicPlayer />
       </div>
+
+      {/* 端口详情弹窗 */}
+      {showPortsModal && (
+        <div 
+          className={`fixed inset-0 bg-black flex items-center justify-center z-50 p-4 transition-all duration-300 ease-in-out ${
+            isPortsModalClosing 
+              ? 'bg-opacity-0' 
+              : isPortsModalOpening 
+                ? 'bg-opacity-0' 
+                : 'bg-opacity-50'
+          }`}
+          onClick={handleClosePortsModal}
+        >
+          <div 
+            className={`bg-white dark:bg-gray-900 rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col transition-all duration-300 ease-in-out transform ${
+              isPortsModalClosing 
+                ? 'scale-95 opacity-0' 
+                : isPortsModalOpening 
+                  ? 'scale-95 opacity-0' 
+                  : 'scale-100 opacity-100'
+            }`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* 弹窗头部 */}
+            <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
+              <div className="flex items-center space-x-3">
+                <Wifi className="w-6 h-6 text-cyan-500" />
+                <h2 className="text-xl font-semibold text-black dark:text-white">活跃端口详情</h2>
+                <span className="text-sm text-gray-600 dark:text-gray-400">
+                  ({modalFilteredPorts.length}/{activePorts.length} 个端口)
+                </span>
+              </div>
+              <button
+                onClick={handleClosePortsModal}
+                className="p-2 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            {/* 搜索框 */}
+            <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="搜索端口号、协议或地址..."
+                  value={modalPortSearchQuery}
+                  onChange={(e) => setModalPortSearchQuery(e.target.value)}
+                  className="w-full pl-12 pr-4 py-3 bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-black dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
+                />
+              </div>
+            </div>
+            
+            {/* 端口列表 */}
+            <div className="flex-1 overflow-hidden">
+              {portsLoading && isFirstPortsLoad ? (
+                <div className="flex items-center justify-center h-64">
+                  <div className="text-center text-gray-500 dark:text-gray-400">
+                    <Wifi className="w-12 h-12 mx-auto mb-3 opacity-50 animate-pulse" />
+                    <p>正在扫描端口...</p>
+                  </div>
+                </div>
+              ) : modalFilteredPorts.length > 0 ? (
+                <div className="p-6">
+                  {/* 表头 */}
+                  <div className="grid grid-cols-5 gap-4 text-sm font-medium text-gray-600 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700 pb-3 mb-4">
+                    <span>端口</span>
+                    <span>协议</span>
+                    <span>状态</span>
+                    <span>地址</span>
+                    <span>进程</span>
+                  </div>
+                  
+                  {/* 端口列表 */}
+                  <div className="max-h-96 overflow-y-auto space-y-2">
+                    {modalFilteredPorts.map((port, index) => (
+                      <div 
+                        key={`${port.protocol}-${port.port}-${port.address}-${index}`} 
+                        className="grid grid-cols-5 gap-4 text-sm py-3 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg px-2 transition-colors"
+                      >
+                        <span className="text-blue-600 dark:text-blue-400 font-mono font-bold text-lg">
+                          {port.port}
+                        </span>
+                        <span className={`font-medium ${
+                          port.protocol === 'tcp' ? 'text-green-600 dark:text-green-400' : 'text-orange-600 dark:text-orange-400'
+                        }`}>
+                          {port.protocol.toUpperCase()}
+                        </span>
+                        <span className="text-gray-700 dark:text-gray-300">
+                          {port.state}
+                        </span>
+                        <span className="text-gray-600 dark:text-gray-400 font-mono text-xs break-all">
+                          {port.address}
+                        </span>
+                        <span className="text-gray-600 dark:text-gray-400 text-xs">
+                          {port.process ? `${port.process}${port.pid ? ` (${port.pid})` : ''}` : '-'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : activePorts.length > 0 ? (
+                <div className="flex items-center justify-center h-64">
+                  <div className="text-center text-gray-500 dark:text-gray-400">
+                    <Search className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                    <p>未找到匹配的端口</p>
+                    <p className="text-xs mt-1">尝试搜索其他关键词</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center justify-center h-64">
+                  <div className="text-center text-gray-500 dark:text-gray-400">
+                    <Wifi className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                    <p>暂无活跃端口</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   )
