@@ -95,6 +95,14 @@ export const FileContextMenu: React.FC<FileContextMenuProps> = ({
     )
   }
 
+  // 检查是否为支持的压缩文件
+  const isArchiveFile = (fileName: string): boolean => {
+    const supportedFormats = ['.zip', '.tar', '.tar.gz', '.tar.xz', '.tgz']
+    return supportedFormats.some(format => 
+      fileName.toLowerCase().endsWith(format)
+    )
+  }
+
   // 检查选中的文件中是否有音频文件
   const hasAudioFiles = (): boolean => {
     const files = getSelectedFiles()
@@ -288,9 +296,9 @@ export const FileContextMenu: React.FC<FileContextMenuProps> = ({
             {isMultipleSelected ? `压缩 ${selectedCount} 项` : '压缩'}
           </div>
           
-          {/* 解压（仅zip文件） */}
+          {/* 解压（支持多种压缩格式） */}
           {file.type === 'file' && !isMultipleSelected && 
-            file.name.toLowerCase().endsWith('.zip') && (
+            isArchiveFile(file.name) && (
             <div
               className="px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer flex items-center"
               onClick={() => onExtract(file)}

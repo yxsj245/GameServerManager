@@ -149,19 +149,51 @@ export class FileApiClient {
         'Authorization': token ? `Bearer ${token}` : ''
       }
     })
-    .then(response => response.blob())
-    .then(blob => {
+    .then(response => {
+      if (!response.ok) {
+        throw new Error(`下载失败: ${response.status}`)
+      }
+      
+      // 从响应头中获取文件名
+      const contentDisposition = response.headers.get('Content-Disposition')
+      let fileName = path.split('/').pop() || 'download'
+      
+      if (contentDisposition) {
+        // 尝试从 Content-Disposition 头中提取文件名
+        // 优先使用 UTF-8 编码的文件名 (filename*=UTF-8'')
+        const utf8Match = contentDisposition.match(/filename\*=UTF-8''([^;]+)/)
+        if (utf8Match) {
+          try {
+            fileName = decodeURIComponent(utf8Match[1])
+          } catch (e) {
+            console.warn('Failed to decode UTF-8 filename:', e)
+          }
+        } else {
+          // 回退到普通的 filename
+          const normalMatch = contentDisposition.match(/filename="([^"]+)"/)
+          if (normalMatch) {
+            fileName = normalMatch[1]
+          }
+        }
+      }
+      
+      return response.blob().then(blob => ({ blob, fileName }))
+    })
+    .then(({ blob, fileName }) => {
       const downloadUrl = window.URL.createObjectURL(blob)
       const link = document.createElement('a')
       link.href = downloadUrl
-      link.download = path.split('/').pop() || 'download'
+      link.download = fileName
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)
       window.URL.revokeObjectURL(downloadUrl)
+      
+      console.log('文件下载成功:', fileName)
     })
     .catch(error => {
       console.error('下载失败:', error)
+      // 可以在这里添加用户友好的错误提示
     })
   }
 
@@ -174,8 +206,25 @@ export class FileApiClient {
     const formData = new FormData()
     formData.append('targetPath', targetPath)
     
+    // 处理文件名编码，确保中文文件名正确传输
     for (let i = 0; i < files.length; i++) {
-      formData.append('files', files[i])
+      const file = files[i]
+      
+      // 检查文件名是否包含中文字符
+      const hasChineseChars = /[\u4e00-\u9fa5]/.test(file.name)
+      
+      if (hasChineseChars) {
+        // 对于包含中文的文件名，创建一个新的File对象确保编码正确
+        const blob = new Blob([file], { type: file.type })
+        const newFile = new File([blob], file.name, {
+          type: file.type,
+          lastModified: file.lastModified
+        })
+        formData.append('files', newFile, file.name)
+        console.log('Uploading Chinese filename:', file.name)
+      } else {
+        formData.append('files', file)
+      }
     }
 
     const response = await this.client.post(`${API_BASE}/upload`, formData, {

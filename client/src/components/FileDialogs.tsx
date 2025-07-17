@@ -166,19 +166,46 @@ export const UploadDialog: React.FC<UploadDialogProps> = ({
     name: 'files',
     multiple: true,
     beforeUpload: (file) => {
+      // 验证文件名是否包含中文字符
+      const hasChineseChars = /[\u4e00-\u9fa5]/.test(file.name)
+      
+      // 检查文件名是否安全
+      const dangerousChars = /[<>:"/\\|?*\x00-\x1f]/
+      if (dangerousChars.test(file.name)) {
+        message.error(`文件名 "${file.name}" 包含不安全的字符，请重命名后再上传`)
+        return Upload.LIST_IGNORE
+      }
+      
+      // 检查文件名长度
+      if (file.name.length > 255) {
+        message.error(`文件名 "${file.name}" 过长，请使用较短的文件名`)
+        return Upload.LIST_IGNORE
+      }
+      
       const uploadFile: UploadFile = {
         uid: file.name + file.size + Date.now(),
         name: file.name,
         status: 'done',
         originFileObj: file as any
       }
+      
       setFileList(prev => [...prev, uploadFile])
+      
+      if (hasChineseChars) {
+        console.log('Added Chinese filename to upload list:', file.name)
+      }
+      
       return false // 阻止自动上传
     },
     onRemove: (file) => {
       setFileList(prev => prev.filter(f => f.uid !== file.uid))
     },
-    fileList: fileList
+    fileList: fileList,
+    showUploadList: {
+      showPreviewIcon: false,
+      showRemoveIcon: true,
+      showDownloadIcon: false
+    }
   }
 
   const handleOk = async () => {
