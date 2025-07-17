@@ -109,10 +109,28 @@ export class FileApiClient {
     return response.data
   }
 
+  // 批量复制文件或目录
+  async copyItems(sourcePaths: string[], targetPath: string): Promise<FileOperationResult> {
+    const response = await this.client.post(`${API_BASE}/copy`, {
+      sourcePaths,
+      targetPath
+    })
+    return response.data
+  }
+
   // 移动文件或目录
   async moveItem(sourcePath: string, targetPath: string): Promise<FileOperationResult> {
     const response = await this.client.post(`${API_BASE}/move`, {
       sourcePath,
+      targetPath
+    })
+    return response.data
+  }
+
+  // 批量移动文件或目录
+  async moveItems(sourcePaths: string[], targetPath: string): Promise<FileOperationResult> {
+    const response = await this.client.post(`${API_BASE}/move`, {
+      sourcePaths,
       targetPath
     })
     return response.data
@@ -195,6 +213,80 @@ export class FileApiClient {
       console.error('下载失败:', error)
       // 可以在这里添加用户友好的错误提示
     })
+  }
+
+  // 创建下载任务（带进度）
+  async createDownloadTask(path: string): Promise<{ taskId: string; message: string }> {
+    const response = await this.client.get(`${API_BASE}/download`, {
+      params: {
+        path,
+        withProgress: 'true'
+      }
+    })
+    return response.data
+  }
+
+  // 执行下载任务
+  downloadFileWithProgress(taskId: string): void {
+    const token = localStorage.getItem('gsm3_token')
+    const url = `${API_BASE}/download-task/${taskId}`
+    
+    // 创建一个临时的a标签进行下载
+    const link = document.createElement('a')
+    link.href = url
+    link.style.display = 'none'
+    
+    // 添加认证头
+    if (token) {
+      // 对于直接下载链接，我们需要在URL中包含token或使用其他方式
+      // 这里我们使用fetch来处理认证
+      fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      })
+      .then(response => {
+        if (!response.ok) {
+          throw new Error(`下载失败: ${response.status}`)
+        }
+        
+        // 从响应头中获取文件名
+        const contentDisposition = response.headers.get('Content-Disposition')
+        let fileName = 'download'
+        
+        if (contentDisposition) {
+          const utf8Match = contentDisposition.match(/filename\*=UTF-8''([^;]+)/)
+          if (utf8Match) {
+            try {
+              fileName = decodeURIComponent(utf8Match[1])
+            } catch (e) {
+              console.warn('Failed to decode UTF-8 filename:', e)
+            }
+          } else {
+            const normalMatch = contentDisposition.match(/filename="([^"]+)"/)
+            if (normalMatch) {
+              fileName = normalMatch[1]
+            }
+          }
+        }
+        
+        return response.blob().then(blob => ({ blob, fileName }))
+      })
+      .then(({ blob, fileName }) => {
+        const downloadUrl = window.URL.createObjectURL(blob)
+        link.href = downloadUrl
+        link.download = fileName
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+        window.URL.revokeObjectURL(downloadUrl)
+        
+        console.log('文件下载成功:', fileName)
+      })
+      .catch(error => {
+        console.error('下载失败:', error)
+      })
+    }
   }
 
   // 上传文件

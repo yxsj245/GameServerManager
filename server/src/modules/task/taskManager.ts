@@ -5,7 +5,7 @@ import * as path from 'path'
 
 export interface Task {
   id: string
-  type: 'compress' | 'extract'
+  type: 'compress' | 'extract' | 'copy' | 'move' | 'download'
   status: 'pending' | 'running' | 'completed' | 'failed'
   progress: number
   message: string
@@ -32,7 +32,7 @@ export class TaskManager extends EventEmitter {
     }
   }
 
-  createTask(type: 'compress' | 'extract', data: any): string {
+  createTask(type: 'compress' | 'extract' | 'copy' | 'move' | 'download', data: any): string {
     const id = uuidv4()
     const task: Task = {
       id,

@@ -14,6 +14,7 @@ import { promisify } from 'util'
 import { authenticateToken } from '../middleware/auth.js'
 import { taskManager } from '../modules/task/taskManager.js'
 import { compressionWorker } from '../modules/task/compressionWorker.js'
+import { executeFileOperation } from '../modules/task/fileOperationWorker.js'
 
 const execAsync = promisify(exec)
 
@@ -399,6 +400,7 @@ router.get('/preview', authenticateToken, async (req: Request, res: Response) =>
     console.log('Preview request - Response sent successfully')
   } catch (error: any) {
     res.status(500).json({
+      success: false,
       status: 'error',
       message: error.message
     })
@@ -451,6 +453,7 @@ router.post('/create', authenticateToken, async (req: Request, res: Response) =>
     })
   } catch (error: any) {
     res.status(500).json({
+      success: false,
       status: 'error',
       message: error.message
     })
@@ -574,34 +577,86 @@ router.post('/rename', authenticateToken, async (req: Request, res: Response) =>
   }
 })
 
-// 复制文件或目录
+// 复制文件或目录（异步任务）
 router.post('/copy', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const { sourcePath, targetPath } = req.body
+    const { sourcePath, targetPath, sourcePaths } = req.body
     
-    if (!isValidPath(sourcePath) || !isValidPath(targetPath)) {
+    // 支持单个文件或多个文件
+    const sources = sourcePaths || [sourcePath]
+    
+    if (!sources || sources.length === 0) {
       return res.status(400).json({
+        success: false,
         status: 'error',
-        message: '无效的路径'
+        message: '缺少源文件路径'
+      })
+    }
+
+    if (!targetPath) {
+      return res.status(400).json({
+        success: false,
+        status: 'error',
+        message: '缺少目标路径'
+      })
+    }
+
+    // 验证所有路径
+    for (const source of sources) {
+      if (!isValidPath(source)) {
+        return res.status(400).json({
+          success: false,
+          status: 'error',
+          message: `无效的源路径: ${source}`
+        })
+      }
+    }
+
+    if (!isValidPath(targetPath)) {
+      return res.status(400).json({
+        success: false,
+        status: 'error',
+        message: '无效的目标路径'
       })
     }
 
     // 修复Windows路径格式
-    const fixedSourcePath = fixWindowsPath(sourcePath)
+    const fixedSources = sources.map(source => fixWindowsPath(source))
     const fixedTargetPath = fixWindowsPath(targetPath)
 
-    const stats = await fs.stat(fixedSourcePath)
-    
-    if (stats.isFile()) {
-      await fs.copyFile(fixedSourcePath, fixedTargetPath)
-    } else {
-      // 递归复制目录
-      await copyDirectory(fixedSourcePath, fixedTargetPath)
+    // 验证源文件存在
+    for (const source of fixedSources) {
+      try {
+        await fs.access(source)
+      } catch (error) {
+        return res.status(400).json({
+          success: false,
+          status: 'error',
+          message: `源文件不存在: ${source}`
+        })
+      }
     }
-    
+
+    // 确保目标目录存在
+    await fs.mkdir(fixedTargetPath, { recursive: true })
+
+    // 创建复制任务
+    const taskId = taskManager.createTask('copy', {
+      sourcePaths: fixedSources,
+      targetPath: fixedTargetPath,
+      operation: 'copy'
+    })
+
+    // 异步执行文件复制
+    setImmediate(() => {
+      executeFileOperation(taskId)
+    })
+
     res.json({
+      success: true,
       status: 'success',
-      message: '复制成功'
+      message: '复制任务已创建',
+      taskId
     })
   } catch (error: any) {
     res.status(500).json({
@@ -611,64 +666,86 @@ router.post('/copy', authenticateToken, async (req: Request, res: Response) => {
   }
 })
 
-// 移动文件或目录
+// 移动文件或目录（异步任务）
 router.post('/move', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const { sourcePath, targetPath } = req.body
+    const { sourcePath, targetPath, sourcePaths } = req.body
     
-    if (!isValidPath(sourcePath) || !isValidPath(targetPath)) {
+    // 支持单个文件或多个文件
+    const sources = sourcePaths || [sourcePath]
+    
+    if (!sources || sources.length === 0) {
       return res.status(400).json({
+        success: false,
         status: 'error',
-        message: '无效的路径'
+        message: '缺少源文件路径'
+      })
+    }
+
+    if (!targetPath) {
+      return res.status(400).json({
+        success: false,
+        status: 'error',
+        message: '缺少目标路径'
+      })
+    }
+
+    // 验证所有路径
+    for (const source of sources) {
+      if (!isValidPath(source)) {
+        return res.status(400).json({
+          success: false,
+          status: 'error',
+          message: `无效的源路径: ${source}`
+        })
+      }
+    }
+
+    if (!isValidPath(targetPath)) {
+      return res.status(400).json({
+        success: false,
+        status: 'error',
+        message: '无效的目标路径'
       })
     }
 
     // 修复Windows路径格式
-    const fixedSourcePath = fixWindowsPath(sourcePath)
+    const fixedSources = sources.map(source => fixWindowsPath(source))
     const fixedTargetPath = fixWindowsPath(targetPath)
 
-    try {
-      await fs.rename(fixedSourcePath, fixedTargetPath)
-    } catch (renameError: any) {
-      // 如果是跨设备链接错误，使用复制+删除的方式
-      if (renameError.code === 'EXDEV') {
-        console.log(`Cross-device move failed, using copy+unlink from ${fixedSourcePath} to ${fixedTargetPath}`)
-        
-        // 检查源路径是文件还是目录
-        const stats = await fs.stat(fixedSourcePath)
-        if (stats.isDirectory()) {
-          // 对于目录，需要递归复制
-          const copyDirectory = async (src: string, dest: string) => {
-            await fs.mkdir(dest, { recursive: true })
-            const entries = await fs.readdir(src, { withFileTypes: true })
-            
-            for (const entry of entries) {
-              const srcPath = path.join(src, entry.name)
-              const destPath = path.join(dest, entry.name)
-              
-              if (entry.isDirectory()) {
-                await copyDirectory(srcPath, destPath)
-              } else {
-                await fs.copyFile(srcPath, destPath)
-              }
-            }
-          }
-          
-          await copyDirectory(fixedSourcePath, fixedTargetPath)
-          await fs.rm(fixedSourcePath, { recursive: true })
-        } else {
-          // 对于文件，直接复制
-          await fs.copyFile(fixedSourcePath, fixedTargetPath)
-          await fs.unlink(fixedSourcePath)
-        }
-      } else {
-        throw renameError
+    // 验证源文件存在
+    for (const source of fixedSources) {
+      try {
+        await fs.access(source)
+      } catch (error) {
+        return res.status(400).json({
+          success: false,
+          status: 'error',
+          message: `源文件不存在: ${source}`
+        })
       }
     }
-    
+
+    // 确保目标目录存在
+    await fs.mkdir(fixedTargetPath, { recursive: true })
+
+    // 创建移动任务
+    const taskId = taskManager.createTask('move', {
+      sourcePaths: fixedSources,
+      targetPath: fixedTargetPath,
+      operation: 'move'
+    })
+
+    // 异步执行文件移动
+    setImmediate(() => {
+      executeFileOperation(taskId)
+    })
+
     res.json({
+      success: true,
       status: 'success',
-      message: '移动成功'
+      message: '移动任务已创建',
+      taskId
     })
   } catch (error: any) {
     res.status(500).json({
@@ -731,7 +808,7 @@ router.get('/search', authenticateToken, async (req: Request, res: Response) => 
 // 下载文件
 router.get('/download', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const { path: filePath } = req.query
+    const { path: filePath, withProgress } = req.query
     
     if (!isValidPath(filePath as string)) {
       return res.status(400).json({
@@ -752,6 +829,22 @@ router.get('/download', authenticateToken, async (req: Request, res: Response) =
     }
 
     const fileName = path.basename(fixedFilePath)
+    
+    // 如果请求进度跟踪，创建下载任务
+    if (withProgress === 'true') {
+      const taskId = taskManager.createTask('download', {
+        filePath: fixedFilePath,
+        fileName,
+        fileSize: stats.size
+      })
+      
+      // 返回任务ID，前端可以通过任务ID跟踪进度
+      return res.json({
+        status: 'success',
+        taskId,
+        message: '下载任务已创建'
+      })
+    }
     
     // 处理中文文件名的下载头
     // 使用 RFC 5987 标准编码中文文件名
@@ -1565,126 +1658,6 @@ router.post('/exists', authenticateToken, async (req: Request, res: Response) =>
   }
 })
 
-// 复制文件或目录
-router.post('/copy', authenticateToken, async (req: Request, res: Response) => {
-  try {
-    const { sourcePath, destPath, overwrite = false } = req.body
-    
-    if (!sourcePath || !destPath) {
-      return res.status(400).json({
-        success: false,
-        message: '缺少源路径或目标路径参数'
-      })
-    }
-    
-    const dataDir = path.join(process.cwd(), 'data')
-    const fullSourcePath = path.resolve(dataDir, sourcePath)
-    const fullDestPath = path.resolve(dataDir, destPath)
-    
-    if (!fullSourcePath.startsWith(dataDir) || !fullDestPath.startsWith(dataDir)) {
-      return res.status(403).json({
-        success: false,
-        message: '访问被拒绝：路径超出允许范围'
-      })
-    }
-    
-    // 检查目标是否已存在
-    try {
-      await fs.access(fullDestPath)
-      if (!overwrite) {
-        return res.status(409).json({
-          success: false,
-          message: '目标文件已存在'
-        })
-      }
-    } catch (error) {
-      // 目标不存在，可以继续
-    }
-    
-    // 确保目标目录存在
-    await fs.mkdir(path.dirname(fullDestPath), { recursive: true })
-    
-    await fs.copyFile(fullSourcePath, fullDestPath)
-    
-    res.json({
-      success: true,
-      message: '文件复制成功',
-      data: { sourcePath, destPath }
-    })
-  } catch (error: any) {
-    if (error.code === 'ENOENT') {
-      return res.status(404).json({
-        success: false,
-        message: '源文件不存在'
-      })
-    }
-    res.status(500).json({
-      success: false,
-      message: error.message
-    })
-  }
-})
-
-// 移动/重命名文件或目录
-router.post('/move', authenticateToken, async (req: Request, res: Response) => {
-  try {
-    const { sourcePath, destPath, overwrite = false } = req.body
-    
-    if (!sourcePath || !destPath) {
-      return res.status(400).json({
-        success: false,
-        message: '缺少源路径或目标路径参数'
-      })
-    }
-    
-    const dataDir = path.join(process.cwd(), 'data')
-    const fullSourcePath = path.resolve(dataDir, sourcePath)
-    const fullDestPath = path.resolve(dataDir, destPath)
-    
-    if (!fullSourcePath.startsWith(dataDir) || !fullDestPath.startsWith(dataDir)) {
-      return res.status(403).json({
-        success: false,
-        message: '访问被拒绝：路径超出允许范围'
-      })
-    }
-    
-    // 检查目标是否已存在
-    try {
-      await fs.access(fullDestPath)
-      if (!overwrite) {
-        return res.status(409).json({
-          success: false,
-          message: '目标文件已存在'
-        })
-      }
-    } catch (error) {
-      // 目标不存在，可以继续
-    }
-    
-    // 确保目标目录存在
-    await fs.mkdir(path.dirname(fullDestPath), { recursive: true })
-    
-    await fs.rename(fullSourcePath, fullDestPath)
-    
-    res.json({
-      success: true,
-      message: '文件移动成功',
-      data: { sourcePath, destPath }
-    })
-  } catch (error: any) {
-    if (error.code === 'ENOENT') {
-      return res.status(404).json({
-        success: false,
-        message: '源文件不存在'
-      })
-    }
-    res.status(500).json({
-      success: false,
-      message: error.message
-    })
-  }
-})
-
 // 搜索文件
 router.post('/search', authenticateToken, async (req: Request, res: Response) => {
   try {
@@ -1837,6 +1810,94 @@ router.delete('/tasks/:taskId', authenticateToken, async (req: Request, res: Res
       status: 'success',
       message: '任务已删除'
     })
+  } catch (error: any) {
+    res.status(500).json({
+      status: 'error',
+      message: error.message
+    })
+  }
+})
+
+// 执行下载任务
+router.get('/download-task/:taskId', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const { taskId } = req.params
+    const task = taskManager.getTask(taskId)
+    
+    if (!task) {
+      return res.status(404).json({
+        status: 'error',
+        message: '任务不存在'
+      })
+    }
+    
+    if (task.type !== 'download') {
+      return res.status(400).json({
+        status: 'error',
+        message: '任务类型不正确'
+      })
+    }
+    
+    const { filePath, fileName, fileSize } = task.data
+    
+    // 更新任务状态为运行中
+    taskManager.updateTask(taskId, {
+      status: 'running',
+      message: '开始下载'
+    })
+    
+    // 处理中文文件名的下载头
+    const encodedFileName = encodeURIComponent(fileName)
+    const asciiFileName = fileName.replace(/[^\x00-\x7F]/g, '_')
+    
+    res.setHeader('Content-Disposition', 
+      `attachment; filename="${asciiFileName}"; filename*=UTF-8''${encodedFileName}`)
+    res.setHeader('Content-Type', 'application/octet-stream')
+    res.setHeader('Content-Length', fileSize.toString())
+    
+    const fileStream = createReadStream(filePath)
+    let downloadedBytes = 0
+    
+    // 监听数据传输进度
+    fileStream.on('data', (chunk) => {
+      downloadedBytes += chunk.length
+      const progress = Math.round((downloadedBytes / fileSize) * 100)
+      
+      // 更新任务进度
+      taskManager.updateTask(taskId, {
+        progress,
+        message: `下载中... ${progress}%`
+      })
+    })
+    
+    // 下载完成
+    fileStream.on('end', () => {
+      taskManager.updateTask(taskId, {
+        status: 'completed',
+        progress: 100,
+        message: '下载完成'
+      })
+    })
+    
+    // 下载出错
+    fileStream.on('error', (error) => {
+      taskManager.updateTask(taskId, {
+        status: 'failed',
+        message: `下载失败: ${error.message}`
+      })
+    })
+    
+    // 客户端断开连接
+    res.on('close', () => {
+      if (!res.headersSent) {
+        taskManager.updateTask(taskId, {
+          status: 'failed',
+          message: '下载被中断'
+        })
+      }
+    })
+    
+    fileStream.pipe(res)
   } catch (error: any) {
     res.status(500).json({
       status: 'error',

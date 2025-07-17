@@ -7,8 +7,10 @@ export interface FileItem {
 }
 
 export interface FileOperationResult {
+  success: boolean
   status: 'success' | 'error'
   message: string
+  taskId?: string
   data?: any
 }
 
@@ -34,7 +36,7 @@ export interface FileContent {
 
 export interface Task {
   id: string
-  type: 'compress' | 'extract'
+  type: 'compress' | 'extract' | 'copy' | 'move' | 'download'
   status: 'pending' | 'running' | 'completed' | 'failed'
   progress: number
   message: string

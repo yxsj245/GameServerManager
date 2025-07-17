@@ -5,6 +5,7 @@ import {
   CopyOutlined,
   ScissorOutlined,
   DownloadOutlined,
+  CloudDownloadOutlined,
   FileOutlined,
   FolderOpenOutlined,
   EyeOutlined,
@@ -33,6 +34,7 @@ interface FileContextMenuProps {
   onRename: (file: FileItem) => void
   onDelete: (files: FileItem[]) => void
   onDownload: (file: FileItem) => void
+  onDownloadWithProgress: (file: FileItem) => void
   onCopy: (files: FileItem[]) => void
   onCut: (files: FileItem[]) => void
   onPaste: () => void
@@ -58,6 +60,7 @@ export const FileContextMenu: React.FC<FileContextMenuProps> = ({
   onRename,
   onDelete,
   onDownload,
+  onDownloadWithProgress,
   onCopy,
   onCut,
   onPaste,
@@ -312,13 +315,22 @@ export const FileContextMenu: React.FC<FileContextMenuProps> = ({
           
           {/* 下载（仅文件） */}
           {file.type === 'file' && !isMultipleSelected && (
-            <div
-              className="px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer flex items-center"
-              onClick={() => onDownload(file)}
-            >
-              <DownloadOutlined className="mr-2" />
-              下载
-            </div>
+            <>
+              <div
+                className="px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer flex items-center"
+                onClick={() => onDownload(file)}
+              >
+                <DownloadOutlined className="mr-2" />
+                直接下载
+              </div>
+              <div
+                className="px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer flex items-center"
+                onClick={() => onDownloadWithProgress(file)}
+              >
+                <CloudDownloadOutlined className="mr-2" />
+                异步下载
+              </div>
+            </>
           )}
           
           {/* 删除 */}

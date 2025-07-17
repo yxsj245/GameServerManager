@@ -40,11 +40,13 @@ interface FileStore {
   deleteSelectedFiles: () => Promise<boolean>
   renameFile: (oldPath: string, newName: string) => Promise<boolean>
   uploadFiles: (files: FileList, onProgress?: (progress: { fileName: string; progress: number; status: 'uploading' | 'completed' | 'error' }) => void) => Promise<boolean>
+  downloadFile: (path: string) => void
+  downloadFileWithProgress: (path: string) => Promise<{ taskId: string; message: string }>
   
   // 剪贴板操作
   copyFiles: (filePaths: string[]) => void
   cutFiles: (filePaths: string[]) => void
-  pasteFiles: () => Promise<boolean>
+  pasteFiles: (targetPath: string) => Promise<{ taskId?: string; success: boolean; message: string }>
   clearClipboard: () => void
   
   // 压缩解压操作
@@ -248,6 +250,26 @@ export const useFileStore = create<FileStore>((set, get) => ({
     }
   },
 
+  // 下载文件（直接下载）
+  downloadFile: (path: string) => {
+    fileApiClient.downloadFile(path)
+  },
+
+  // 下载文件（带进度）
+  downloadFileWithProgress: async (path: string) => {
+    try {
+      const result = await fileApiClient.createDownloadTask(path)
+      // 立即刷新活动任务列表
+      await get().loadActiveTasks()
+      // 开始下载
+      fileApiClient.downloadFileWithProgress(result.taskId)
+      return result
+    } catch (error: any) {
+      set({ error: error.message || '创建下载任务失败' })
+      throw error
+    }
+  },
+
   // 打开文件
   openFile: async (path: string) => {
     const { openFiles, originalFiles } = get()
@@ -357,42 +379,42 @@ export const useFileStore = create<FileStore>((set, get) => ({
   },
 
   // 粘贴文件
-  pasteFiles: async () => {
-    const { clipboard, currentPath } = get()
-    if (!clipboard.operation || clipboard.items.length === 0) {
-      return false
+  pasteFiles: async (targetPath: string): Promise<{ taskId?: string; success: boolean; message: string }> => {
+    const { clipboard } = get()
+    if (!clipboard.items.length) {
+      return { success: false, message: '剪贴板为空' }
     }
 
     try {
-      if (clipboard.operation === 'copy') {
-        // 复制操作
-        for (const sourcePath of clipboard.items) {
-          // 兼容Windows和Unix路径分隔符
-          const separator = sourcePath.includes('\\') ? '\\' : '/'
-          const fileName = sourcePath.split(separator).pop() || 'unknown'
-          const targetPath = `${currentPath}${separator}${fileName}`.replace(/[\/\\]+/g, separator)
-          
-          await fileApiClient.copyItem(sourcePath, targetPath)
-        }
-      } else if (clipboard.operation === 'cut') {
-        // 剪切操作
-        for (const sourcePath of clipboard.items) {
-          // 兼容Windows和Unix路径分隔符
-          const separator = sourcePath.includes('\\') ? '\\' : '/'
-          const fileName = sourcePath.split(separator).pop() || 'unknown'
-          const targetPath = `${currentPath}${separator}${fileName}`.replace(/[\/\\]+/g, separator)
-          
-          await fileApiClient.moveItem(sourcePath, targetPath)
-        }
-        // 剪切后清空剪贴板
-        get().clearClipboard()
-      }
+      let result
+      const sourcePaths = clipboard.items
       
-      await get().loadFiles()
-      return true
-    } catch (error: any) {
-      set({ error: error.message || '粘贴操作失败' })
-      return false
+      if (clipboard.operation === 'copy') {
+        // 批量复制
+        result = await fileApiClient.copyItems(sourcePaths, targetPath)
+      } else {
+        // 批量移动
+        result = await fileApiClient.moveItems(sourcePaths, targetPath)
+        // 移动操作后清空剪贴板
+        set(state => ({
+          clipboard: { items: [], operation: null }
+        }))
+      }
+
+      if (result.success) {
+        // 刷新文件列表
+        await get().loadFiles()
+        return { 
+          taskId: result.taskId, 
+          success: true, 
+          message: clipboard.operation === 'copy' ? '复制任务已创建' : '移动任务已创建' 
+        }
+      } else {
+        return { success: false, message: result.message || '操作失败' }
+      }
+    } catch (error) {
+      console.error('粘贴文件失败:', error)
+      return { success: false, message: '粘贴文件失败' }
     }
   },
 
@@ -491,7 +513,11 @@ export const useFileStore = create<FileStore>((set, get) => ({
       return result
     } catch (error: any) {
       set({ error: error.message || '删除任务失败' })
-      return { status: 'error', message: error.message || '删除任务失败' }
+      return { 
+        success: false, 
+        status: 'error', 
+        message: error.message || '删除任务失败' 
+      }
     }
   }
 }))

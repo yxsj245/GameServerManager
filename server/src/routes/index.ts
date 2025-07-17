@@ -7,6 +7,7 @@ import instanceRoutes from './instances.js'
 import { minecraftRouter } from './minecraft.js'
 import onlineDeployRoutes from './onlineDeploy.js'
 import configRoutes from './config.js'
+import taskRoutes from './tasks.js'
 
 const router = Router()
 
@@ -39,5 +40,6 @@ router.use('/instances', instanceRoutes)
 router.use('/minecraft', minecraftRouter)
 router.use('/online-deploy', onlineDeployRoutes)
 router.use('/config', configRoutes)
+router.use('/tasks', taskRoutes)
 
 export default router

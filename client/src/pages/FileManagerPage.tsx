@@ -89,6 +89,8 @@ const FileManagerPage: React.FC = () => {
     deleteSelectedFiles,
     renameFile,
     uploadFiles,
+    downloadFile,
+    downloadFileWithProgress,
     copyFiles,
     cutFiles,
     pasteFiles,
@@ -512,6 +514,23 @@ const FileManagerPage: React.FC = () => {
       message: `正在下载 ${file.name}`
     })
   }
+
+  const handleContextMenuDownloadWithProgress = async (file: FileItem) => {
+    try {
+      const result = await downloadFileWithProgress(file.path)
+      addNotification({
+        type: 'success',
+        title: '下载任务已创建',
+        message: `正在下载 ${file.name}，任务ID: ${result.taskId}`
+      })
+    } catch (error: any) {
+      addNotification({
+        type: 'error',
+        title: '创建下载任务失败',
+        message: error.message || '未知错误'
+      })
+    }
+  }
   
   const handleContextMenuCopy = (files: FileItem[]) => {
     const filePaths = files.map(file => file.path)
@@ -540,13 +559,31 @@ const FileManagerPage: React.FC = () => {
       return
     }
     
-    const success = await pasteFiles()
-    if (success) {
+    const result = await pasteFiles(currentPath)
+    if (result.success) {
       const operationText = clipboard.operation === 'copy' ? '复制' : '移动'
+      if (result.taskId) {
+        // 异步任务
+        addNotification({
+          type: 'success',
+          title: `${operationText}任务已创建`,
+          message: `正在${operationText} ${clipboard.items.length} 个项目，任务ID: ${result.taskId}`
+        })
+        // 刷新任务列表
+        await loadTasks()
+      } else {
+        // 同步操作
+        addNotification({
+          type: 'success',
+          title: '粘贴成功',
+          message: `成功${operationText} ${clipboard.items.length} 个项目`
+        })
+      }
+    } else {
       addNotification({
-        type: 'success',
-        title: '粘贴成功',
-        message: `成功${operationText} ${clipboard.items.length} 个项目`
+        type: 'error',
+        title: '粘贴失败',
+        message: result.message || '操作失败'
       })
     }
   }
@@ -1054,6 +1091,7 @@ const FileManagerPage: React.FC = () => {
                       onRename={handleContextMenuRename}
                       onDelete={handleContextMenuDelete}
                       onDownload={handleContextMenuDownload}
+                      onDownloadWithProgress={handleContextMenuDownloadWithProgress}
                       onCopy={handleContextMenuCopy}
                       onCut={handleContextMenuCut}
                       onPaste={handlePaste}
@@ -1104,6 +1142,7 @@ const FileManagerPage: React.FC = () => {
                       onRename={handleContextMenuRename}
                       onDelete={handleContextMenuDelete}
                       onDownload={handleContextMenuDownload}
+                      onDownloadWithProgress={handleContextMenuDownloadWithProgress}
                       onCopy={handleContextMenuCopy}
                       onCut={handleContextMenuCut}
                       onPaste={handlePaste}
@@ -1266,7 +1305,11 @@ const FileManagerPage: React.FC = () => {
                   <div className="flex items-center space-x-2">
                     {getTaskStatusIcon(task.status)}
                     <span className="font-medium">
-                      {task.type === 'compress' ? '压缩' : '解压'}
+                      {task.type === 'compress' ? '压缩' : 
+                       task.type === 'extract' ? '解压' :
+                       task.type === 'copy' ? '复制' :
+                       task.type === 'move' ? '移动' :
+                       task.type === 'download' ? '下载' : task.type}
                     </span>
                     <span className="text-gray-500">
                       {getTaskStatusText(task.status)}
