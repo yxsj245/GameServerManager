@@ -162,6 +162,12 @@ const FileManagerPage: React.FC = () => {
     setViewMode(mode)
     localStorage.setItem('fileManager_viewMode', mode)
   }
+
+  // 右键菜单状态
+  const [contextMenuInfo, setContextMenuInfo] = useState<{
+    file: FileItem | null
+    position: { x: number; y: number }
+  } | null>(null);
   
   // 初始化
   useEffect(() => {
@@ -308,8 +314,10 @@ const FileManagerPage: React.FC = () => {
   
   // 处理路径输入
   const handlePathSubmit = () => {
-    if (pathInput.trim()) {
-      navigateToPath(pathInput.trim())
+    const trimmedInput = normalizePath(pathInput.trim())
+    const current = normalizePath(currentPath)
+    if (trimmedInput && trimmedInput !== current) {
+      navigateToPath(trimmedInput)
     }
     setIsEditingPath(false)
   }
@@ -903,8 +911,11 @@ const FileManagerPage: React.FC = () => {
                       onView={handleContextMenuView}
                       onCompress={handleContextMenuCompress}
                       onExtract={handleContextMenuExtract}
-                       onOpenTerminal={handleContextMenuOpenTerminal}
-                       onAddToPlaylist={handleAddToPlaylist}
+                      onOpenTerminal={handleContextMenuOpenTerminal}
+                      onAddToPlaylist={handleAddToPlaylist}
+                      // 全局菜单控制
+                      globalContextMenuInfo={contextMenuInfo}
+                      setGlobalContextMenuInfo={setContextMenuInfo}
                     >
                       <FileGridItem
                         file={file}
@@ -950,8 +961,11 @@ const FileManagerPage: React.FC = () => {
                       onView={handleContextMenuView}
                       onCompress={handleContextMenuCompress}
                       onExtract={handleContextMenuExtract}
-                        onOpenTerminal={handleContextMenuOpenTerminal}
-                        onAddToPlaylist={handleAddToPlaylist}
+                      onOpenTerminal={handleContextMenuOpenTerminal}
+                      onAddToPlaylist={handleAddToPlaylist}
+                      // 全局菜单控制
+                      globalContextMenuInfo={contextMenuInfo}
+                      setGlobalContextMenuInfo={setContextMenuInfo}
                       >
                       <FileListItem
                         file={file}

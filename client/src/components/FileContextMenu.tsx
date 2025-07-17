@@ -24,6 +24,11 @@ interface FileContextMenuProps {
     items: string[]
     operation: 'copy' | 'cut' | null
   }
+  // 菜单全局状态props
+  globalContextMenuInfo: {
+    file: FileItem | null
+    position: { x: number; y: number }
+  } | null
   onOpen: (file: FileItem) => void
   onRename: (file: FileItem) => void
   onDelete: (files: FileItem[]) => void
@@ -36,6 +41,11 @@ interface FileContextMenuProps {
   onExtract: (file: FileItem) => void
   onOpenTerminal: (file: FileItem) => void
   onAddToPlaylist?: (files: FileItem[]) => void
+  // 菜单全局状态props
+  setGlobalContextMenuInfo: React.Dispatch<React.SetStateAction<{
+    file: FileItem | null
+    position: { x: number; y: number }
+  } | null>>
 }
 
 export const FileContextMenu: React.FC<FileContextMenuProps> = ({
@@ -43,6 +53,7 @@ export const FileContextMenu: React.FC<FileContextMenuProps> = ({
   file,
   selectedFiles,
   clipboard,
+  globalContextMenuInfo,
   onOpen,
   onRename,
   onDelete,
@@ -54,13 +65,17 @@ export const FileContextMenu: React.FC<FileContextMenuProps> = ({
   onCompress,
   onExtract,
   onOpenTerminal,
-  onAddToPlaylist
+  onAddToPlaylist,
+  setGlobalContextMenuInfo
 }) => {
   const isSelected = selectedFiles.has(file.path)
   const selectedCount = selectedFiles.size
   const isMultipleSelected = selectedCount > 1
-  const [contextMenuVisible, setContextMenuVisible] = React.useState(false)
-  const [contextMenuPosition, setContextMenuPosition] = React.useState({ x: 0, y: 0 })
+  const contextMenuVisible = globalContextMenuInfo?.file?.path === file.path;
+  const contextMenuPosition = globalContextMenuInfo?.position || { x: 0, y: 0 };
+  // 解决右键菜单溢出问题
+  const menuRef = React.useRef<HTMLDivElement>(null);
+  const [adjustedPosition, setAdjustedPosition] = React.useState(contextMenuPosition);
 
   const getSelectedFiles = (): FileItem[] => {
     if (isSelected && isMultipleSelected) {
@@ -95,26 +110,65 @@ export const FileContextMenu: React.FC<FileContextMenuProps> = ({
   }
 
   const handleContextMenu = (event: React.MouseEvent) => {
-    event.preventDefault()
-    setContextMenuPosition({ x: event.clientX, y: event.clientY })
-    setContextMenuVisible(true)
-    console.log('显示右键菜单:', file.name)
-  }
+  event.preventDefault();
+  setGlobalContextMenuInfo({file, position: { x: event.clientX, y: event.clientY }});
+  //日志
+  console.log('显示右键菜单:', file.name);
+  };
 
   const handleMenuClick = () => {
-    setContextMenuVisible(false)
-  }
+  setGlobalContextMenuInfo(null);
+  };
+
+  // 添加路径复制
+  const handleCopyAbsolutePath = (file: FileItem) => {
+    const absolutePath = file.path; // Assuming `file.path` contains the absolute path
+    navigator.clipboard.writeText(absolutePath)
+      .then(() => {
+        console.log("路径已复制到剪贴板:", absolutePath);
+      })
+      .catch((err) => {
+        console.error("无法复制路径:", err);
+      });
+  };
 
   React.useEffect(() => {
-    const handleClickOutside = () => {
-      setContextMenuVisible(false)
-    }
-    
     if (contextMenuVisible) {
-      document.addEventListener('click', handleClickOutside)
-      return () => document.removeEventListener('click', handleClickOutside)
+      const handleClickOutside = () => setGlobalContextMenuInfo(null);
+      document.addEventListener('click', handleClickOutside);
+      return () => document.removeEventListener('click', handleClickOutside);
     }
-  }, [contextMenuVisible])
+  }, [contextMenuVisible, setGlobalContextMenuInfo]);
+  
+  // 解决菜单溢出问题
+  React.useLayoutEffect(() => {
+    if (contextMenuVisible && menuRef.current) {
+      const { x, y } = contextMenuPosition;
+      const menuRect = menuRef.current.getBoundingClientRect();
+      const menuWidth = menuRect.width;
+      const menuHeight = menuRect.height;
+      const winWidth = window.innerWidth;
+      const winHeight = window.innerHeight;
+
+      let adjustedX = x;
+      let adjustedY = y;
+
+      // 判断是否溢出右边或下边，需修正
+      if (x + menuWidth > winWidth) {
+        adjustedX = Math.max(0, x - menuWidth);
+      }
+      if (y + menuHeight > winHeight) {
+        adjustedY = Math.max(0, y - menuHeight);
+      }
+      if (adjustedX !== adjustedPosition.x || adjustedY !== adjustedPosition.y) {
+        setAdjustedPosition({ x: adjustedX, y: adjustedY });
+      }
+    }
+    // 菜单关闭时回到初始坐标
+    if (!contextMenuVisible && (adjustedPosition.x !== contextMenuPosition.x || adjustedPosition.y !== contextMenuPosition.y)) {
+      setAdjustedPosition(contextMenuPosition);
+    }
+  }, [contextMenuVisible, contextMenuPosition, file.path, menuRef.current]);
 
   return (
     <>
@@ -125,10 +179,13 @@ export const FileContextMenu: React.FC<FileContextMenuProps> = ({
       {contextMenuVisible && (
         <div
           className="fixed bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-2 min-w-[160px]"
+          ref={menuRef}
           style={{
-            left: contextMenuPosition.x,
-            top: contextMenuPosition.y,
-            zIndex: 1000
+            left: adjustedPosition.x,
+            top: adjustedPosition.y,
+            zIndex: 1000,
+            opacity: adjustedPosition === contextMenuPosition ? 0 : 1,
+            pointerEvents: adjustedPosition === contextMenuPosition ? 'none' : 'auto'
           }}
           onClick={handleMenuClick}
         >
@@ -166,6 +223,15 @@ export const FileContextMenu: React.FC<FileContextMenuProps> = ({
             </div>
           )}
           
+          {/* 复制绝对路径 */}
+          <div
+            className="px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer flex items-center"
+            onClick={() => handleCopyAbsolutePath(file)}
+          >
+            <CopyOutlined className="mr-2" />
+            复制绝对路径
+          </div>
+
           {/* 添加到播放列表（仅音频文件） */}
           {onAddToPlaylist && hasAudioFiles() && (
             <div
