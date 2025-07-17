@@ -1338,6 +1338,7 @@ const TerminalPage: React.FC = () => {
             bg-gray-800/50 backdrop-blur-sm border-r border-gray-700/50 transition-all duration-300 ease-in-out
             ${sidebarHovered ? 'shadow-xl' : ''}
             ${isMobile ? 'shadow-2xl' : ''}
+            flex flex-col
           `}
           onMouseEnter={() => setSidebarHovered(true)}
           onMouseLeave={() => setSidebarHovered(false)}
