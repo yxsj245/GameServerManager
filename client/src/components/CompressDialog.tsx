@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Modal, Input, Select, Form, InputNumber } from 'antd'
 
 interface CompressDialogProps {
@@ -8,6 +8,19 @@ interface CompressDialogProps {
   onCancel: () => void
 }
 
+// 生成时间戳格式的文件名
+const generateTimestampFileName = (): string => {
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  const day = String(now.getDate()).padStart(2, '0')
+  const hours = String(now.getHours()).padStart(2, '0')
+  const minutes = String(now.getMinutes()).padStart(2, '0')
+  const seconds = String(now.getSeconds()).padStart(2, '0')
+  
+  return `archive_${year}${month}${day}_${hours}${minutes}${seconds}`
+}
+
 export const CompressDialog: React.FC<CompressDialogProps> = ({
   visible,
   fileCount,
@@ -15,9 +28,18 @@ export const CompressDialog: React.FC<CompressDialogProps> = ({
   onCancel
 }) => {
   const [form] = Form.useForm()
-  const [archiveName, setArchiveName] = useState('archive')
+  const [archiveName, setArchiveName] = useState(generateTimestampFileName())
   const [format, setFormat] = useState('zip')
   const [compressionLevel, setCompressionLevel] = useState(6)
+
+  // 当对话框显示时，生成新的时间戳文件名
+  useEffect(() => {
+    if (visible) {
+      const newFileName = generateTimestampFileName()
+      setArchiveName(newFileName)
+      form.setFieldsValue({ archiveName: newFileName })
+    }
+  }, [visible, form])
 
   const handleOk = () => {
     const finalArchiveName = archiveName.endsWith(`.${format}`) 
@@ -25,7 +47,8 @@ export const CompressDialog: React.FC<CompressDialogProps> = ({
       : `${archiveName}.${format}`
     onConfirm(finalArchiveName, format, compressionLevel)
     form.resetFields()
-    setArchiveName('archive')
+    const newFileName = generateTimestampFileName()
+    setArchiveName(newFileName)
     setFormat('zip')
     setCompressionLevel(6)
   }
@@ -33,7 +56,8 @@ export const CompressDialog: React.FC<CompressDialogProps> = ({
   const handleCancel = () => {
     onCancel()
     form.resetFields()
-    setArchiveName('archive')
+    const newFileName = generateTimestampFileName()
+    setArchiveName(newFileName)
     setFormat('zip')
     setCompressionLevel(6)
   }
@@ -51,7 +75,7 @@ export const CompressDialog: React.FC<CompressDialogProps> = ({
         form={form}
         layout="vertical"
         initialValues={{
-          archiveName: 'archive',
+          archiveName: generateTimestampFileName(),
           format: 'zip',
           compressionLevel: 6
         }}
