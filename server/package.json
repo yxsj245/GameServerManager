@@ -32,8 +32,7 @@
     "yauzl": "^2.10.0",
     "mime-types": "^2.1.35",
     "adm-zip": "^0.5.10",
-    "tar-stream": "^3.1.7",
-    "zlib": "^1.0.5"
+    "tar-stream": "^3.1.7"
   },
   "devDependencies": {
     "@types/cors": "^2.8.17",
