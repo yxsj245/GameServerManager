@@ -7,10 +7,10 @@ ARG DEV_MODE=false
 ENV DEV_MODE=${DEV_MODE}
 
 ENV DEBIAN_FRONTEND=noninteractive \
-    STEAM_USER=steam \
-    STEAM_HOME=/home/steam \
-    STEAMCMD_DIR=/home/steam/steamcmd \
-    GAMES_DIR=/home/steam/games \
+    STEAM_USER=root \
+    STEAM_HOME=/root \
+    STEAMCMD_DIR=/root/steamcmd \
+    GAMES_DIR=/root/games \
     NODE_VERSION=22.17.0
 
 # 将apt源改为中国镜像源（清华TUNA）
@@ -151,21 +151,13 @@ ENV LANG=zh_CN.UTF-8 \
     LANGUAGE=zh_CN:zh \
     LC_ALL=zh_CN.UTF-8
 
-# 创建steam用户和应用目录
-RUN useradd -m -s /bin/bash ${STEAM_USER} \
-    && mkdir -p ${STEAMCMD_DIR} ${GAMES_DIR} /app ${STEAM_HOME}/GSManager \
-    && chown -R ${STEAM_USER}:${STEAM_USER} ${STEAM_HOME} \
-    && chown -R ${STEAM_USER}:${STEAM_USER} /app
+# 创建应用目录
+RUN mkdir -p ${STEAMCMD_DIR} ${GAMES_DIR} /app ${STEAM_HOME}/GSManager
 
 # 复制项目文件
-COPY --chown=steam:steam . /app/
+COPY . /app/
 
-# 切换到steam用户构建项目
-USER ${STEAM_USER}
 WORKDIR /app
-
-# 切换回root用户继续安装SteamCMD
-USER root
 
 # 下载并安装SteamCMD
 RUN mkdir -p ${STEAMCMD_DIR} \
@@ -178,9 +170,8 @@ RUN mkdir -p ${STEAMCMD_DIR} \
           || wget -t 5 --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 -O steamcmd_linux.tar.gz https://media.steampowered.com/installer/steamcmd_linux.tar.gz; \
           tar -xzvf steamcmd_linux.tar.gz; \
           rm steamcmd_linux.tar.gz; \
-          chown -R ${STEAM_USER}:${STEAM_USER} ${STEAMCMD_DIR}; \
           chmod +x ${STEAMCMD_DIR}/steamcmd.sh; \
-          su - ${STEAM_USER} -c "export http_proxy=http://192.168.10.23:7890 && export https_proxy=http://192.168.10.23:7890 && cd ${STEAMCMD_DIR} && ./steamcmd.sh +quit"; \
+          cd ${STEAMCMD_DIR} && ./steamcmd.sh +quit; \
           unset http_proxy https_proxy; \
         else \
           echo "代理服务器不可用，使用直接连接"; \
@@ -188,9 +179,8 @@ RUN mkdir -p ${STEAMCMD_DIR} \
           || wget -t 5 --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 -O steamcmd_linux.tar.gz https://media.steampowered.com/installer/steamcmd_linux.tar.gz; \
           tar -xzvf steamcmd_linux.tar.gz; \
           rm steamcmd_linux.tar.gz; \
-          chown -R ${STEAM_USER}:${STEAM_USER} ${STEAMCMD_DIR}; \
           chmod +x ${STEAMCMD_DIR}/steamcmd.sh; \
-          su - ${STEAM_USER} -c "cd ${STEAMCMD_DIR} && ./steamcmd.sh +quit"; \
+          cd ${STEAMCMD_DIR} && ./steamcmd.sh +quit; \
         fi) \
     # 创建steamclient.so符号链接
     && mkdir -p ${STEAM_HOME}/.steam/sdk32 ${STEAM_HOME}/.steam/sdk64 \
@@ -201,8 +191,7 @@ RUN mkdir -p ${STEAMCMD_DIR} \
     && mkdir -p ${STEAM_HOME}/.steam/steam \
     && ln -sf ${STEAMCMD_DIR}/linux32 ${STEAM_HOME}/.steam/steam/linux32 \
     && ln -sf ${STEAMCMD_DIR}/linux64 ${STEAM_HOME}/.steam/steam/linux64 \
-    && ln -sf ${STEAMCMD_DIR}/steamcmd ${STEAM_HOME}/.steam/steam/steamcmd \
-    && chown -R ${STEAM_USER}:${STEAM_USER} ${STEAM_HOME}/.steam
+    && ln -sf ${STEAMCMD_DIR}/steamcmd ${STEAM_HOME}/.steam/steam/steamcmd
 
 # 安装依赖
 RUN npm run install:all
@@ -222,8 +211,7 @@ RUN if [ "$DEV_MODE" = "false" ]; then \
             exit 1; \
         fi; \
     else \
-        cp -r /app/* ${STEAM_HOME}/GSManager/ && \
-        chown -R ${STEAM_USER}:${STEAM_USER} ${STEAM_HOME}/GSManager; \
+        cp -r /app/* ${STEAM_HOME}/GSManager/; \
     fi
 
 # 注意：生产环境的启动脚本已经在打包过程中生成，无需额外复制
@@ -235,8 +223,7 @@ RUN if [ "$DEV_MODE" = "true" ]; then \
 
 # 创建数据目录并复制默认数据
 RUN mkdir -p ${STEAM_HOME}/GSManager/server/data \
-    && cp -r /app/server/data/* ${STEAM_HOME}/GSManager/server/data/ \
-    && chown -R ${STEAM_USER}:${STEAM_USER} ${STEAM_HOME}/GSManager
+    && cp -r /app/server/data/* ${STEAM_HOME}/GSManager/server/data/
 
 # 创建目录用于挂载游戏数据
 VOLUME ["${GAMES_DIR}"]
@@ -244,14 +231,12 @@ VOLUME ["${GAMES_DIR}"]
 # 暴露GSM3管理面板端口
 EXPOSE 3001
 
-# 切换到steam用户
-USER ${STEAM_USER}
 WORKDIR ${STEAM_HOME}/GSManager
 
 # 根据构建参数设置启动命令
 RUN if [ "$DEV_MODE" = "true" ]; then \
         echo '#!/bin/bash' > ${STEAM_HOME}/GSManager/start-dev.sh && \
-        echo 'cd /home/steam/GSManager' >> ${STEAM_HOME}/GSManager/start-dev.sh && \
+        echo 'cd /root/GSManager' >> ${STEAM_HOME}/GSManager/start-dev.sh && \
         echo 'echo "启动开发模式..."' >> ${STEAM_HOME}/GSManager/start-dev.sh && \
         echo 'echo "前端将在 http://localhost:5173 启动"' >> ${STEAM_HOME}/GSManager/start-dev.sh && \
         echo 'echo "后端将在 http://localhost:3001 启动"' >> ${STEAM_HOME}/GSManager/start-dev.sh && \
@@ -261,4 +246,4 @@ RUN if [ "$DEV_MODE" = "true" ]; then \
     fi
 
 # 启动容器时运行相应的脚本
-ENTRYPOINT ["/bin/bash", "-c", "if [ \"$DEV_MODE\" = \"true\" ]; then /home/steam/GSManager/start-dev.sh; else /home/steam/GSManager/start.sh; fi"]
+ENTRYPOINT ["/bin/bash", "-c", "if [ \"$DEV_MODE\" = \"true\" ]; then /root/GSManager/start-dev.sh; else /root/GSManager/start.sh; fi"]
