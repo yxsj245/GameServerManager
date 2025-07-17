@@ -25,6 +25,7 @@ interface SteamGameInfo {
   image: string
   url: string
   system?: Platform[]
+  system_info?: Platform[]  // 面板兼容的系统列表
 }
 
 // 获取当前平台
@@ -51,6 +52,17 @@ function isGameSupportedOnCurrentPlatform(game: SteamGameInfo): boolean {
   
   const currentPlatform = getCurrentPlatform()
   return game.system.includes(currentPlatform)
+}
+
+// 检查面板是否兼容当前平台
+function isPanelCompatibleOnCurrentPlatform(game: SteamGameInfo): boolean {
+  // 如果游戏没有定义system_info字段，默认面板兼容
+  if (!game.system_info || game.system_info.length === 0) {
+    return true
+  }
+  
+  const currentPlatform = getCurrentPlatform()
+  return game.system_info.includes(currentPlatform)
 }
 
 const __filename = fileURLToPath(import.meta.url)
@@ -86,17 +98,23 @@ router.get('/games', authenticateToken, async (req: Request, res: Response) => {
     const allGames: { [key: string]: SteamGameInfo } = JSON.parse(gamesData)
     
     const currentPlatform = getCurrentPlatform()
-    const filteredGames: { [key: string]: SteamGameInfo & { supportedOnCurrentPlatform: boolean, currentPlatform: Platform } } = {}
+    const filteredGames: { [key: string]: SteamGameInfo & { 
+      supportedOnCurrentPlatform: boolean, 
+      currentPlatform: Platform,
+      panelCompatibleOnCurrentPlatform: boolean 
+    } } = {}
     
     // 添加平台信息到所有游戏（不再过滤不兼容的游戏）
     for (const [gameKey, gameInfo] of Object.entries(allGames)) {
       const isSupported = isGameSupportedOnCurrentPlatform(gameInfo)
+      const isPanelCompatible = isPanelCompatibleOnCurrentPlatform(gameInfo)
       
       // 返回所有游戏，包括不支持当前平台的游戏
       filteredGames[gameKey] = {
         ...gameInfo,
         supportedOnCurrentPlatform: isSupported,
-        currentPlatform
+        currentPlatform,
+        panelCompatibleOnCurrentPlatform: isPanelCompatible
       }
     }
     

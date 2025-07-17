@@ -29,6 +29,7 @@ interface GameInfo {
   system?: string[]
   supportedOnCurrentPlatform?: boolean
   currentPlatform?: string
+  panelCompatibleOnCurrentPlatform?: boolean
 }
 
 interface Games {
@@ -133,6 +134,11 @@ const GameDeploymentPage: React.FC = () => {
   // 在线部署筛选相关状态
   const [onlineGameTypeFilter, setOnlineGameTypeFilter] = useState<string>('all')
   const [onlineGameSearchQuery, setOnlineGameSearchQuery] = useState('')
+  
+  // 面板兼容性确认对话框状态
+  const [showCompatibilityModal, setShowCompatibilityModal] = useState(false)
+  const [compatibilityModalAnimating, setCompatibilityModalAnimating] = useState(false)
+  const [pendingGameInstall, setPendingGameInstall] = useState<{ key: string; info: GameInfo } | null>(null)
   
   const socketRef = useRef<Socket | null>(null)
   const currentDownloadId = useRef<string | null>(null)
@@ -1039,6 +1045,21 @@ const GameDeploymentPage: React.FC = () => {
       return
     }
     
+    // 检查面板是否兼容当前平台
+    if (gameInfo.panelCompatibleOnCurrentPlatform === false) {
+      // 显示兼容性确认对话框
+      setPendingGameInstall({ key: gameKey, info: gameInfo })
+      setShowCompatibilityModal(true)
+      setTimeout(() => setCompatibilityModalAnimating(true), 10)
+      return
+    }
+    
+    // 直接打开安装对话框
+    openInstallModal(gameKey, gameInfo)
+  }
+
+  // 打开安装对话框的通用函数
+  const openInstallModal = (gameKey: string, gameInfo: GameInfo) => {
     setSelectedGame({ key: gameKey, info: gameInfo })
     setInstanceName(gameInfo.game_nameCN)
     setInstallPath('')
@@ -1052,6 +1073,26 @@ const GameDeploymentPage: React.FC = () => {
     setTimeout(() => {
       setShowInstallModal(false)
     }, 300)
+  }
+
+  // 关闭兼容性确认对话框
+  const handleCloseCompatibilityModal = () => {
+    setCompatibilityModalAnimating(false)
+    setTimeout(() => {
+      setShowCompatibilityModal(false)
+      setPendingGameInstall(null)
+    }, 300)
+  }
+
+  // 确认继续安装不兼容的游戏
+  const handleConfirmIncompatibleInstall = () => {
+    if (pendingGameInstall) {
+      handleCloseCompatibilityModal()
+      // 延迟一点时间等待对话框关闭动画完成
+      setTimeout(() => {
+        openInstallModal(pendingGameInstall.key, pendingGameInstall.info)
+      }, 350)
+    }
   }
 
   // 关闭创建实例对话框
@@ -1679,12 +1720,18 @@ const GameDeploymentPage: React.FC = () => {
                     className={`w-full py-2 px-4 rounded-lg transition-colors flex items-center justify-center space-x-2 ${
                       gameInfo.supportedOnCurrentPlatform === false
                         ? 'bg-gray-400 cursor-not-allowed text-gray-200'
+                        : gameInfo.panelCompatibleOnCurrentPlatform === false
+                        ? 'bg-orange-600 hover:bg-orange-700 text-white'
                         : 'bg-blue-600 hover:bg-blue-700 text-white'
                     }`}
                   >
                     <Download className="w-4 h-4" />
                     <span>
-                      {gameInfo.supportedOnCurrentPlatform === false ? '平台不兼容' : '安装游戏'}
+                      {gameInfo.supportedOnCurrentPlatform === false 
+                        ? '平台不兼容' 
+                        : gameInfo.panelCompatibleOnCurrentPlatform === false 
+                        ? '面板不兼容' 
+                        : '安装游戏'}
                     </span>
                   </button>
                 </div>
@@ -3424,6 +3471,71 @@ const GameDeploymentPage: React.FC = () => {
                     <span>创建实例</span>
                   </>
                 )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 面板兼容性确认对话框 */}
+      {showCompatibilityModal && pendingGameInstall && (
+        <div className={`fixed inset-0 bg-black/50 flex items-center justify-center z-50 transition-opacity duration-300 ${
+          compatibilityModalAnimating ? 'opacity-100' : 'opacity-0'
+        }`}>
+          <div className={`bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md mx-4 transform transition-all duration-300 ${
+            compatibilityModalAnimating ? 'scale-100 opacity-100' : 'scale-95 opacity-0'
+          }`}>
+            <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center space-x-2">
+                <AlertCircle className="w-5 h-5 text-orange-500" />
+                <span>面板兼容性提示</span>
+              </h3>
+              <button
+                onClick={handleCloseCompatibilityModal}
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="p-6">
+              <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg p-4 mb-4">
+                <div className="flex items-start space-x-3">
+                  <AlertCircle className="w-5 h-5 text-orange-500 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <h4 className="text-sm font-medium text-orange-800 dark:text-orange-200 mb-1">
+                      面板兼容性警告
+                    </h4>
+                    <p className="text-sm text-orange-700 dark:text-orange-300">
+                      此游戏在您当前平台上，面板尚未适配，您将无法进行管理。但是您可以继续安装。
+                    </p>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  <strong>游戏:</strong> {pendingGameInstall.info.game_nameCN}
+                </p>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                  <strong>当前平台:</strong> {pendingGameInstall.info.currentPlatform}
+                </p>
+              </div>
+            </div>
+            
+            <div className="flex space-x-3 p-6 border-t border-gray-200 dark:border-gray-700">
+              <button
+                onClick={handleCloseCompatibilityModal}
+                className="flex-1 px-4 py-2 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-600 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-500 transition-colors"
+              >
+                取消
+              </button>
+              <button
+                onClick={handleConfirmIncompatibleInstall}
+                className="flex-1 px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg transition-colors flex items-center justify-center space-x-2"
+              >
+                <Download className="w-4 h-4" />
+                <span>继续安装</span>
               </button>
             </div>
           </div>
