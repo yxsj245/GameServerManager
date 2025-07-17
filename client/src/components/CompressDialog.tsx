@@ -105,7 +105,10 @@ export const CompressDialog: React.FC<CompressDialogProps> = ({
             value={format}
             onChange={setFormat}
             options={[
-              { label: 'ZIP', value: 'zip' }
+              { label: 'ZIP', value: 'zip' },
+              { label: 'TAR', value: 'tar' },
+              { label: 'TAR.GZ (推荐)', value: 'tar.gz' },
+              { label: 'TAR.XZ (高压缩率)', value: 'tar.xz' }
             ]}
           />
         </Form.Item>
@@ -113,7 +116,7 @@ export const CompressDialog: React.FC<CompressDialogProps> = ({
         <Form.Item
           label="压缩级别"
           name="compressionLevel"
-          help="1-9，数字越大压缩率越高但速度越慢"
+          help={format === 'tar' ? '对于TAR格式，此选项无效（TAR不压缩）' : '1-9，数字越大压缩率越高但速度越慢'}
         >
           <InputNumber
             min={1}
@@ -121,6 +124,7 @@ export const CompressDialog: React.FC<CompressDialogProps> = ({
             value={compressionLevel}
             onChange={(value) => setCompressionLevel(value || 6)}
             className="w-full"
+            disabled={format === 'tar'}
           />
         </Form.Item>
       </Form>

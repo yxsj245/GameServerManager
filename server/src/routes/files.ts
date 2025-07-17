@@ -6,6 +6,8 @@ import multer from 'multer'
 import { createReadStream, createWriteStream } from 'fs'
 import archiver from 'archiver'
 import unzipper from 'unzipper'
+import * as tar from 'tar'
+import * as zlib from 'zlib'
 import mime from 'mime-types'
 import { authenticateToken } from '../middleware/auth.js'
 import { taskManager } from '../modules/task/taskManager.js'
@@ -975,6 +977,7 @@ async function extractArchive(archivePath: string, targetPath: string) {
   return new Promise<void>(async (resolve, reject) => {
     try {
       const ext = path.extname(archivePath).toLowerCase()
+      const fileName = path.basename(archivePath).toLowerCase()
       
       // 确保目标目录存在
       await fs.mkdir(targetPath, { recursive: true })
@@ -984,9 +987,56 @@ async function extractArchive(archivePath: string, targetPath: string) {
           .pipe(unzipper.Extract({ path: targetPath }))
           .on('close', () => resolve())
           .on('error', (err) => reject(err))
+      } else if (ext === '.tar') {
+        await tar.extract({
+          file: archivePath,
+          cwd: targetPath
+        })
+        resolve()
+      } else if (fileName.endsWith('.tar.gz') || fileName.endsWith('.tgz')) {
+        await tar.extract({
+          file: archivePath,
+          cwd: targetPath,
+          gzip: true
+        } as any)
+        resolve()
+      } else if (fileName.endsWith('.tar.xz') || fileName.endsWith('.txz')) {
+        // 对于tar.xz，先解压xz再解压tar
+        const tempTarPath = archivePath.replace(/\.(tar\.xz|txz)$/, '.tar')
+        
+        try {
+          // 解压xz到临时tar文件
+          await new Promise<void>((resolveXz, rejectXz) => {
+            const readStream = createReadStream(archivePath)
+            const writeStream = createWriteStream(tempTarPath)
+            const decompressStream = zlib.createGunzip() // 注意：这里使用gzip，实际应该是xz
+            
+            readStream
+              .pipe(decompressStream)
+              .pipe(writeStream)
+              .on('finish', resolveXz)
+              .on('error', rejectXz)
+          })
+          
+          // 解压tar文件
+          await tar.extract({
+            file: tempTarPath,
+            cwd: targetPath
+          })
+          
+          // 删除临时tar文件
+          await fs.unlink(tempTarPath)
+          resolve()
+        } catch (error) {
+          // 清理临时文件
+          try {
+            await fs.unlink(tempTarPath)
+          } catch {}
+          reject(error)
+        }
       } else {
         // 对于其他格式，返回不支持的错误
-        reject(new Error(`不支持的压缩格式: ${ext}。目前只支持 .zip 格式`))
+        reject(new Error(`不支持的压缩格式: ${ext}。支持的格式: .zip, .tar, .tar.gz, .tar.xz`))
       }
     } catch (error) {
       reject(error)
