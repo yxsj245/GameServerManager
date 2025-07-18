@@ -1,5 +1,6 @@
 import axios, { AxiosInstance } from 'axios'
 import { FileItem, FileOperationResult, FileSearchResult, FileContent, Task } from '@/types/file'
+import { useNotificationStore } from '@/stores/notificationStore'
 
 const API_BASE = '/api/files'
 
@@ -25,6 +26,30 @@ export class FileApiClient {
         return config
       },
       (error) => {
+        return Promise.reject(error)
+      }
+    )
+
+    // 响应拦截器 - 处理401错误
+    this.client.interceptors.response.use(
+      (response) => {
+        return response
+      },
+      (error) => {
+        if (error.response?.status === 401) {
+          // 添加消息通知
+          try {
+            const { addNotification } = useNotificationStore.getState()
+            addNotification({
+              type: 'error',
+              title: '认证失败',
+              message: '您的登录状态已过期，请退出重新登录',
+              duration: 5000
+            })
+          } catch (notificationError) {
+            console.error('添加通知失败:', notificationError)
+          }
+        }
         return Promise.reject(error)
       }
     )

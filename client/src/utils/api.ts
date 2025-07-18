@@ -1,6 +1,7 @@
 import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios'
 import { LoginRequest, LoginResponse, ApiResponse, User, Instance, CreateInstanceRequest, CaptchaResponse, CheckCaptchaResponse } from '@/types'
 import config from '@/config'
+import { useNotificationStore } from '@/stores/notificationStore'
 
 class ApiClient {
   private client: AxiosInstance
@@ -37,6 +38,20 @@ class ApiClient {
         if (error.response?.status === 401) {
           // 只记录认证失败信息，不自动跳转登录页面
           console.warn('认证失败，请检查登录状态')
+          
+          // 添加消息通知
+          try {
+            const { addNotification } = useNotificationStore.getState()
+            addNotification({
+              type: 'error',
+              title: '认证失败',
+              message: '您的登录状态已过期，请退出重新登录',
+              duration: 5000
+            })
+          } catch (notificationError) {
+            console.error('添加通知失败:', notificationError)
+          }
+          
           // 不再自动清除token和跳转，让用户手动处理
         }
         return Promise.reject(error)
