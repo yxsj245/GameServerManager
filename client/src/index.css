@@ -592,6 +592,29 @@
   }
 }
 
+@keyframes modalSlideIn {
+  from {
+    transform: scale(0.95) translateY(-10px);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1) translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes bounceGentle {
+  0%, 20%, 50%, 80%, 100% {
+    transform: translateY(0);
+  }
+  40% {
+    transform: translateY(-8px);
+  }
+  60% {
+    transform: translateY(-4px);
+  }
+}
+
 .animate-fade-in {
   animation: fadeIn 0.2s ease-out forwards;
 }
@@ -606,6 +629,14 @@
 
 .animate-scale-out {
   animation: scaleOut 0.3s ease-in forwards;
+}
+
+.animate-modal-slide-in {
+  animation: modalSlideIn 0.3s ease-out forwards;
+}
+
+.animate-bounce-gentle {
+  animation: bounceGentle 2s ease-in-out infinite;
 }
 
 /* 游戏字体 - 使用系统字体 */

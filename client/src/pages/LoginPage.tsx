@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { useAuthStore } from '@/stores/authStore'
 import { useNotificationStore } from '@/stores/notificationStore'
 import { useThemeStore } from '@/stores/themeStore'
-import { Eye, EyeOff, Gamepad2, Sun, Moon, Loader2, RefreshCw, UserPlus } from 'lucide-react'
+import { Eye, EyeOff, Gamepad2, Sun, Moon, Loader2, RefreshCw, UserPlus, HelpCircle } from 'lucide-react'
 import apiClient from '@/utils/api'
 import { CaptchaData } from '@/types'
 import LoginTransition from '@/components/LoginTransition'
@@ -24,6 +24,8 @@ const LoginPage: React.FC = () => {
   const [isRegisterMode, setIsRegisterMode] = useState(false)
   const [hasUsers, setHasUsers] = useState(true)
   const [checkingUsers, setCheckingUsers] = useState(true)
+  const [showForgotPasswordModal, setShowForgotPasswordModal] = useState(false)
+  const [isClosingModal, setIsClosingModal] = useState(false)
   const { login, loading, error } = useAuthStore()
   const { addNotification } = useNotificationStore()
   const { theme, toggleTheme } = useThemeStore()
@@ -73,6 +75,22 @@ const LoginPage: React.FC = () => {
     } catch (error) {
       console.error('检查验证码需求失败:', error)
     }
+  }
+
+  // 处理忘记密码点击
+  const handleForgotPassword = () => {
+    setShowForgotPasswordModal(true)
+    setIsClosingModal(false)
+  }
+
+  // 关闭忘记密码模态框
+  const closeForgotPasswordModal = () => {
+    setIsClosingModal(true)
+    // 等待动画完成后关闭模态框
+    setTimeout(() => {
+      setShowForgotPasswordModal(false)
+      setIsClosingModal(false)
+    }, 200) // 与 animate-fade-out 动画时长一致
   }
 
   // 加载验证码
@@ -539,6 +557,28 @@ const LoginPage: React.FC = () => {
             </button>
           </form>
           
+          {/* 忘记密码链接（仅登录模式） */}
+          {!isRegisterMode && (
+            <div className="mt-4 text-center">
+              <button
+                type="button"
+                onClick={handleForgotPassword}
+                className="
+                  text-sm text-gray-600 dark:text-gray-400 
+                  hover:text-blue-500 dark:hover:text-blue-400
+                  transition-all duration-200 
+                  flex items-center justify-center space-x-1
+                  mx-auto
+                  hover:scale-105
+                "
+                disabled={loading || isLoggingIn}
+              >
+                <HelpCircle className="w-4 h-4" />
+                <span>忘记密码？</span>
+              </button>
+            </div>
+          )}
+          
           {/* 底部信息 */}
           <div className="mt-6 text-center">
             <p className="text-sm text-gray-600 dark:text-gray-400">
@@ -548,6 +588,68 @@ const LoginPage: React.FC = () => {
         </div>
       </div>
     </div>
+    
+    {/* 忘记密码模态框 */}
+    {showForgotPasswordModal && (
+      <div 
+        className={`fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 ${
+          isClosingModal ? 'animate-fade-out' : 'animate-fade-in'
+        }`}
+        onClick={closeForgotPasswordModal}
+      >
+        <div 
+          className={`bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4 shadow-2xl ${
+            isClosingModal ? 'animate-scale-out' : 'animate-modal-slide-in'
+          }`}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="text-center">
+            <div className="mb-4">
+              <HelpCircle className="w-12 h-12 text-blue-500 mx-auto mb-2 animate-bounce-gentle" />
+              <h3 className="text-xl font-bold text-gray-800 dark:text-gray-200">
+                忘记密码
+              </h3>
+            </div>
+            
+            <div className="text-left mb-6 space-y-3">
+              <p className="text-gray-600 dark:text-gray-400 text-sm">
+                如果您忘记了管理员密码，请按照以下步骤重置：
+              </p>
+              
+              <div className="bg-gray-100 dark:bg-gray-700 p-4 rounded-lg">
+                <ol className="list-decimal list-inside space-y-2 text-sm text-gray-700 dark:text-gray-300">
+                  <li>停止 GSManager3 面板服务</li>
+                  <li>删除程序目录下的 <code className="bg-red-100 dark:bg-red-900 px-2 py-1 rounded text-red-600 dark:text-red-400 font-mono text-xs">server/data/users.json</code> 文件</li>
+                  <li>重新启动面板服务</li>
+                  <li>系统将自动进入初始化模式，您可以重新创建管理员账户</li>
+                </ol>
+              </div>
+              
+              <div className="bg-yellow-100 dark:bg-yellow-900 p-3 rounded-lg">
+                <p className="text-yellow-800 dark:text-yellow-200 text-xs">
+                  ⚠️ 注意：删除用户文件将清除所有用户账户数据，请谨慎操作！
+                </p>
+              </div>
+            </div>
+            
+            <div className="flex space-x-3">
+              <button
+                onClick={closeForgotPasswordModal}
+                className="
+                  flex-1 px-4 py-2 bg-gray-200 dark:bg-gray-600 
+                  text-gray-800 dark:text-gray-200 rounded-lg
+                  hover:bg-gray-300 dark:hover:bg-gray-500
+                  transition-all duration-200
+                  hover:scale-105 active:scale-95
+                "
+              >
+                我知道了
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )}
     </>
   )
 }
