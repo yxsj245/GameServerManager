@@ -1,5 +1,5 @@
 import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios'
-import { LoginRequest, LoginResponse, ApiResponse, User, Instance, CreateInstanceRequest, CaptchaResponse, CheckCaptchaResponse } from '@/types'
+import { LoginRequest, LoginResponse, RegisterRequest, RegisterResponse, HasUsersResponse, ApiResponse, User, Instance, CreateInstanceRequest, CaptchaResponse, CheckCaptchaResponse } from '@/types'
 import config from '@/config'
 import { useNotificationStore } from '@/stores/notificationStore'
 
@@ -218,6 +218,36 @@ class ApiClient {
       return {
         success: true,
         message: '已登出',
+      }
+    }
+  }
+
+  async hasUsers(): Promise<HasUsersResponse> {
+    try {
+      const response = await this.client.get<HasUsersResponse>('/auth/has-users')
+      return response.data
+    } catch (error: any) {
+      if (error.response?.data) {
+        return error.response.data
+      }
+      return {
+        success: false,
+        hasUsers: true // 默认假设有用户，避免意外的注册界面
+      }
+    }
+  }
+
+  async register(credentials: RegisterRequest): Promise<RegisterResponse> {
+    try {
+      const response = await this.client.post<RegisterResponse>('/auth/register', credentials)
+      return response.data
+    } catch (error: any) {
+      if (error.response?.data) {
+        return error.response.data
+      }
+      return {
+        success: false,
+        message: error.message || '注册失败，请检查网络连接',
       }
     }
   }

@@ -63,10 +63,7 @@ export class AuthManager {
       await this.loadUsers()
       await this.loadLoginAttempts()
 
-      // 如果没有用户，创建默认管理员账户
-      if (this.users.size === 0) {
-        await this.createDefaultAdmin()
-      }
+      // 不再自动创建默认管理员账户，改为在前端检测到无用户时提示注册
 
       this.logger.info('认证管理器初始化完成')
     } catch (error) {
@@ -377,5 +374,75 @@ export class AuthManager {
   checkIfRequireCaptcha(username: string): boolean {
     const failedCount = this.failedAttempts.get(username) || 0
     return failedCount >= 1
+  }
+
+  // 检查是否有用户存在
+  hasUsers(): boolean {
+    return this.users.size > 0
+  }
+
+  // 注册新用户
+  async register(username: string, password: string, role: 'admin' | 'user' = 'admin'): Promise<{ success: boolean; message: string; user?: Omit<User, 'password'> }> {
+    // 验证用户名格式
+    if (!/^[a-zA-Z0-9]{3,30}$/.test(username)) {
+      return {
+        success: false,
+        message: '用户名只能包含字母和数字，长度为3-30个字符'
+      }
+    }
+
+    // 验证密码长度
+    if (password.length < 6) {
+      return {
+        success: false,
+        message: '密码长度至少为6个字符'
+      }
+    }
+
+    // 检查用户名是否已存在
+    if (this.users.has(username)) {
+      return {
+        success: false,
+        message: '用户名已存在'
+      }
+    }
+
+    try {
+      // 加密密码
+      const hashedPassword = await bcrypt.hash(password, 12)
+      
+      // 创建新用户
+      const newUser: User = {
+        id: username,
+        username,
+        password: hashedPassword,
+        role,
+        createdAt: new Date().toISOString(),
+        loginAttempts: 0
+      }
+
+      this.users.set(username, newUser)
+      await this.saveUsers()
+      
+      this.logger.info(`新用户注册成功: ${username} (${role})`)
+      
+      return {
+        success: true,
+        message: '注册成功',
+        user: {
+          id: newUser.id,
+          username: newUser.username,
+          role: newUser.role,
+          createdAt: newUser.createdAt,
+          loginAttempts: newUser.loginAttempts
+        }
+      }
+    } catch (error) {
+      this.logger.error('用户注册失败:', error)
+      return {
+        success: false,
+        message: '注册失败，请稍后重试'
+      }
+    }
   }
 }

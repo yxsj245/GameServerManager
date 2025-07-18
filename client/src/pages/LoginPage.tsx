@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { useAuthStore } from '@/stores/authStore'
 import { useNotificationStore } from '@/stores/notificationStore'
 import { useThemeStore } from '@/stores/themeStore'
-import { Eye, EyeOff, Gamepad2, Sun, Moon, Loader2, RefreshCw } from 'lucide-react'
+import { Eye, EyeOff, Gamepad2, Sun, Moon, Loader2, RefreshCw, UserPlus } from 'lucide-react'
 import apiClient from '@/utils/api'
 import { CaptchaData } from '@/types'
 import LoginTransition from '@/components/LoginTransition'
@@ -10,7 +10,9 @@ import LoginTransition from '@/components/LoginTransition'
 const LoginPage: React.FC = () => {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [captchaCode, setCaptchaCode] = useState('')
   const [captchaData, setCaptchaData] = useState<CaptchaData | null>(null)
   const [requireCaptcha, setRequireCaptcha] = useState(false)
@@ -19,6 +21,9 @@ const LoginPage: React.FC = () => {
   const [loginSuccess, setLoginSuccess] = useState(false)
   const [isAnimating, setIsAnimating] = useState(true)
   const [showLoginTransition, setShowLoginTransition] = useState(false)
+  const [isRegisterMode, setIsRegisterMode] = useState(false)
+  const [hasUsers, setHasUsers] = useState(true)
+  const [checkingUsers, setCheckingUsers] = useState(true)
   const { login, loading, error } = useAuthStore()
   const { addNotification } = useNotificationStore()
   const { theme, toggleTheme } = useThemeStore()
@@ -30,10 +35,32 @@ const LoginPage: React.FC = () => {
     }, 100)
     return () => clearTimeout(timer)
   }, [])
+
+  // 检查是否有用户存在
+  useEffect(() => {
+    const checkUsers = async () => {
+      try {
+        const response = await apiClient.hasUsers()
+        if (response.success) {
+          setHasUsers(response.hasUsers)
+          setIsRegisterMode(!response.hasUsers)
+        }
+      } catch (error) {
+        console.error('检查用户失败:', error)
+        // 默认假设有用户，显示登录界面
+        setHasUsers(true)
+        setIsRegisterMode(false)
+      } finally {
+        setCheckingUsers(false)
+      }
+    }
+    
+    checkUsers()
+  }, [])
   
-  // 检查是否需要验证码
+  // 检查是否需要验证码（仅登录模式）
   const checkCaptchaRequired = async (usernameValue: string) => {
-    if (!usernameValue.trim()) return
+    if (!usernameValue.trim() || isRegisterMode) return
     
     try {
       const response = await apiClient.checkCaptchaRequired(usernameValue.trim())
@@ -79,14 +106,16 @@ const LoginPage: React.FC = () => {
     loadCaptcha()
   }
 
-  // 用户名输入变化时检查是否需要验证码
+  // 用户名输入变化时检查是否需要验证码（仅登录模式）
   useEffect(() => {
-    const timer = setTimeout(() => {
-      checkCaptchaRequired(username)
-    }, 500)
-    
-    return () => clearTimeout(timer)
-  }, [username])
+    if (!isRegisterMode) {
+      const timer = setTimeout(() => {
+        checkCaptchaRequired(username)
+      }, 500)
+      
+      return () => clearTimeout(timer)
+    }
+  }, [username, isRegisterMode])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -100,54 +129,131 @@ const LoginPage: React.FC = () => {
       return
     }
 
-    if (requireCaptcha && (!captchaData || !captchaCode.trim())) {
-      addNotification({
-        type: 'warning',
-        title: '输入错误',
-        message: '请输入验证码'
-      })
-      return
-    }
-    
-    setIsLoggingIn(true)
-    
-    const credentials = {
-      username: username.trim(),
-      password,
-      ...(requireCaptcha && captchaData ? {
-        captchaId: captchaData.id,
-        captchaCode: captchaCode.trim()
-      } : {})
-    }
-    
-    const result = await login(credentials)
-    
-    if (result.success) {
-      setLoginSuccess(true)
-      setShowLoginTransition(true)
-      addNotification({
-        type: 'success',
-        title: '登录成功',
-        message: '欢迎回来！'
-      })
+    if (isRegisterMode) {
+      // 注册逻辑
+      if (password !== confirmPassword) {
+        addNotification({
+          type: 'warning',
+          title: '输入错误',
+          message: '两次输入的密码不一致'
+        })
+        return
+      }
+
+      if (password.length < 6) {
+        addNotification({
+          type: 'warning',
+          title: '输入错误',
+          message: '密码长度至少为6个字符'
+        })
+        return
+      }
+
+      setIsLoggingIn(true)
       
-      // 延迟一下让用户看到成功动画
-      setTimeout(() => {
+      try {
+        const response = await apiClient.register({
+          username: username.trim(),
+          password
+        })
+        
+        if (response.success) {
+          addNotification({
+            type: 'success',
+            title: '注册成功',
+            message: '管理员账户创建成功，请登录'
+          })
+          
+          // 切换到登录模式
+          setIsRegisterMode(false)
+          setHasUsers(true)
+          setPassword('')
+          setConfirmPassword('')
+        } else {
+          addNotification({
+            type: 'error',
+            title: '注册失败',
+            message: response.message
+          })
+        }
+      } catch (error: any) {
+        addNotification({
+          type: 'error',
+          title: '注册失败',
+          message: error.message || '注册失败，请稍后重试'
+        })
+      } finally {
         setIsLoggingIn(false)
-      }, 1000)
+      }
     } else {
-      setIsLoggingIn(false)
-      addNotification({
-        type: 'error',
-        title: '登录失败',
-        message: result.message
-      })
+      // 登录逻辑
+      if (requireCaptcha && (!captchaData || !captchaCode.trim())) {
+        addNotification({
+          type: 'warning',
+          title: '输入错误',
+          message: '请输入验证码'
+        })
+        return
+      }
       
-      // 如果登录失败且需要验证码，刷新验证码
-      if (requireCaptcha) {
-        refreshCaptcha()
+      setIsLoggingIn(true)
+      
+      const credentials = {
+        username: username.trim(),
+        password,
+        ...(requireCaptcha && captchaData ? {
+          captchaId: captchaData.id,
+          captchaCode: captchaCode.trim()
+        } : {})
+      }
+      
+      const result = await login(credentials)
+      
+      if (result.success) {
+        setLoginSuccess(true)
+        setShowLoginTransition(true)
+        addNotification({
+          type: 'success',
+          title: '登录成功',
+          message: '欢迎回来！'
+        })
+        
+        // 延迟一下让用户看到成功动画
+        setTimeout(() => {
+          setIsLoggingIn(false)
+        }, 1000)
+      } else {
+        setIsLoggingIn(false)
+        addNotification({
+          type: 'error',
+          title: '登录失败',
+          message: result.message
+        })
+        
+        // 如果登录失败且需要验证码，刷新验证码
+        if (requireCaptcha) {
+          refreshCaptcha()
+        }
       }
     }
+  }
+
+  // 如果正在检查用户，显示加载界面
+  if (checkingUsers) {
+    return (
+      <div className={`
+        min-h-screen flex items-center justify-center p-4
+        ${theme === 'dark' 
+          ? 'bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900' 
+          : 'bg-gradient-to-br from-blue-50 via-white to-purple-50'
+        }
+      `}>
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+          <p className="text-gray-600 dark:text-gray-400">正在检查系统状态...</p>
+        </div>
+      </div>
+    )
   }
   
   return (
@@ -208,12 +314,34 @@ const LoginPage: React.FC = () => {
           </p>
         </div>
         
-        {/* 登录表单 */}
+        {/* 登录/注册表单 */}
         <div className={`
           card-game p-8 transition-all duration-800
           ${isAnimating ? 'opacity-0' : 'opacity-100 animate-fade-in'}
           ${loginSuccess ? 'scale-105 shadow-2xl' : ''}
         `}>
+          {/* 表单标题 */}
+          <div className="text-center mb-6">
+            <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-200 flex items-center justify-center space-x-2">
+              {isRegisterMode ? (
+                <>
+                  <UserPlus className="w-6 h-6" />
+                  <span>创建管理员账户</span>
+                </>
+              ) : (
+                <>
+                  <Gamepad2 className="w-6 h-6" />
+                  <span>登录到面板</span>
+                </>
+              )}
+            </h2>
+            {isRegisterMode && (
+              <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
+                系统检测到还没有管理员账户，请创建第一个管理员账户
+              </p>
+            )}
+          </div>
+          
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* 用户名输入 */}
             <div>
@@ -255,7 +383,7 @@ const LoginPage: React.FC = () => {
                     transition-all duration-200 hover:border-white/30
                     focus:scale-[1.02] focus:shadow-lg
                   "
-                  placeholder="请输入密码"
+                  placeholder={isRegisterMode ? "请设置密码（至少6位）" : "请输入密码"}
                   disabled={loading || isLoggingIn}
                 />
                 <button
@@ -269,8 +397,42 @@ const LoginPage: React.FC = () => {
               </div>
             </div>
 
-            {/* 验证码输入 */}
-            {requireCaptcha && (
+            {/* 确认密码输入（仅注册模式） */}
+            {isRegisterMode && (
+              <div>
+                <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-800 dark:text-gray-200 mb-2">
+                  确认密码
+                </label>
+                <div className="relative">
+                  <input
+                    id="confirmPassword"
+                    type={showConfirmPassword ? 'text' : 'password'}
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    className="
+                      w-full px-4 py-3 pr-12 bg-white/10 border border-white/20 rounded-lg
+                      text-black dark:text-white placeholder-gray-400
+                      focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent
+                      transition-all duration-200 hover:border-white/30
+                      focus:scale-[1.02] focus:shadow-lg
+                    "
+                    placeholder="请再次输入密码"
+                    disabled={loading || isLoggingIn}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-black dark:hover:text-white transition-all duration-200 hover:scale-110"
+                    disabled={loading || isLoggingIn}
+                  >
+                    {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* 验证码输入（仅登录模式） */}
+            {!isRegisterMode && requireCaptcha && (
               <div>
                 <label htmlFor="captcha" className="block text-sm font-medium text-gray-800 dark:text-gray-200 mb-2">
                   验证码
@@ -344,7 +506,7 @@ const LoginPage: React.FC = () => {
               </div>
             )}
             
-            {/* 登录按钮 */}
+            {/* 提交按钮 */}
             <button
               type="submit"
               disabled={loading || isLoggingIn}
@@ -363,16 +525,16 @@ const LoginPage: React.FC = () => {
                 loginSuccess ? (
                   <>
                     <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    <span>登录成功！</span>
+                    <span>{isRegisterMode ? '注册成功！' : '登录成功！'}</span>
                   </>
                 ) : (
                   <>
                     <Loader2 className="w-5 h-5 animate-spin" />
-                    <span>登录中...</span>
+                    <span>{isRegisterMode ? '注册中...' : '登录中...'}</span>
                   </>
                 )
               ) : (
-                <span>登录</span>
+                <span>{isRegisterMode ? '创建管理员账户' : '登录'}</span>
               )}
             </button>
           </form>

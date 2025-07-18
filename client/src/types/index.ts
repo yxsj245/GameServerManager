@@ -24,6 +24,22 @@ export interface LoginResponse {
   requireCaptcha?: boolean
 }
 
+export interface RegisterRequest {
+  username: string
+  password: string
+}
+
+export interface RegisterResponse {
+  success: boolean
+  message: string
+  user?: User
+}
+
+export interface HasUsersResponse {
+  success: boolean
+  hasUsers: boolean
+}
+
 export interface CaptchaData {
   id: string
   svg: string
