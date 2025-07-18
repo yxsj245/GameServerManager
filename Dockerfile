@@ -2,9 +2,9 @@ FROM debian:bullseye-slim
 
 ENV DEBIAN_FRONTEND=noninteractive \
     STEAM_USER=steam \
-    STEAM_HOME=/home/steam \
-    STEAMCMD_DIR=/home/steam/steamcmd \
-    GAMES_DIR=/home/steam/games \
+    STEAM_HOME=/root \
+    STEAMCMD_DIR=/root/steamcmd \
+    GAMES_DIR=/root/games \
     NODE_VERSION=22.17.0
 
 # 将apt源改为中国镜像源（清华TUNA）
@@ -148,7 +148,7 @@ ENV LANG=zh_CN.UTF-8 \
 # 创建steam用户和应用目录
 RUN useradd -m -s /bin/bash ${STEAM_USER} \
     && mkdir -p ${STEAMCMD_DIR} ${GAMES_DIR} /app \
-    && chown -R ${STEAM_USER}:${STEAM_USER} ${STEAM_HOME} \
+    && chown -R ${STEAM_USER}:${STEAM_USER} /home/steam \
     && chown -R ${STEAM_USER}:${STEAM_USER} /app
 
 # 复制项目文件
@@ -172,9 +172,8 @@ RUN mkdir -p ${STEAMCMD_DIR} \
           || wget -t 5 --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 -O steamcmd_linux.tar.gz https://media.steampowered.com/installer/steamcmd_linux.tar.gz; \
           tar -xzvf steamcmd_linux.tar.gz; \
           rm steamcmd_linux.tar.gz; \
-          chown -R ${STEAM_USER}:${STEAM_USER} ${STEAMCMD_DIR}; \
           chmod +x ${STEAMCMD_DIR}/steamcmd.sh; \
-          su - ${STEAM_USER} -c "export http_proxy=http://192.168.10.23:7890 && export https_proxy=http://192.168.10.23:7890 && cd ${STEAMCMD_DIR} && ./steamcmd.sh +quit"; \
+          cd ${STEAMCMD_DIR} && ./steamcmd.sh +quit; \
           unset http_proxy https_proxy; \
         else \
           echo "代理服务器不可用，使用直接连接"; \
@@ -182,9 +181,8 @@ RUN mkdir -p ${STEAMCMD_DIR} \
           || wget -t 5 --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 -O steamcmd_linux.tar.gz https://media.steampowered.com/installer/steamcmd_linux.tar.gz; \
           tar -xzvf steamcmd_linux.tar.gz; \
           rm steamcmd_linux.tar.gz; \
-          chown -R ${STEAM_USER}:${STEAM_USER} ${STEAMCMD_DIR}; \
           chmod +x ${STEAMCMD_DIR}/steamcmd.sh; \
-          su - ${STEAM_USER} -c "cd ${STEAMCMD_DIR} && ./steamcmd.sh +quit"; \
+          cd ${STEAMCMD_DIR} && ./steamcmd.sh +quit; \
         fi) \
     # 创建steamclient.so符号链接
     && mkdir -p ${STEAM_HOME}/.steam/sdk32 ${STEAM_HOME}/.steam/sdk64 \
@@ -195,8 +193,7 @@ RUN mkdir -p ${STEAMCMD_DIR} \
     && mkdir -p ${STEAM_HOME}/.steam/steam \
     && ln -sf ${STEAMCMD_DIR}/linux32 ${STEAM_HOME}/.steam/steam/linux32 \
     && ln -sf ${STEAMCMD_DIR}/linux64 ${STEAM_HOME}/.steam/steam/linux64 \
-    && ln -sf ${STEAMCMD_DIR}/steamcmd ${STEAM_HOME}/.steam/steam/steamcmd \
-    && chown -R ${STEAM_USER}:${STEAM_USER} ${STEAM_HOME}/.steam
+    && ln -sf ${STEAMCMD_DIR}/steamcmd ${STEAM_HOME}/.steam/steam/steamcmd
 
 # 安装依赖并构建项目
 RUN npm run install:all \

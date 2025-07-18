@@ -1011,8 +1011,8 @@ const SettingsPage: React.FC = () => {
                   }))}
                   className="w-full px-3 py-2 pr-10 bg-white/10 border border-white/20 rounded-lg text-black dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder={steamcmdSettings.installMode === 'online' 
-                    ? '例如: C:\\SteamCMD 或 /opt/steamcmd' 
-                    : '例如: C:\\SteamCMD 或 /opt/steamcmd'
+                    ? '例如: C:\\SteamCMD 或 容器写 /root/steamcmd' 
+                    : '例如: C:\\SteamCMD 或 容器写 /root/steamcmd'
                   }
                   disabled={steamcmdLoading}
                 />

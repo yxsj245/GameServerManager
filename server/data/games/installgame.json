@@ -311,8 +311,8 @@
 		"tip": "",
 		"image":"https://shared.cdn.queniuqe.com/store_item_assets/steam/apps/440900/header.jpg",
         "url":"https://store.steampowered.com/app/440900/Conan_Exiles/",
-        "system":["Windows","Linux"],
-		"system_info":["Linux"]
+        "system":["Windows"],
+		"system_info":[""]
 	},
 	"NoOneSurvived": {
 		"game_nameCN": "无人生还",
@@ -353,7 +353,8 @@
 		"appid": "412680",
 		"tip": "Windows请开启输出流转发\\TheIsleServer.exe 'TheIsland?listen?SessionName=MyServer?ServerPassword=123456?ServerAdminPassword=admin123' -server -log",
 		"image":"https://shared.cdn.queniuqe.com/store_item_assets/steam/apps/376210/header.jpg",
-        "url":"https://store.steampowered.com/app/376210/The_Isle/"
+        "url":"https://store.steampowered.com/app/376210/The_Isle/",
+        "system":["Windows"]
 	},
 	"Outworlder": {
 		"game_nameCN": "伤害世界",
@@ -391,7 +392,8 @@
 		"appid": "1794810",
 		"tip": "",
 		"image":"https://shared.cdn.queniuqe.com/store_item_assets/steam/apps/1371580/header_schinese.jpg",
-        "url":"https://store.steampowered.com/app/1371580/"
+        "url":"https://store.steampowered.com/app/1371580/",
+        "system":["Windows"]
 	},
 	"Barotrauma": {
 		"game_nameCN": "潜渊症",
@@ -432,7 +434,7 @@
 		"tip": "Windows需要开启输出流转发\\IcarusServer.exe -dedicated -port=17777 -maxplayers=8 -log",
 		"image":"https://shared.cdn.queniuqe.com/store_item_assets/steam/apps/1149460/header_schinese.jpg",
         "url":"https://store.steampowered.com/app/1149460/_ICARUS/",
-        "system":["Windows","Linux"]
+        "system":["Windows"]
 	},
 	"Mindustry": {
 		"game_nameCN": "像素工厂",
