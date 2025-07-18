@@ -92,8 +92,8 @@ export function setGameDeploymentManagers(
 // 获取可安装的游戏列表
 router.get('/games', authenticateToken, async (req: Request, res: Response) => {
   try {
-    // const gamesFilePath = path.join(__dirname, '../../data/games/installgame.json')
-    const gamesFilePath = path.join(__dirname, '../data/games/installgame.json')
+    const gamesFilePath = path.join(__dirname, '../../data/games/installgame.json')
+    // const gamesFilePath = path.join(__dirname, '../data/games/installgame.json')
     const gamesData = await fs.readFile(gamesFilePath, 'utf-8')
     const allGames: { [key: string]: SteamGameInfo } = JSON.parse(gamesData)
     

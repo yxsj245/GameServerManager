@@ -12,7 +12,8 @@ import {
   CheckCircle,
   AlertCircle,
   Plus,
-  Package
+  Package,
+  BookOpen
 } from 'lucide-react'
 import { useNotificationStore } from '@/stores/notificationStore'
 import apiClient from '@/utils/api'
@@ -26,6 +27,7 @@ interface GameInfo {
   tip: string
   image: string
   url: string
+  docs?: string
   system?: string[]
   supportedOnCurrentPlatform?: boolean
   currentPlatform?: string
@@ -139,6 +141,11 @@ const GameDeploymentPage: React.FC = () => {
   const [showCompatibilityModal, setShowCompatibilityModal] = useState(false)
   const [compatibilityModalAnimating, setCompatibilityModalAnimating] = useState(false)
   const [pendingGameInstall, setPendingGameInstall] = useState<{ key: string; info: GameInfo } | null>(null)
+  
+  // 开服文档相关状态
+  const [showDocsModal, setShowDocsModal] = useState(false)
+  const [docsModalAnimating, setDocsModalAnimating] = useState(false)
+  const [selectedGameDocs, setSelectedGameDocs] = useState<GameInfo | null>(null)
   
   const socketRef = useRef<Socket | null>(null)
   const currentDownloadId = useRef<string | null>(null)
@@ -1095,6 +1102,31 @@ const GameDeploymentPage: React.FC = () => {
     }
   }
 
+  // 打开开服文档
+  const handleOpenDocs = (gameInfo: GameInfo) => {
+    if (!gameInfo.docs) {
+      addNotification({
+        type: 'error',
+        title: '文档不可用',
+        message: '该游戏暂无开服文档'
+      })
+      return
+    }
+    
+    setSelectedGameDocs(gameInfo)
+    setShowDocsModal(true)
+    setTimeout(() => setDocsModalAnimating(true), 10)
+  }
+
+  // 关闭开服文档对话框
+  const handleCloseDocsModal = () => {
+    setDocsModalAnimating(false)
+    setTimeout(() => {
+      setShowDocsModal(false)
+      setSelectedGameDocs(null)
+    }, 300)
+  }
+
   // 关闭创建实例对话框
   const handleCloseCreateInstanceModal = () => {
     setCreateInstanceModalAnimating(false)
@@ -1714,26 +1746,40 @@ const GameDeploymentPage: React.FC = () => {
                   </div>
 
                   {/* 操作按钮 */}
-                  <button
-                    onClick={() => handleInstallGame(gameKey, gameInfo)}
-                    disabled={gameInfo.supportedOnCurrentPlatform === false}
-                    className={`w-full py-2 px-4 rounded-lg transition-colors flex items-center justify-center space-x-2 ${
-                      gameInfo.supportedOnCurrentPlatform === false
-                        ? 'bg-gray-400 cursor-not-allowed text-gray-200'
-                        : gameInfo.panelCompatibleOnCurrentPlatform === false
-                        ? 'bg-orange-600 hover:bg-orange-700 text-white'
-                        : 'bg-blue-600 hover:bg-blue-700 text-white'
-                    }`}
-                  >
-                    <Download className="w-4 h-4" />
-                    <span>
-                      {gameInfo.supportedOnCurrentPlatform === false 
-                        ? '平台不兼容' 
-                        : gameInfo.panelCompatibleOnCurrentPlatform === false 
-                        ? '面板不兼容' 
-                        : '安装游戏'}
-                    </span>
-                  </button>
+                  <div className="flex space-x-2">
+                    {/* 安装游戏按钮 */}
+                    <button
+                      onClick={() => handleInstallGame(gameKey, gameInfo)}
+                      disabled={gameInfo.supportedOnCurrentPlatform === false}
+                      className={`flex-1 py-2 px-3 rounded-lg transition-colors flex items-center justify-center space-x-1 text-sm ${
+                        gameInfo.supportedOnCurrentPlatform === false
+                          ? 'bg-gray-400 cursor-not-allowed text-gray-200'
+                          : gameInfo.panelCompatibleOnCurrentPlatform === false
+                          ? 'bg-orange-600 hover:bg-orange-700 text-white'
+                          : 'bg-blue-600 hover:bg-blue-700 text-white'
+                      }`}
+                    >
+                      <Download className="w-4 h-4" />
+                      <span>
+                        {gameInfo.supportedOnCurrentPlatform === false 
+                          ? '不兼容' 
+                          : gameInfo.panelCompatibleOnCurrentPlatform === false 
+                          ? '面板不兼容' 
+                          : '安装游戏'}
+                      </span>
+                    </button>
+                    
+                    {/* 开服文档按钮 */}
+                    {gameInfo.docs && (
+                      <button
+                        onClick={() => handleOpenDocs(gameInfo)}
+                        className="flex-1 py-2 px-3 rounded-lg transition-colors flex items-center justify-center space-x-1 text-sm bg-green-600 hover:bg-green-700 text-white"
+                      >
+                        <BookOpen className="w-4 h-4" />
+                        <span>开服文档</span>
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
               ))
@@ -3537,6 +3583,41 @@ const GameDeploymentPage: React.FC = () => {
                 <Download className="w-4 h-4" />
                 <span>继续安装</span>
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 开服文档模态框 */}
+      {showDocsModal && selectedGameDocs && (
+        <div className={`fixed inset-0 bg-black/50 flex items-center justify-center z-50 transition-opacity duration-300 ${
+          docsModalAnimating ? 'opacity-100' : 'opacity-0'
+        }`}>
+          <div className={`bg-white dark:bg-gray-800 rounded-lg shadow-xl w-[80vw] h-[90vh] mx-4 transform transition-all duration-300 flex flex-col ${
+            docsModalAnimating ? 'scale-100 opacity-100' : 'scale-95 opacity-0'
+          }`}>
+            <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center space-x-2">
+                <BookOpen className="w-5 h-5 text-blue-500" />
+                <span>开服文档 - {selectedGameDocs.game_nameCN}</span>
+              </h3>
+              <button
+                onClick={handleCloseDocsModal}
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="flex-1 p-6 overflow-hidden">
+              <div className="w-full h-full bg-gray-50 dark:bg-gray-900 rounded-lg overflow-hidden">
+                <iframe
+                  src={selectedGameDocs.docs}
+                  className="w-full h-full border-0"
+                  title={`${selectedGameDocs.game_nameCN} 开服文档`}
+                  sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
+                />
+              </div>
             </div>
           </div>
         </div>
