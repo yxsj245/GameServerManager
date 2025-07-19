@@ -1,5 +1,11 @@
 name: Build Package
 
+# 添加权限配置
+permissions:
+  contents: write
+  packages: write
+  actions: read
+
 on:
   workflow_dispatch:
     inputs:
@@ -122,7 +128,7 @@ jobs:
   # 创建发布版本（仅在推送标签时触发）
   create_release:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [build_linux, build_windows, build_docker]
+    needs: [build_linux, build_windows]
     runs-on: ubuntu-latest
     steps:
       - name: Download Linux artifact
