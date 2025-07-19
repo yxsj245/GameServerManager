@@ -1,3 +1,4 @@
+# 请注意：此仓库当前存放的为3.0版本代码 如需2.0源码请[前往这里](https://github.com/GSManagerXZ/GameServerManager2) 3.0将于2025.7.21（周一）发布公测包
 # 项目介绍
 <div align="center">
 
