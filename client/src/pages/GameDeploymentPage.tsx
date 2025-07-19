@@ -620,7 +620,6 @@ const GameDeploymentPage: React.FC = () => {
 
     // 监听Minecraft整合包部署日志
     socketRef.current.on('more-games-deploy-log', (data) => {
-      console.log('收到部署日志:', data)
       const message = typeof data.message === 'string' ? data.message : JSON.stringify(data.message)
       // 检查是否是整合包部署的日志
       if (data.deploymentId && data.deploymentId.startsWith('mrpack-deploy-')) {
@@ -632,7 +631,6 @@ const GameDeploymentPage: React.FC = () => {
 
     // 监听Minecraft整合包部署完成
     socketRef.current.on('more-games-deploy-complete', (data) => {
-      console.log('收到部署完成事件:', data)
       // 检查是否是整合包部署的完成事件
       if (data.deploymentId && data.deploymentId.startsWith('mrpack-deploy-')) {
         setMrpackDeploying(false)
@@ -661,7 +659,6 @@ const GameDeploymentPage: React.FC = () => {
 
     // 监听Minecraft整合包部署错误
     socketRef.current.on('more-games-deploy-error', (data) => {
-      console.log('收到部署错误事件:', data)
       // 检查是否是整合包部署的错误事件
       if (data.deploymentId && data.deploymentId.startsWith('mrpack-deploy-')) {
         setMrpackDeploying(false)
