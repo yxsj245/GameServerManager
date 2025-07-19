@@ -46,15 +46,11 @@ jobs:
         env:
           CI: true
           NODE_ENV: production
-      - name: Archive build files
-        run: |
-          cd dist/package
-          tar -czf ../../gsm3-management-panel-linux.tar.gz *
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: gsm3-management-panel-linux-build
-          path: gsm3-management-panel-linux.tar.gz
+          path: dist/package/
           retention-days: 30
 
   build_windows:
@@ -81,16 +77,11 @@ jobs:
         env:
           CI: true
           NODE_ENV: production
-      - name: Archive build files
-        shell: pwsh
-        run: |
-          cd dist/package
-          Compress-Archive -Path "*" -DestinationPath "../../gsm3-management-panel-windows.zip" -Force
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: gsm3-management-panel-windows-build
-          path: gsm3-management-panel-windows.zip
+          path: dist/package/
           retention-days: 30
 
   build_docker:
@@ -138,10 +129,20 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: gsm3-management-panel-linux-build
+          path: linux-build/
       - name: Download Windows artifact
         uses: actions/download-artifact@v4
         with:
           name: gsm3-management-panel-windows-build
+          path: windows-build/
+      - name: Create Linux tar.gz
+        run: |
+          cd linux-build
+          tar -czf ../gsm3-management-panel-linux.tar.gz *
+      - name: Create Windows zip
+        run: |
+          cd windows-build
+          zip -r ../gsm3-management-panel-windows.zip *
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
