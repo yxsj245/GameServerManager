@@ -1,5 +1,6 @@
 import axios from 'axios';
 import * as fs from 'fs-extra';
+import { promises as fsPromises } from 'fs';
 import { createWriteStream } from 'fs';
 import * as path from 'path';
 import * as yauzl from 'yauzl';
@@ -643,7 +644,7 @@ export class MrpackServerAPI {
     await fs.ensureDir(targetDir);
     
     // 获取源目录中的所有文件
-    const files = await fs.readdir(sourceDir);
+    const files = await fsPromises.readdir(sourceDir);
     
     if (onProgress) {
       onProgress(`正在移动 ${files.length} 个文件到目标目录...`, 'info');
@@ -657,7 +658,7 @@ export class MrpackServerAPI {
         // 统一使用move操作，无论是文件还是目录
         await fs.move(sourcePath, targetPath, { overwrite: true });
         
-        const stat = await fs.stat(targetPath);
+        const stat = await fsPromises.stat(targetPath);
         if (stat.isFile()) {
           if (onProgress) {
             onProgress(`已移动文件: ${file}`, 'info');

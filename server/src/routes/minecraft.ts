@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express'
-import { getServerCategories, getAvailableVersions, getDownloadInfo, validateJavaEnvironment } from '../modules/game/othergame/minecraft-server-api.js'
+import { getServerCategories, getAvailableVersions, getDownloadInfo, validateJavaEnvironment } from '../modules/game/othergame/minecraft-server-api'
 import { 
   getMinecraftServerCategories, 
   getMinecraftVersions, 

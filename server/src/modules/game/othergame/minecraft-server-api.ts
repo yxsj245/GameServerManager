@@ -1,5 +1,6 @@
 import axios from 'axios';
 import * as fs from 'fs-extra';
+import { promises as fsPromises } from 'fs';
 import { createWriteStream } from 'fs';
 import * as path from 'path';
 import { spawn, ChildProcess } from 'child_process';
@@ -228,7 +229,7 @@ export class FileManager {
     try {
       // 尝试在目录中创建一个临时文件来测试写权限
       const testFile = path.join(dirPath, '.write-test-' + Date.now());
-      await fs.writeFile(testFile, 'test');
+      await fsPromises.writeFile(testFile, 'test');
       await fs.remove(testFile);
       return true;
     } catch (error) {
@@ -256,7 +257,7 @@ export class FileManager {
    */
   static async fileExists(filePath: string): Promise<boolean> {
     try {
-      await fs.access(filePath);
+      await fsPromises.access(filePath);
       return true;
     } catch {
       return false;
@@ -365,7 +366,7 @@ export class FileManager {
     }
     
     // 获取临时目录中的所有文件
-    const files = await fs.readdir(this.tempDir);
+    const files = await fsPromises.readdir(this.tempDir);
     
     if (onLog) {
       onLog(`正在移动 ${files.length} 个文件到目标目录: ${normalizedTargetDir}`, 'info');
@@ -394,7 +395,7 @@ export class FileManager {
           throw new Error(`文件移动后验证失败: ${file}`);
         }
         
-        const stat = await fs.stat(targetPath);
+        const stat = await fsPromises.stat(targetPath);
         if (stat.isFile()) {
           if (onLog) {
             onLog(`已移动文件: ${file}`, 'info');

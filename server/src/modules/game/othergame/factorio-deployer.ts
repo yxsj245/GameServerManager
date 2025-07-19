@@ -1,6 +1,7 @@
 import axios from 'axios';
 import express, { Request, Response } from 'express';
 import * as fs from 'fs-extra';
+import { promises as fsPromises } from 'fs';
 import { createWriteStream, createReadStream } from 'fs';
 import * as path from 'path';
 import * as os from 'os';
@@ -44,10 +45,10 @@ export class FactorioDeployer {
   private async detectFileFormat(filePath: string): Promise<string> {
     try {
       const buffer = Buffer.alloc(512);
-      const fd = await fs.open(filePath, 'r');
+      const fd = await fsPromises.open(filePath, 'r');
       
       try {
-        await fs.read(fd, buffer, 0, 512, 0);
+        await fd.read(buffer, 0, 512, 0);
         
         // 检查文件头魔数
         const header = buffer.toString('hex');
@@ -86,7 +87,7 @@ export class FactorioDeployer {
         }
         
       } finally {
-        await fs.close(fd);
+        await fd.close();
       }
       
       // 如果魔数检测失败，根据文件扩展名判断
@@ -200,7 +201,7 @@ export class FactorioDeployer {
       await this.downloadServer(initialTempFilePath);
 
       // 检查实际下载的文件路径
-       const tempFiles = await fs.readdir(tempDir);
+       const tempFiles = await fsPromises.readdir(tempDir);
        const downloadedFile = tempFiles.find(file => 
          file.startsWith('factorio-server-') && 
          (file.endsWith('.tar.xz') || file.endsWith('.tar.gz') || file.endsWith('.zip') || file.endsWith('.tar'))
@@ -326,7 +327,7 @@ export class FactorioDeployer {
       return new Promise((resolve, reject) => {
         writer.on('finish', () => {
           if (this.cancelled) {
-            fs.unlink(adjustedFilePath).catch(() => {});
+            fsPromises.unlink(adjustedFilePath).catch(() => {});
             reject(new Error('操作已取消'));
             return;
           }
@@ -341,13 +342,13 @@ export class FactorioDeployer {
         });
         
         writer.on('error', (error) => {
-          fs.unlink(adjustedFilePath).catch(() => {});
+          fsPromises.unlink(adjustedFilePath).catch(() => {});
           reject(error);
         });
         
         response.data.on('error', (error: any) => {
           if (error.name === 'AbortError') {
-            fs.unlink(adjustedFilePath).catch(() => {});
+            fsPromises.unlink(adjustedFilePath).catch(() => {});
             reject(new Error('操作已取消'));
           } else {
             reject(error);
@@ -376,7 +377,7 @@ export class FactorioDeployer {
    */
   private async checkFileIntegrity(filePath: string): Promise<boolean> {
     try {
-      const stats = await fs.stat(filePath);
+      const stats = await fsPromises.stat(filePath);
       console.log(`文件大小: ${stats.size} 字节`);
       
       // 检查文件大小是否合理（Factorio服务端通常大于10MB）
@@ -387,10 +388,10 @@ export class FactorioDeployer {
       
       // 尝试读取文件头部分来验证文件完整性
       const buffer = Buffer.alloc(1024);
-      const fd = await fs.open(filePath, 'r');
+      const fd = await fsPromises.open(filePath, 'r');
       
       try {
-        await fs.read(fd, buffer, 0, 1024, 0);
+        await fd.read(buffer, 0, 1024, 0);
         
         // 检查是否为有效的压缩文件头
         if (buffer[0] === 0x00 && buffer[1] === 0x00) {
@@ -400,7 +401,7 @@ export class FactorioDeployer {
         
         return true;
       } finally {
-        await fs.close(fd);
+        await fd.close();
       }
     } catch (error) {
       console.error('文件完整性检查失败:', error);

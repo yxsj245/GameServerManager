@@ -420,7 +420,7 @@ export async function createTempDirectory(deployment: ActiveDeployment, prefix: 
 export async function getMinecraftServerCategories(): Promise<MinecraftServerCategory[]> {
   try {
     // 使用minecraft-server-api.ts中的API服务
-    const { getServerCategories } = await import('./minecraft-server-api');
+    const { getServerCategories } = await import('./minecraft-server-api.js');
     const categories = await getServerCategories();
     
     // 转换为统一函数库的格式
@@ -443,7 +443,7 @@ export async function getMinecraftServerCategories(): Promise<MinecraftServerCat
 export async function getMinecraftVersions(server: string): Promise<string[]> {
   try {
     // 使用minecraft-server-api.ts中的API服务
-    const { getAvailableVersions } = await import('./minecraft-server-api');
+    const { getAvailableVersions } = await import('./minecraft-server-api.js');
     return await getAvailableVersions(server);
   } catch (error) {
     throw new Error(`获取版本列表失败: ${error instanceof Error ? error.message : String(error)}`);
@@ -456,7 +456,7 @@ export async function getMinecraftVersions(server: string): Promise<string[]> {
 export async function getMinecraftDownloadInfo(server: string, version: string): Promise<MinecraftDownloadData> {
   try {
     // 使用minecraft-server-api.ts中的API服务
-    const { getDownloadInfo } = await import('./minecraft-server-api');
+    const { getDownloadInfo } = await import('./minecraft-server-api.js');
     const downloadData = await getDownloadInfo(server, version);
     return {
       url: downloadData.url,
@@ -601,7 +601,7 @@ export async function downloadFileWithCancellation(
     // 清理可能已创建的部分文件
     writer.end();
     try {
-      await fs.unlink(filePath);
+      await fsPromises.unlink(filePath);
     } catch (unlinkError) {
       // 忽略删除文件时的错误
     }
@@ -1366,7 +1366,7 @@ export async function extractZipFileWithCancellation(zipPath: string, extractPat
                 deployment.cancellationToken.onCancelled(() => {
                   readStream.destroy();
                   writeStream.destroy();
-                  fs.unlink(filePath).catch(() => {});
+                  fsPromises.unlink(filePath).catch(() => {});
                 });
                 
                 writeStream.on('finish', () => {
