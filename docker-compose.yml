@@ -5,8 +5,8 @@ volumes:
 services:
   management_panel:
     build: .
-    container_name: gsm3_management_panel
-    image: langlangy.server.xiaozhuhouses.asia:20000/gameservermanager:3.0.3
+    container_name: GSManager3
+    image: xiaozhu674/gameservermanager:3.1.0
     user: root                       
     ports:
       # GSM3管理面板端口
