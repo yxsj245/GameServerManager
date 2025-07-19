@@ -7,9 +7,9 @@ ENV DEBIAN_FRONTEND=noninteractive \
     GAMES_DIR=/root/games \
     NODE_VERSION=22.17.0
 
-# 将apt源改为中国镜像源（清华TUNA）
-RUN sed -i 's/deb.debian.org/mirrors.tuna.tsinghua.edu.cn/g' /etc/apt/sources.list \
-    && sed -i 's/security.debian.org/mirrors.tuna.tsinghua.edu.cn/g' /etc/apt/sources.list
+# 将apt源改为中国镜像源（阿里云）
+# RUN sed -i 's/deb.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list \
+#     && sed -i 's/security.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list
 
 # 安装Node.js、Python、SteamCMD和常见依赖（包括32位库）
 RUN apt-get update && apt-get upgrade -y \
