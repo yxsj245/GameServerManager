@@ -2,9 +2,9 @@ import { Router, Request, Response } from 'express'
 import { promises as fs } from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
-import { deployTModLoaderServer, deployFactorioServer, cancelDeployment, getActiveDeployments, getTModLoaderInfo, searchMrpackModpacks, getMrpackProjectVersions, deployMrpackServer } from '../modules/game/othergame/unified-functions'
-import { authenticateToken } from '../middleware/auth'
-import logger from '../utils/logger'
+import { deployTModLoaderServer, deployFactorioServer, cancelDeployment, getActiveDeployments, getTModLoaderInfo, searchMrpackModpacks, getMrpackProjectVersions, deployMrpackServer } from '../modules/game/othergame/unified-functions.js'
+import { authenticateToken } from '../middleware/auth.js'
+import logger from '../utils/logger.js'
 import { Server as SocketIOServer } from 'socket.io'
 
 const __filename = fileURLToPath(import.meta.url)
