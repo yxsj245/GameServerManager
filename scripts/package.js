@@ -196,7 +196,7 @@ pause`
       await fs.writeFile(
         path.join(packageDir, 'start.bat'),
         startScript,
-        'latin1'  // 使用ANSI编码
+        'gbk'  // 使用GBK编码（中文Windows默认编码）
       )
     } else if (buildTarget === 'linux') {
       const startShScript = `#!/bin/bash
@@ -226,7 +226,7 @@ pause`
       await fs.writeFile(
         path.join(packageDir, 'start.bat'),
         startScript,
-        'latin1'  // 使用ANSI编码
+        'gbk'  // 使用GBK编码（中文Windows默认编码）
       )
       
       const startShScript = `#!/bin/bash
@@ -259,7 +259,7 @@ pause`
     await fs.writeFile(
       path.join(packageDir, 'install-python-deps.bat'),
       installPythonDepsScript,
-      'latin1'  // 使用ANSI编码
+      'gbk'  // 使用GBK编码（中文Windows默认编码）
     )
     
     // 创建Linux Python依赖安装脚本
