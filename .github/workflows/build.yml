@@ -48,13 +48,13 @@ jobs:
           NODE_ENV: production
       - name: Archive build files
         run: |
-          cd dist
-          zip -r ../gsm3-management-panel-linux.zip package/
+          cd dist/package
+          tar -czf ../../gsm3-management-panel-linux.tar.gz *
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: gsm3-management-panel-linux-build
-          path: gsm3-management-panel-linux.zip
+          path: gsm3-management-panel-linux.tar.gz
           retention-days: 30
 
   build_windows:
@@ -84,8 +84,8 @@ jobs:
       - name: Archive build files
         shell: pwsh
         run: |
-          cd dist
-          Compress-Archive -Path "package" -DestinationPath "../gsm3-management-panel-windows.zip" -Force
+          cd dist/package
+          Compress-Archive -Path "*" -DestinationPath "../../gsm3-management-panel-windows.zip" -Force
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -124,7 +124,7 @@ jobs:
           context: .
           push: true
           tags: |
-            xiaozhu674/gameservermanager:3.0.0
+            xiaozhu674/gameservermanager:3.1.0
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -146,7 +146,7 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           files: |
-            gsm3-management-panel-linux.zip
+            gsm3-management-panel-linux.tar.gz
             gsm3-management-panel-windows.zip
           generate_release_notes: true
           draft: false
