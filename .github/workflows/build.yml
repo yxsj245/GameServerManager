@@ -3,15 +3,21 @@ name: Build Package
 on:
   workflow_dispatch:
     inputs:
-      platform:
-        description: "选择构建平台"
-        required: true
-        type: choice
-        options:
-          - all
-          - linux
-          - windows
-        default: "all"
+      build_linux:
+        description: "构建Linux版本"
+        required: false
+        type: boolean
+        default: true
+      build_windows:
+        description: "构建Windows版本"
+        required: false
+        type: boolean
+        default: true
+      build_docker:
+        description: "构建Docker镜像"
+        required: false
+        type: boolean
+        default: false
   push:
     tags:
       - 'v*'
@@ -20,7 +26,7 @@ on:
 
 jobs:
   build_linux:
-    if: github.event.inputs.platform == 'all' || github.event.inputs.platform == 'linux' || github.event_name == 'push' || github.event_name == 'release'
+    if: github.event.inputs.build_linux == 'true' || github.event_name == 'push' || github.event_name == 'release'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -52,7 +58,7 @@ jobs:
           retention-days: 30
 
   build_windows:
-    if: github.event.inputs.platform == 'all' || github.event.inputs.platform == 'windows' || github.event_name == 'push' || github.event_name == 'release'
+    if: github.event.inputs.build_windows == 'true' || github.event_name == 'push' || github.event_name == 'release'
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -87,10 +93,52 @@ jobs:
           path: gsm3-management-panel-windows.zip
           retention-days: 30
 
+  build_docker:
+    if: github.event.inputs.build_docker == 'true' || github.event_name == 'push' || github.event_name == 'release'
+    runs-on: ubuntu-latest
+    steps:
+      # 第一步：检出代码
+      - name: 拉取仓库代码
+        uses: actions/checkout@v4
+        
+      # 第二步：设置构建环境
+      - name: 配置QEMU模拟器
+        uses: docker/setup-qemu-action@v2
+        
+      - name: 配置Docker Buildx
+        uses: docker/setup-buildx-action@v2
+        with:
+          driver-opts: network=host
+        
+      # 第三步：登录所有镜像仓库
+      - name: 登录Docker仓库
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: 登录GitHub容器仓库
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+          
+      # 第四步：构建并推送镜像（带缓存功能）
+      - name: 缓存并构建推送DockerHub
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          push: true
+          tags: |
+            xiaozhu674/gameservermanager:3.0.0
+            ghcr.io/${{ github.repository_owner }}/gameservermanager:3.0.0
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
   # 创建发布版本（仅在推送标签时触发）
   create_release:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [build_linux, build_windows]
+    needs: [build_linux, build_windows, build_docker]
     runs-on: ubuntu-latest
     steps:
       - name: Download Linux artifact
