@@ -5,6 +5,7 @@ const { execSync } = require('child_process')
 const https = require('https')
 const { pipeline } = require('stream')
 const { promisify } = require('util')
+const iconv = require('iconv-lite')
 const pipelineAsync = promisify(pipeline)
 
 const packageName = 'gsm3-management-panel'
@@ -195,8 +196,7 @@ pause`
       
       await fs.writeFile(
         path.join(packageDir, 'start.bat'),
-        startScript,
-        'latin1'  // 使用ANSI编码
+        iconv.encode(startScript, 'gbk')  // 使用iconv-lite转换为GBK编码
       )
     } else if (buildTarget === 'linux') {
       const startShScript = `#!/bin/bash
@@ -225,8 +225,7 @@ pause`
       
       await fs.writeFile(
         path.join(packageDir, 'start.bat'),
-        startScript,
-        'latin1'  // 使用ANSI编码
+        iconv.encode(startScript, 'gbk')  // 使用iconv-lite转换为GBK编码
       )
       
       const startShScript = `#!/bin/bash
@@ -258,8 +257,7 @@ pause`
     
     await fs.writeFile(
       path.join(packageDir, 'install-python-deps.bat'),
-      installPythonDepsScript,
-      'latin1'  // 使用ANSI编码
+      iconv.encode(installPythonDepsScript, 'gbk')  // 使用iconv-lite转换为GBK编码
     )
     
     // 创建Linux Python依赖安装脚本
