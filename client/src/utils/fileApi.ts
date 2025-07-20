@@ -181,63 +181,72 @@ export class FileApiClient {
     return response.data
   }
 
-  // 下载文件
+  // 下载文件（立即触发下载）
   downloadFile(path: string): void {
     const token = localStorage.getItem('gsm3_token')
-    const url = `${API_BASE}/download?path=${encodeURIComponent(path)}`
     
-    // 创建一个临时的a标签进行下载，但需要处理认证
-    fetch(url, {
-      headers: {
-        'Authorization': token ? `Bearer ${token}` : ''
-      }
-    })
-    .then(response => {
-      if (!response.ok) {
-        throw new Error(`下载失败: ${response.status}`)
-      }
+    // 构建带认证的URL
+    const baseUrl = `${API_BASE}/download?path=${encodeURIComponent(path)}`
+    const url = token ? `${baseUrl}&token=${encodeURIComponent(token)}` : baseUrl
+    
+    // 方法1：使用隐藏的iframe进行下载（推荐，支持认证）
+    try {
+      const iframe = document.createElement('iframe')
+      iframe.style.display = 'none'
+      iframe.style.position = 'absolute'
+      iframe.style.left = '-9999px'
+      iframe.style.top = '-9999px'
+      iframe.name = 'download_iframe_' + Date.now()
       
-      // 从响应头中获取文件名
-      const contentDisposition = response.headers.get('Content-Disposition')
-      let fileName = path.split('/').pop() || 'download'
+      document.body.appendChild(iframe)
       
-      if (contentDisposition) {
-        // 尝试从 Content-Disposition 头中提取文件名
-        // 优先使用 UTF-8 编码的文件名 (filename*=UTF-8'')
-        const utf8Match = contentDisposition.match(/filename\*=UTF-8''([^;]+)/)
-        if (utf8Match) {
-          try {
-            fileName = decodeURIComponent(utf8Match[1])
-          } catch (e) {
-            console.warn('Failed to decode UTF-8 filename:', e)
+      // 直接设置iframe的src来触发下载
+      iframe.src = url
+      
+      // 清理DOM元素
+      setTimeout(() => {
+        if (document.body.contains(iframe)) {
+          document.body.removeChild(iframe)
+        }
+      }, 5000) // 增加清理时间，确保下载完成
+      
+      console.log('开始下载文件:', path)
+    } catch (error) {
+      console.error('iframe下载失败，尝试备用方法:', error)
+      
+      // 方法2：备用方案 - 使用隐藏的链接点击
+      try {
+        const link = document.createElement('a')
+        link.href = url
+        link.download = ''
+        link.style.display = 'none'
+        link.target = '_blank'
+        
+        document.body.appendChild(link)
+        link.click()
+        
+        // 清理DOM元素
+        setTimeout(() => {
+          if (document.body.contains(link)) {
+            document.body.removeChild(link)
           }
-        } else {
-          // 回退到普通的 filename
-          const normalMatch = contentDisposition.match(/filename="([^"]+)"/)
-          if (normalMatch) {
-            fileName = normalMatch[1]
-          }
+        }, 1000)
+        
+        console.log('使用链接点击下载文件:', path)
+      } catch (fallbackError) {
+        console.error('链接下载也失败了，尝试最后的方法:', fallbackError)
+        
+        // 方法3：最后的备用方案 - 直接跳转
+        try {
+          window.open(url, '_blank')
+          console.log('使用window.open下载文件:', path)
+        } catch (finalError) {
+          console.error('所有下载方法都失败了:', finalError)
+          // 显示错误提示
+          alert('下载失败，请稍后重试')
         }
       }
-      
-      return response.blob().then(blob => ({ blob, fileName }))
-    })
-    .then(({ blob, fileName }) => {
-      const downloadUrl = window.URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = downloadUrl
-      link.download = fileName
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      window.URL.revokeObjectURL(downloadUrl)
-      
-      console.log('文件下载成功:', fileName)
-    })
-    .catch(error => {
-      console.error('下载失败:', error)
-      // 可以在这里添加用户友好的错误提示
-    })
+    }
   }
 
   // 创建下载任务（带进度）

@@ -11,7 +11,7 @@ import * as zlib from 'zlib'
 import mime from 'mime-types'
 import { exec } from 'child_process'
 import { promisify } from 'util'
-import { authenticateToken } from '../middleware/auth.js'
+import { authenticateToken, authenticateTokenFlexible } from '../middleware/auth.js'
 import { taskManager } from '../modules/task/taskManager.js'
 import { compressionWorker } from '../modules/task/compressionWorker.js'
 import { executeFileOperation } from '../modules/task/fileOperationWorker.js'
@@ -806,7 +806,7 @@ router.get('/search', authenticateToken, async (req: Request, res: Response) => 
 })
 
 // 下载文件
-router.get('/download', authenticateToken, async (req: Request, res: Response) => {
+router.get('/download', authenticateTokenFlexible, async (req: Request, res: Response) => {
   try {
     const { path: filePath, withProgress } = req.query
     
