@@ -40,8 +40,6 @@ GameServerManager 3.0（简称GSM3）是一个基于现代化技术栈的游戏�
 - 📦 **Docker 支持** - 完整的容器化部署方案，一键启动
 - 🎨 **可视化配置** - 游戏配置文件的图形化编辑界面
 
-![容器信息面板](http://images.server.xiaozhuhouses.asia:40061/i/2025/06/09/wbnc63.png)
-
 ---
 
 ## 本地开发部署
