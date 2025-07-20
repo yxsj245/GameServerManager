@@ -188,16 +188,10 @@ async function createPackage() {
     console.log('📝 创建启动脚本...')
     // 根据目标平台创建启动脚本
     if (buildTarget === 'windows') {
-      const startScript = `@echo off
-echo 正在启动GSM3管理面板...
-cd server
-node.exe index.js
-pause`
-      
-      await fs.writeFile(
-        path.join(packageDir, 'start.bat'),
-        startScript,
-        'latin1'  // 使用ANSI编码
+      // Windows平台复制scripts\start.bat文件
+      await fs.copy(
+        path.join(__dirname, 'start.bat'),
+        path.join(packageDir, 'start.bat')
       )
     } else if (buildTarget === 'linux') {
       const startShScript = `#!/bin/bash
@@ -249,24 +243,15 @@ node server/index.js`
     }
     
     console.log('🐍 创建Python依赖安装脚本...')
-    // 创建Python依赖安装脚本
-    const installPythonDepsScript = `@echo off
-echo 正在安装Python依赖...
-cd server\\Python
-pip install -r server/Python/requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple/ --trusted-host pypi.tuna.tsinghua.edu.cn
-echo Python依赖安装完成！
-pause`
-    
-    await fs.writeFile(
-      path.join(packageDir, 'install-python-deps.bat'),
-      installPythonDepsScript,
-      'latin1'  // 使用ANSI编码
+    // 复制Python依赖安装脚本
+    await fs.copy(
+      path.join(__dirname, 'install-python-deps.bat'),
+      path.join(packageDir, 'install-python-deps.bat')
     )
     
     // 创建Linux Python依赖安装脚本
     const installPythonDepsShScript = `#!/bin/bash
 echo "正在安装Python依赖..."
-cd server/src/Python
 pip install -r server/Python/requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple/ --trusted-host pypi.tuna.tsinghua.edu.cn
 echo "Python依赖安装完成！"`
     
