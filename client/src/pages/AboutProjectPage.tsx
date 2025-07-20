@@ -1,10 +1,11 @@
 import React, { useState } from 'react'
-import { Github, Info, Heart, Star, GitFork, Eye, ExternalLink } from 'lucide-react'
+import { Github, Info, Heart, Star, GitFork, Eye, ExternalLink, BookOpen } from 'lucide-react'
 
 const AboutProjectPage: React.FC = () => {
-  const [activeTab, setActiveTab] = useState('github')
+  const [activeTab, setActiveTab] = useState('docs')
 
   const tabs = [
+    { id: 'docs', label: '文档站', icon: BookOpen },
     { id: 'github', label: 'Github', icon: Github },
     { id: 'afdian', label: '爱发电', icon: Heart },
     { id: 'info', label: '项目信息', icon: Info }
@@ -48,6 +49,40 @@ const AboutProjectPage: React.FC = () => {
 
         {/* 标签页内容 */}
         <div className="p-6">
+          {activeTab === 'docs' && (
+            <div className="space-y-4">
+              <div className="flex items-center space-x-3 mb-4">
+                <BookOpen className="w-6 h-6 text-blue-500" />
+                <h2 className="text-xl font-semibold text-black dark:text-white">文档站</h2>
+              </div>
+              
+              {/* 文档站嵌入页面 */}
+              <div className="w-full h-[600px] border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden">
+                <iframe
+                  src="http://docsgsm.xiaozhuhouses.asia/"
+                  className="w-full h-full"
+                  title="GSM3 文档站"
+                  frameBorder="0"
+                  sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
+                />
+              </div>
+              
+              <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                <p className="text-sm text-blue-800 dark:text-blue-200">
+                  <strong>文档说明：</strong> 这里包含了 GSM3 的完整使用文档。
+                  <a 
+                    href="http://docsgsm.xiaozhuhouses.asia/" 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="ml-2 text-blue-600 dark:text-blue-400 hover:underline"
+                  >
+                    http://docsgsm.xiaozhuhouses.asia/
+                  </a>
+                </p>
+              </div>
+            </div>
+          )}
+
           {activeTab === 'github' && (
             <div className="space-y-6">
               <div className="flex items-center space-x-3 mb-6">
@@ -275,7 +310,7 @@ const AboutProjectPage: React.FC = () => {
                   </p>
                   <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
                     主要特性包括：实时终端管理、服务器实例控制、自动化部署、定时任务调度、
-                    文件管理、用户权限控制等。通过现代化的技术栈和优雅的用户界面，
+                    文件管理。通过现代化的技术栈和优雅的用户界面，
                     让游戏服务器管理变得更加简单高效。
                   </p>
                 </div>
@@ -300,7 +335,6 @@ const AboutProjectPage: React.FC = () => {
                     <h4 className="font-medium text-black dark:text-white">高级功能</h4>
                     <ul className="text-sm text-gray-600 dark:text-gray-400 space-y-1">
                       <li>• 定时任务调度</li>
-                      <li>• 用户权限管理</li>
                       <li>• 系统监控</li>
                       <li>• 主题切换</li>
                     </ul>
