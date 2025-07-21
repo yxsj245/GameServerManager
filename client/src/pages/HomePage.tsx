@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '@/stores/authStore'
+import { useNotificationStore } from '@/stores/notificationStore'
 import { SystemStats, SystemInfo, ProcessInfo, WeatherData, ActivePort } from '@/types'
 import socketClient from '@/utils/socket'
 import apiClient from '@/utils/api'
@@ -224,6 +225,7 @@ const cityOptions = [
 
 const HomePage: React.FC = () => {
   const { user } = useAuthStore()
+  const { addNotification } = useNotificationStore()
   const navigate = useNavigate()
   const [systemStats, setSystemStats] = useState<SystemStats | null>(null)
   const [systemInfo, setSystemInfo] = useState<SystemInfo | null>(null)
@@ -254,6 +256,12 @@ const HomePage: React.FC = () => {
   const [isProcessesModalOpening, setIsProcessesModalOpening] = useState(false)
   const [modalProcessSearchQuery, setModalProcessSearchQuery] = useState('')
   const [modalFilteredProcesses, setModalFilteredProcesses] = useState<ProcessInfo[]>([])
+  
+  // 确认弹窗相关状态
+  const [showKillConfirm, setShowKillConfirm] = useState(false)
+  const [isKillConfirmClosing, setIsKillConfirmClosing] = useState(false)
+  const [isKillConfirmVisible, setIsKillConfirmVisible] = useState(false)
+  const [killProcessInfo, setKillProcessInfo] = useState<{ pid: number; name: string; force: boolean } | null>(null)
   
   useEffect(() => {
     // 获取系统信息
@@ -551,10 +559,38 @@ const HomePage: React.FC = () => {
   }
   
   // 终止进程
-  const handleKillProcess = async (pid: number, force: boolean = false) => {
+  const handleKillProcess = (pid: number, force: boolean = false) => {
+    // 查找进程信息
+    const process = activeProcesses.find(p => p.pid === pid)
+    const processName = process?.name || `PID ${pid}`
+    
+    // 设置确认弹窗信息
+    setKillProcessInfo({ pid, name: processName, force })
+    setShowKillConfirm(true)
+    setIsKillConfirmClosing(false)
+    setIsKillConfirmVisible(false)
+    
+    // 延迟显示动画，确保DOM已渲染
+    setTimeout(() => {
+      setIsKillConfirmVisible(true)
+    }, 10)
+  }
+  
+  const confirmKillProcess = async () => {
+    if (!killProcessInfo) return
+    
+    const { pid, name, force } = killProcessInfo
+    
     try {
       const response = await apiClient.killProcess(pid, force)
       if (response.success) {
+        // 显示成功通知
+        addNotification({
+          type: 'success',
+          title: '进程终止成功',
+          message: `进程 ${name} (PID: ${pid}) 已${force ? '强制' : ''}终止`
+        })
+        
         // 刷新进程列表
         const processResponse = await apiClient.getProcessList()
         if (processResponse.success) {
@@ -562,12 +598,39 @@ const HomePage: React.FC = () => {
         }
       } else {
         console.error('终止进程失败:', response.message)
-        alert(`终止进程失败: ${response.message}`)
+        addNotification({
+          type: 'error',
+          title: '进程终止失败',
+          message: response.message || '未知错误'
+        })
       }
     } catch (error) {
       console.error('终止进程失败:', error)
-      alert('终止进程失败，请稍后重试')
+      addNotification({
+        type: 'error',
+        title: '进程终止失败',
+        message: '网络错误，请稍后重试'
+      })
+    } finally {
+      // 关闭确认弹窗
+      setIsKillConfirmClosing(true)
+      setTimeout(() => {
+        setShowKillConfirm(false)
+        setIsKillConfirmClosing(false)
+        setIsKillConfirmVisible(false)
+        setKillProcessInfo(null)
+      }, 300) // 与CSS动画时间匹配
     }
+  }
+  
+  const cancelKillProcess = () => {
+    setIsKillConfirmClosing(true)
+    setTimeout(() => {
+      setShowKillConfirm(false)
+      setIsKillConfirmClosing(false)
+      setIsKillConfirmVisible(false)
+      setKillProcessInfo(null)
+    }, 300) // 与CSS动画时间匹配
   }
   
   const formatBytes = (bytes: number) => {
@@ -1266,6 +1329,98 @@ const HomePage: React.FC = () => {
                   </div>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 终止进程确认弹窗 */}
+      {showKillConfirm && killProcessInfo && (
+        <div 
+          className={`fixed inset-0 bg-black flex items-center justify-center z-50 p-4 transition-all duration-300 ease-in-out ${
+            isKillConfirmClosing ? 'bg-opacity-0' : isKillConfirmVisible ? 'bg-opacity-50' : 'bg-opacity-0'
+          }`}
+          onClick={cancelKillProcess}
+        >
+          <div 
+            className={`bg-white dark:bg-gray-900 rounded-lg shadow-xl w-full max-w-md transition-all duration-300 ease-in-out transform ${
+              isKillConfirmClosing ? 'scale-95 opacity-0' : isKillConfirmVisible ? 'scale-100 opacity-100' : 'scale-95 opacity-0'
+            }`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* 弹窗头部 */}
+            <div className="flex items-center space-x-3 p-6 border-b border-gray-200 dark:border-gray-700">
+              <AlertTriangle className={`w-6 h-6 ${killProcessInfo.force ? 'text-red-600' : 'text-yellow-600'}`} />
+              <h2 className="text-xl font-semibold text-black dark:text-white">
+                {killProcessInfo.force ? '强制终止进程' : '终止进程'}
+              </h2>
+            </div>
+            
+            {/* 弹窗内容 */}
+            <div className="p-6">
+              <div className="mb-4">
+                <p className="text-gray-700 dark:text-gray-300 mb-2">
+                  您确定要{killProcessInfo.force ? '强制' : ''}终止以下进程吗？
+                </p>
+                <div className="bg-gray-100 dark:bg-gray-800 rounded-lg p-3 border">
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium text-black dark:text-white">
+                      {killProcessInfo.name}
+                    </span>
+                    <span className="text-blue-600 dark:text-blue-400 font-mono text-sm">
+                      PID: {killProcessInfo.pid}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              
+              {/* 风险提示 */}
+              <div className={`p-3 rounded-lg border-l-4 mb-4 ${
+                killProcessInfo.force 
+                  ? 'bg-red-50 dark:bg-red-900/20 border-red-500' 
+                  : 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-500'
+              }`}>
+                <div className="flex items-start space-x-2">
+                  <AlertTriangle className={`w-4 h-4 mt-0.5 flex-shrink-0 ${
+                    killProcessInfo.force ? 'text-red-600' : 'text-yellow-600'
+                  }`} />
+                  <div className="text-sm">
+                    <p className={`font-medium ${
+                      killProcessInfo.force ? 'text-red-800 dark:text-red-300' : 'text-yellow-800 dark:text-yellow-300'
+                    }`}>
+                      {killProcessInfo.force ? '⚠️ 高风险操作' : '⚠️ 注意'}
+                    </p>
+                    <p className={`mt-1 ${
+                      killProcessInfo.force ? 'text-red-700 dark:text-red-400' : 'text-yellow-700 dark:text-yellow-400'
+                    }`}>
+                      {killProcessInfo.force 
+                        ? '强制终止可能导致数据丢失或系统不稳定，进程无法正常清理资源。非必要不建议使用！'
+                        : '终止进程会通知此进程进入结束流程，相对比较安全，但仍然可能会影响相关应用程序的正常运行。'
+                      }
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            {/* 弹窗按钮 */}
+            <div className="flex items-center justify-end space-x-3 p-6 border-t border-gray-200 dark:border-gray-700">
+              <button
+                onClick={cancelKillProcess}
+                className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+              >
+                取消
+              </button>
+              <button
+                onClick={confirmKillProcess}
+                className={`px-4 py-2 text-white rounded-lg transition-colors ${
+                  killProcessInfo.force
+                    ? 'bg-red-600 hover:bg-red-700 focus:ring-red-500'
+                    : 'bg-yellow-600 hover:bg-yellow-700 focus:ring-yellow-500'
+                } focus:outline-none focus:ring-2 focus:ring-offset-2`}
+              >
+                {killProcessInfo.force ? '强制终止' : '确认终止'}
+              </button>
             </div>
           </div>
         </div>
