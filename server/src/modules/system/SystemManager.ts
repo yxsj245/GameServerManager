@@ -145,8 +145,38 @@ export class SystemManager extends EventEmitter {
     
     this.logger.info('系统监控管理器初始化完成')
     
+    // 检测并输出当前系统的资源获取方法
+    this.detectResourceMethods()
+    
     // 开始监控
     this.startMonitoring()
+  }
+
+  /**
+   * 检测当前系统的资源获取方法
+   */
+  private async detectResourceMethods(): Promise<void> {
+    const platform = os.platform()
+    
+    if (platform === 'win32') {
+      this.logger.info('系统平台: Windows')
+      
+      // 检测磁盘信息获取方法
+      try {
+        await execAsync('wmic logicaldisk get size,freespace,caption', { timeout: 5000 })
+        this.logger.info('磁盘信息获取方法: WMIC命令')
+      } catch (wmicError) {
+        try {
+          await execAsync('powershell "Get-WmiObject -Class Win32_LogicalDisk | Select-Object Size,FreeSpace,DeviceID | ConvertTo-Json"', { timeout: 8000 })
+          this.logger.info('磁盘信息获取方法: PowerShell WMI (WMIC不可用)')
+        } catch (psError) {
+          this.logger.warn('磁盘信息获取方法: 备用方案 (WMIC和PowerShell均不可用)')
+        }
+      }
+    } else {
+      this.logger.info(`系统平台: ${platform}`)
+      this.logger.info('磁盘信息获取方法: Linux df命令')
+    }
   }
 
   /**
@@ -358,29 +388,72 @@ export class SystemManager extends EventEmitter {
    */
   private async getDiskInfo(): Promise<SystemStats['disk']> {
     try {
-      let command: string
-      
       if (os.platform() === 'win32') {
-        command = 'wmic logicaldisk get size,freespace,caption'
+        return await this.getWindowsDiskInfo()
       } else {
-        command = 'df -h /'
+        return await this.getLinuxDiskInfo()
+      }
+    } catch (error) {
+      this.logger.error('获取磁盘信息失败:', error)
+      return {
+        total: 0,
+        used: 0,
+        free: 0,
+        usage: 0
+      }
+    }
+  }
+
+  /**
+   * 获取Windows磁盘信息
+   */
+  private async getWindowsDiskInfo(): Promise<SystemStats['disk']> {
+    try {
+      // 首先尝试使用wmic命令
+      const command = 'wmic logicaldisk get size,freespace,caption'
+      const { stdout } = await execAsync(command, { timeout: 10000 })
+      
+      const lines = stdout.trim().split('\n').slice(1)
+      let totalSize = 0
+      let totalFree = 0
+      
+      for (const line of lines) {
+        const parts = line.trim().split(/\s+/)
+        if (parts.length >= 3) {
+          const size = parseInt(parts[2]) || 0
+          const free = parseInt(parts[1]) || 0
+          totalSize += size
+          totalFree += free
+        }
       }
       
-      const { stdout } = await execAsync(command)
+      const used = totalSize - totalFree
+      const usage = totalSize > 0 ? (used / totalSize) * 100 : 0
       
-      if (os.platform() === 'win32') {
-        // 解析Windows输出
-        const lines = stdout.trim().split('\n').slice(1)
+      return {
+        total: totalSize,
+        used,
+        free: totalFree,
+        usage: Math.round(usage * 100) / 100
+      }
+    } catch (wmicError) {
+      this.logger.warn('wmic命令执行失败，尝试使用备用方案:', wmicError)
+      
+      try {
+        // 备用方案1: 使用PowerShell
+        const psCommand = 'powershell "Get-WmiObject -Class Win32_LogicalDisk | Select-Object Size,FreeSpace,DeviceID | ConvertTo-Json"'
+        const { stdout } = await execAsync(psCommand, { timeout: 15000 })
+        
+        const disks = JSON.parse(stdout)
+        const diskArray = Array.isArray(disks) ? disks : [disks]
+        
         let totalSize = 0
         let totalFree = 0
         
-        for (const line of lines) {
-          const parts = line.trim().split(/\s+/)
-          if (parts.length >= 3) {
-            const size = parseInt(parts[2]) || 0
-            const free = parseInt(parts[1]) || 0
-            totalSize += size
-            totalFree += free
+        for (const disk of diskArray) {
+          if (disk.Size && disk.FreeSpace) {
+            totalSize += parseInt(disk.Size) || 0
+            totalFree += parseInt(disk.FreeSpace) || 0
           }
         }
         
@@ -393,32 +466,61 @@ export class SystemManager extends EventEmitter {
           free: totalFree,
           usage: Math.round(usage * 100) / 100
         }
-      } else {
-        // 解析Linux输出
-        const lines = stdout.trim().split('\n')
-        const dataLine = lines[1]
-        const parts = dataLine.split(/\s+/)
+      } catch (psError) {
+        this.logger.warn('PowerShell命令执行失败，使用Node.js备用方案:', psError)
         
-        const total = this.parseSize(parts[1])
-        const used = this.parseSize(parts[2])
-        const free = this.parseSize(parts[3])
-        const usage = parseFloat(parts[4].replace('%', ''))
-        
-        return {
-          total,
-          used,
-          free,
-          usage
+        // 备用方案2: 使用Node.js fs.statSync (仅获取主要驱动器信息)
+        try {
+          const drives = ['C:', 'D:', 'E:', 'F:', 'G:']
+          let totalSize = 0
+          let totalFree = 0
+          
+          for (const drive of drives) {
+            try {
+              const stats = await fs.stat(drive + '\\')
+              // 注意：fs.stat无法直接获取磁盘空间信息
+              // 这里只是一个占位符，实际需要其他方法
+            } catch (driveError) {
+              // 驱动器不存在，跳过
+            }
+          }
+          
+          // 如果所有方法都失败，返回默认值
+          this.logger.warn('所有磁盘信息获取方法都失败，返回默认值')
+          return {
+            total: 0,
+            used: 0,
+            free: 0,
+            usage: 0
+          }
+        } catch (nodeError) {
+          throw nodeError
         }
       }
-    } catch (error) {
-      this.logger.error('获取磁盘信息失败:', error)
-      return {
-        total: 0,
-        used: 0,
-        free: 0,
-        usage: 0
-      }
+    }
+  }
+
+  /**
+   * 获取Linux磁盘信息
+   */
+  private async getLinuxDiskInfo(): Promise<SystemStats['disk']> {
+    const command = 'df -h /'
+    const { stdout } = await execAsync(command, { timeout: 10000 })
+    
+    const lines = stdout.trim().split('\n')
+    const dataLine = lines[1]
+    const parts = dataLine.split(/\s+/)
+    
+    const total = this.parseSize(parts[1])
+    const used = this.parseSize(parts[2])
+    const free = this.parseSize(parts[3])
+    const usage = parseFloat(parts[4].replace('%', ''))
+    
+    return {
+      total,
+      used,
+      free,
+      usage
     }
   }
 
@@ -548,61 +650,113 @@ export class SystemManager extends EventEmitter {
    */
   public async getDiskList(): Promise<DiskInfo[]> {
     try {
-      let command: string
-      
       if (os.platform() === 'win32') {
-        command = 'wmic logicaldisk get size,freespace,caption'
+        return await this.getWindowsDiskList()
       } else {
-        command = 'df -h'
+        return await this.getLinuxDiskList()
       }
-      
-      const { stdout } = await execAsync(command)
-      const result: DiskInfo[] = []
-      
-      if (os.platform() === 'win32') {
-        const lines = stdout.trim().split('\n').slice(1)
-        
-        for (const line of lines) {
-          const parts = line.trim().split(/\s+/)
-          if (parts.length >= 3) {
-            const size = parseInt(parts[2]) || 0
-            const free = parseInt(parts[1]) || 0
-            const used = size - free
-            const usage = size > 0 ? (used / size) * 100 : 0
-            
-            result.push({
-              filesystem: parts[0] || '',
-              size,
-              used,
-              available: free,
-              usage: Math.round(usage * 100) / 100,
-              mountpoint: parts[0] || ''
-            })
-          }
-        }
-      } else {
-        const lines = stdout.trim().split('\n').slice(1)
-        
-        for (const line of lines) {
-          const parts = line.split(/\s+/)
-          if (parts.length >= 6) {
-            result.push({
-              filesystem: parts[0],
-              size: this.parseSize(parts[1]),
-              used: this.parseSize(parts[2]),
-              available: this.parseSize(parts[3]),
-              usage: parseFloat(parts[4].replace('%', '')),
-              mountpoint: parts[5]
-            })
-          }
-        }
-      }
-      
-      return result
     } catch (error) {
       this.logger.error('获取磁盘列表失败:', error)
       return []
     }
+  }
+
+  /**
+   * 获取Windows磁盘列表
+   */
+  private async getWindowsDiskList(): Promise<DiskInfo[]> {
+    try {
+      // 首先尝试使用wmic命令
+      const command = 'wmic logicaldisk get size,freespace,caption'
+      const { stdout } = await execAsync(command, { timeout: 10000 })
+      
+      const lines = stdout.trim().split('\n').slice(1)
+      const disks: DiskInfo[] = []
+      
+      for (const line of lines) {
+        const parts = line.trim().split(/\s+/)
+        if (parts.length >= 3) {
+          const caption = parts[0]
+          const freeSpace = parseInt(parts[1]) || 0
+          const size = parseInt(parts[2]) || 0
+          const used = size - freeSpace
+          const usage = size > 0 ? (used / size) * 100 : 0
+          
+          disks.push({
+            filesystem: caption,
+            size,
+            used,
+            available: freeSpace,
+            usage: Math.round(usage * 100) / 100,
+            mountpoint: caption
+          })
+        }
+      }
+      
+      return disks
+    } catch (wmicError) {
+      this.logger.warn('wmic命令执行失败，尝试使用PowerShell备用方案:', wmicError)
+      
+      try {
+        // 备用方案: 使用PowerShell
+        const psCommand = 'powershell "Get-WmiObject -Class Win32_LogicalDisk | Select-Object Size,FreeSpace,DeviceID | ConvertTo-Json"'
+        const { stdout } = await execAsync(psCommand, { timeout: 15000 })
+        
+        const diskData = JSON.parse(stdout)
+        const diskArray = Array.isArray(diskData) ? diskData : [diskData]
+        const disks: DiskInfo[] = []
+        
+        for (const disk of diskArray) {
+          if (disk.Size && disk.FreeSpace) {
+            const size = parseInt(disk.Size) || 0
+            const freeSpace = parseInt(disk.FreeSpace) || 0
+            const used = size - freeSpace
+            const usage = size > 0 ? (used / size) * 100 : 0
+            
+            disks.push({
+              filesystem: disk.DeviceID,
+              size,
+              used,
+              available: freeSpace,
+              usage: Math.round(usage * 100) / 100,
+              mountpoint: disk.DeviceID
+            })
+          }
+        }
+        
+        return disks
+      } catch (psError) {
+        this.logger.error('PowerShell命令也执行失败:', psError)
+        throw psError
+      }
+    }
+  }
+
+  /**
+   * 获取Linux磁盘列表
+   */
+  private async getLinuxDiskList(): Promise<DiskInfo[]> {
+    const command = 'df -h'
+    const { stdout } = await execAsync(command, { timeout: 10000 })
+    
+    const result: DiskInfo[] = []
+    const lines = stdout.trim().split('\n').slice(1)
+    
+    for (const line of lines) {
+      const parts = line.split(/\s+/)
+      if (parts.length >= 6) {
+        result.push({
+          filesystem: parts[0],
+          size: this.parseSize(parts[1]),
+          used: this.parseSize(parts[2]),
+          available: this.parseSize(parts[3]),
+          usage: parseFloat(parts[4].replace('%', '')),
+          mountpoint: parts[5]
+        })
+      }
+    }
+    
+    return result
   }
 
   /**
