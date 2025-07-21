@@ -330,6 +330,10 @@ class ApiClient {
     return this.get('/system/processes')
   }
 
+  async killProcess(pid: number, force: boolean = false) {
+    return this.post(`/system/processes/${pid}/kill`, { force })
+  }
+
   async getActiveTerminalProcesses() {
     return this.get('/terminal/active-processes')
   }

@@ -193,6 +193,50 @@ router.get('/processes', async (req: Request, res: Response) => {
   }
 })
 
+// 终止进程
+router.post('/processes/:pid/kill', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    if (!systemManager) {
+      return res.status(500).json({ error: '系统管理器未初始化' })
+    }
+    
+    const pid = parseInt(req.params.pid)
+    const { force = false } = req.body
+    
+    if (!pid || pid <= 0) {
+      return res.status(400).json({
+        success: false,
+        error: '无效的进程ID'
+      })
+    }
+    
+    // 记录操作日志
+    logger.info(`用户尝试终止进程 PID: ${pid}, 强制: ${force}`)
+    
+    const result = await systemManager.killProcess(pid, force)
+    
+    if (result.success) {
+      logger.info(`进程 ${pid} 终止成功`)
+      res.json({
+        success: true,
+        message: result.message
+      })
+    } else {
+      logger.warn(`进程 ${pid} 终止失败: ${result.message}`)
+      res.status(400).json({
+        success: false,
+        error: result.message
+      })
+    }
+  } catch (error) {
+    logger.error('终止进程失败:', error)
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : '终止进程失败'
+    })
+  }
+})
+
 // 获取CPU信息
 router.get('/cpu', (req: Request, res: Response) => {
   try {

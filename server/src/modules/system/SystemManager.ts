@@ -73,6 +73,17 @@ interface ProcessInfo {
   command: string
 }
 
+interface ProcessInfoResponse {
+  id: string
+  pid: number
+  name: string
+  cpu: number
+  memory: number
+  status: string
+  startTime: string
+  command: string
+}
+
 interface DiskInfo {
   filesystem: string
   size: number
@@ -762,43 +773,284 @@ export class SystemManager extends EventEmitter {
   /**
    * 获取进程列表
    */
-  public async getProcessList(): Promise<ProcessInfo[]> {
+  public async getProcessList(): Promise<ProcessInfoResponse[]> {
+    try {
+      let processes: ProcessInfo[]
+      if (os.platform() === 'win32') {
+        processes = await this.getWindowsProcessList()
+      } else {
+        processes = await this.getLinuxProcessList()
+      }
+      
+      // 转换数据格式以匹配客户端期望的格式
+      return processes.map(process => ({
+        id: `${process.pid}`, // 添加 id 字段
+        pid: process.pid,
+        name: process.name,
+        cpu: process.cpu,
+        memory: process.memory,
+        status: process.status,
+        startTime: process.startTime.toISOString(), // 转换为 ISO 字符串
+        command: process.command
+      }))
+    } catch (error) {
+      this.logger.error('获取进程列表失败:', error)
+      return []
+    }
+  }
+
+  /**
+   * 获取Windows进程列表
+   */
+  private async getWindowsProcessList(): Promise<ProcessInfo[]> {
+    // 使用 wmic 获取更详细的进程信息
+    const command = 'wmic process get Name,ProcessId,PageFileUsage,UserModeTime,KernelModeTime,CreationDate /format:csv'
+    const { stdout } = await execAsync(command, { timeout: 15000 })
+    
+    const result: ProcessInfo[] = []
+    const lines = stdout.trim().split('\n').filter(line => line.trim() && !line.startsWith('Node'))
+    
+    for (let i = 0; i < Math.min(lines.length, 100); i++) {
+      const line = lines[i].trim()
+      if (!line) continue
+      
+      const parts = line.split(',')
+      if (parts.length >= 6) {
+        const creationDate = parts[1]
+        const kernelModeTime = parts[2] || '0'
+        const name = parts[3] || 'Unknown'
+        const pageFileUsage = parts[4] || '0'
+        const processId = parts[5] || '0'
+        const userModeTime = parts[6] || '0'
+        
+        const pid = parseInt(processId)
+        if (pid && pid > 0 && name !== 'Unknown') {
+          // 计算CPU使用率 (简化计算)
+          const totalTime = parseInt(kernelModeTime) + parseInt(userModeTime)
+          const cpu = totalTime > 0 ? Math.min(totalTime / 10000000, 100) : 0
+          
+          // 内存使用 (KB转MB)
+          const memoryKB = parseInt(pageFileUsage) || 0
+          const memoryMB = memoryKB / 1024
+          
+          // 解析创建时间
+          let startTime = new Date()
+          if (creationDate && creationDate.length >= 14) {
+            try {
+              const year = parseInt(creationDate.substring(0, 4))
+              const month = parseInt(creationDate.substring(4, 6)) - 1
+              const day = parseInt(creationDate.substring(6, 8))
+              const hour = parseInt(creationDate.substring(8, 10))
+              const minute = parseInt(creationDate.substring(10, 12))
+              const second = parseInt(creationDate.substring(12, 14))
+              startTime = new Date(year, month, day, hour, minute, second)
+            } catch (e) {
+              // 使用默认时间
+            }
+          }
+          
+          result.push({
+            pid,
+            name: name.replace('.exe', ''),
+            cpu: Math.round(cpu * 100) / 100,
+            memory: Math.round(memoryMB * 100) / 100, // 数字类型，单位MB
+            status: 'Running',
+            startTime: startTime, // Date 对象
+            command: name
+          })
+        }
+      }
+    }
+    
+    // 按CPU使用率排序
+    return result.sort((a, b) => b.cpu - a.cpu).slice(0, 50)
+  }
+
+  /**
+   * 获取Linux进程列表
+   */
+  private async getLinuxProcessList(): Promise<ProcessInfo[]> {
+    const command = 'ps aux --sort=-%cpu | head -51'
+    const { stdout } = await execAsync(command, { timeout: 10000 })
+    
+    const result: ProcessInfo[] = []
+    const lines = stdout.trim().split('\n').slice(1) // 跳过标题行
+    
+    for (const line of lines) {
+      if (!line.trim()) continue
+      
+      // ps aux 输出格式: USER PID %CPU %MEM VSZ RSS TTY STAT START TIME COMMAND
+      const parts = line.trim().split(/\s+/)
+      if (parts.length >= 11) {
+        const user = parts[0]
+        const pid = parseInt(parts[1])
+        const cpu = parseFloat(parts[2]) || 0
+        const memPercent = parseFloat(parts[3]) || 0
+        const vsz = parseInt(parts[4]) || 0
+        const rss = parseInt(parts[5]) || 0
+        const tty = parts[6]
+        const stat = parts[7]
+        const start = parts[8]
+        const time = parts[9]
+        const command = parts.slice(10).join(' ')
+        
+        if (pid && pid > 0) {
+          // 内存使用 (KB转MB)
+          const memoryMB = rss / 1024
+          
+          // 获取进程名 (从命令中提取)
+          let processName = command.split(' ')[0]
+          if (processName.includes('/')) {
+            processName = processName.split('/').pop() || processName
+          }
+          
+          // 状态映射
+          let status = 'Running'
+          if (stat.includes('Z')) status = 'Zombie'
+          else if (stat.includes('T')) status = 'Stopped'
+          else if (stat.includes('S')) status = 'Sleeping'
+          
+          // 解析启动时间
+          let startTime = new Date()
+          if (start && start !== '?') {
+            try {
+              // 如果是今天的时间格式 (HH:MM)
+              if (start.includes(':')) {
+                const [hour, minute] = start.split(':').map(Number)
+                const today = new Date()
+                startTime = new Date(today.getFullYear(), today.getMonth(), today.getDate(), hour, minute)
+              } else {
+                // 如果是日期格式 (MMM DD 或 YYYY)
+                const today = new Date()
+                if (start.length === 4 && !isNaN(Number(start))) {
+                  // 年份格式
+                  startTime = new Date(Number(start), 0, 1)
+                } else {
+                  // 月日格式，假设是今年
+                  startTime = new Date(`${start} ${today.getFullYear()}`)
+                }
+              }
+            } catch (e) {
+              // 解析失败，使用当前时间
+              startTime = new Date()
+            }
+          }
+          
+          result.push({
+            pid,
+            name: processName,
+            cpu: Math.round(cpu * 100) / 100,
+            memory: Math.round(memoryMB * 100) / 100, // 数字类型，单位MB
+            status,
+            startTime: startTime, // Date 对象
+            command: command.length > 50 ? command.substring(0, 50) + '...' : command
+          })
+        }
+      }
+    }
+    
+    return result.slice(0, 50)
+  }
+
+  /**
+   * 终止进程
+   */
+  public async killProcess(pid: number, force: boolean = false): Promise<{ success: boolean; message: string }> {
+    try {
+      if (!pid || pid <= 0) {
+        return { success: false, message: '无效的进程ID' }
+      }
+
+      // 检查进程是否存在
+      const processExists = await this.checkProcessExists(pid)
+      if (!processExists) {
+        return { success: false, message: '进程不存在或已经结束' }
+      }
+
+      let command: string
+      
+      if (os.platform() === 'win32') {
+        // Windows: 使用 taskkill 命令
+        if (force) {
+          command = `taskkill /F /PID ${pid}`
+        } else {
+          command = `taskkill /PID ${pid}`
+        }
+      } else {
+        // Linux/Unix: 使用 kill 命令
+        if (force) {
+          command = `kill -9 ${pid}`
+        } else {
+          command = `kill -15 ${pid}`
+        }
+      }
+      
+      this.logger.info(`尝试终止进程 PID: ${pid}, 强制: ${force}, 命令: ${command}`)
+      
+      const { stdout, stderr } = await execAsync(command)
+      
+      // 等待一小段时间后检查进程是否真的被终止
+      await new Promise(resolve => setTimeout(resolve, 1000))
+      const stillExists = await this.checkProcessExists(pid)
+      
+      if (stillExists) {
+        if (!force) {
+          // 如果普通终止失败，尝试强制终止
+          this.logger.warn(`进程 ${pid} 普通终止失败，尝试强制终止`)
+          return await this.killProcess(pid, true)
+        } else {
+          return { success: false, message: '进程终止失败，可能权限不足或进程受保护' }
+        }
+      }
+      
+      this.logger.info(`进程 ${pid} 已成功终止`)
+      return { success: true, message: '进程已成功终止' }
+      
+    } catch (error: any) {
+      this.logger.error(`终止进程 ${pid} 失败:`, error)
+      
+      // 解析错误信息
+      let errorMessage = '终止进程失败'
+      if (error.message) {
+        if (error.message.includes('Access is denied') || error.message.includes('权限不足')) {
+          errorMessage = '权限不足，无法终止该进程'
+        } else if (error.message.includes('not found') || error.message.includes('No such process')) {
+          errorMessage = '进程不存在'
+        } else {
+          errorMessage = `终止进程失败: ${error.message}`
+        }
+      }
+      
+      return { success: false, message: errorMessage }
+    }
+  }
+
+  /**
+   * 检查进程是否存在
+   */
+  private async checkProcessExists(pid: number): Promise<boolean> {
     try {
       let command: string
       
       if (os.platform() === 'win32') {
-        command = 'tasklist /fo csv'
+        command = `tasklist /FI "PID eq ${pid}" /FO CSV`
       } else {
-        command = 'ps aux'
+        command = `ps -p ${pid}`
       }
       
       const { stdout } = await execAsync(command)
-      const result: ProcessInfo[] = []
       
-      // 简化的进程列表解析
-      const lines = stdout.trim().split('\n').slice(1)
-      
-      for (let i = 0; i < Math.min(lines.length, 50); i++) { // 限制返回50个进程
-        const line = lines[i]
-        const parts = line.split(/\s+/)
-        
-        if (parts.length >= 5) {
-          result.push({
-            pid: parseInt(parts[1]) || 0,
-            name: parts[0] || '',
-            cpu: parseFloat(parts[2]) || 0,
-            memory: parseFloat(parts[3]) || 0,
-            status: 'running',
-            startTime: new Date(),
-            command: parts.slice(4).join(' ')
-          })
-        }
+      if (os.platform() === 'win32') {
+        // Windows: 检查输出是否包含进程信息
+        const lines = stdout.trim().split('\n')
+        return lines.length > 1 // 第一行是标题，如果有第二行说明进程存在
+      } else {
+        // Linux: ps 命令如果进程存在会返回进程信息
+        return stdout.trim().split('\n').length > 1
       }
-      
-      return result
     } catch (error) {
-      this.logger.error('获取进程列表失败:', error)
-      return []
+      // 如果命令执行失败，通常说明进程不存在
+      return false
     }
   }
 

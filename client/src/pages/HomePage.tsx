@@ -17,7 +17,8 @@ import {
   Wifi,
   Search,
   Maximize2,
-  X
+  X,
+  AlertTriangle
 } from 'lucide-react'
 import MusicPlayer from '@/components/MusicPlayer'
 
@@ -242,6 +243,18 @@ const HomePage: React.FC = () => {
   const [modalPortSearchQuery, setModalPortSearchQuery] = useState('')
   const [modalFilteredPorts, setModalFilteredPorts] = useState<ActivePort[]>([])
   
+  // 活跃进程相关状态
+  const [activeProcesses, setActiveProcesses] = useState<ProcessInfo[]>([])
+  const [processesLoading, setProcessesLoading] = useState(false)
+  const [isFirstProcessesLoad, setIsFirstProcessesLoad] = useState(true)
+  const [processSearchQuery, setProcessSearchQuery] = useState('')
+  const [filteredProcesses, setFilteredProcesses] = useState<ProcessInfo[]>([])
+  const [showProcessesModal, setShowProcessesModal] = useState(false)
+  const [isProcessesModalClosing, setIsProcessesModalClosing] = useState(false)
+  const [isProcessesModalOpening, setIsProcessesModalOpening] = useState(false)
+  const [modalProcessSearchQuery, setModalProcessSearchQuery] = useState('')
+  const [modalFilteredProcesses, setModalFilteredProcesses] = useState<ProcessInfo[]>([])
+  
   useEffect(() => {
     // 获取系统信息
     const fetchSystemInfo = async () => {
@@ -288,15 +301,40 @@ const HomePage: React.FC = () => {
       }
     }
     
+    // 获取活跃进程列表
+    const fetchActiveProcesses = async () => {
+      try {
+        // 只有在首次加载时才设置loading为true
+        if (isFirstProcessesLoad) {
+          setProcessesLoading(true)
+        }
+        const response = await apiClient.getProcessList()
+        if (response.success) {
+          setActiveProcesses(response.data)
+        }
+      } catch (error) {
+        console.error('获取活跃进程失败:', error)
+      } finally {
+        if (isFirstProcessesLoad) {
+          setProcessesLoading(false)
+          setIsFirstProcessesLoad(false)
+        }
+      }
+    }
+    
     fetchSystemInfo()
     fetchTerminalProcesses()
     fetchActivePorts()
+    fetchActiveProcesses()
     
     // 设置定时刷新终端进程列表
     const processInterval = setInterval(fetchTerminalProcesses, 5000) // 每5秒刷新一次
     
     // 设置定时刷新活跃端口列表（仅在连接时刷新）
     let portsInterval: NodeJS.Timeout | null = null
+    
+    // 设置定时刷新活跃进程列表（仅在连接时刷新）
+    let processesInterval: NodeJS.Timeout | null = null
     
     const startPortsRefresh = () => {
       if (portsInterval) clearInterval(portsInterval)
@@ -310,9 +348,22 @@ const HomePage: React.FC = () => {
       }
     }
     
+    const startProcessesRefresh = () => {
+      if (processesInterval) clearInterval(processesInterval)
+      processesInterval = setInterval(fetchActiveProcesses, 8000) // 每8秒刷新一次
+    }
+    
+    const stopProcessesRefresh = () => {
+      if (processesInterval) {
+        clearInterval(processesInterval)
+        processesInterval = null
+      }
+    }
+    
     // 如果已连接则开始刷新
     if (socketClient.isConnected()) {
       startPortsRefresh()
+      startProcessesRefresh()
     }
     
     // 设置定时更新日期时间
@@ -373,11 +424,13 @@ const HomePage: React.FC = () => {
     // 监听Socket连接状态
     socketClient.on('connection-status', ({ connected }) => {
       setConnected(connected)
-      // 根据连接状态控制端口刷新
+      // 根据连接状态控制端口和进程刷新
       if (connected) {
         startPortsRefresh()
+        startProcessesRefresh()
       } else {
         stopPortsRefresh()
+        stopProcessesRefresh()
       }
     })
     
@@ -395,6 +448,7 @@ const HomePage: React.FC = () => {
       socketClient.emit('unsubscribe-system-stats')
       clearInterval(processInterval)
       stopPortsRefresh()
+      stopProcessesRefresh()
       clearInterval(dateTimeInterval)
       clearInterval(weatherInterval)
     }
@@ -428,6 +482,34 @@ const HomePage: React.FC = () => {
     }
   }, [activePorts, modalPortSearchQuery])
   
+  // 处理进程搜索过滤
+  useEffect(() => {
+    if (processSearchQuery.trim() === '') {
+      setFilteredProcesses(activeProcesses)
+    } else {
+      const filtered = activeProcesses.filter(process => 
+        process.name.toLowerCase().includes(processSearchQuery.toLowerCase()) ||
+        process.pid.toString().includes(processSearchQuery) ||
+        process.command.toLowerCase().includes(processSearchQuery.toLowerCase())
+      )
+      setFilteredProcesses(filtered)
+    }
+  }, [activeProcesses, processSearchQuery])
+  
+  // 处理弹窗进程搜索过滤
+  useEffect(() => {
+    if (modalProcessSearchQuery.trim() === '') {
+      setModalFilteredProcesses(activeProcesses)
+    } else {
+      const filtered = activeProcesses.filter(process => 
+        process.name.toLowerCase().includes(modalProcessSearchQuery.toLowerCase()) ||
+        process.pid.toString().includes(modalProcessSearchQuery) ||
+        process.command.toLowerCase().includes(modalProcessSearchQuery.toLowerCase())
+      )
+      setModalFilteredProcesses(filtered)
+    }
+  }, [activeProcesses, modalProcessSearchQuery])
+  
   // 处理弹窗打开动画
   const handleOpenPortsModal = () => {
     setShowPortsModal(true)
@@ -446,6 +528,46 @@ const HomePage: React.FC = () => {
       setIsPortsModalClosing(false)
       setModalPortSearchQuery('') // 关闭时清空搜索
     }, 300) // 300ms 动画时间
+  }
+  
+  // 处理进程弹窗打开动画
+  const handleOpenProcessesModal = () => {
+    setShowProcessesModal(true)
+    setIsProcessesModalOpening(true)
+    // 短暂延迟后开始淡入动画
+    setTimeout(() => {
+      setIsProcessesModalOpening(false)
+    }, 50) // 50ms 后开始淡入
+  }
+  
+  // 处理进程弹窗关闭动画
+  const handleCloseProcessesModal = () => {
+    setIsProcessesModalClosing(true)
+    setTimeout(() => {
+      setShowProcessesModal(false)
+      setIsProcessesModalClosing(false)
+      setModalProcessSearchQuery('') // 关闭时清空搜索
+    }, 300) // 300ms 动画时间
+  }
+  
+  // 终止进程
+  const handleKillProcess = async (pid: number, force: boolean = false) => {
+    try {
+      const response = await apiClient.killProcess(pid, force)
+      if (response.success) {
+        // 刷新进程列表
+        const processResponse = await apiClient.getProcessList()
+        if (processResponse.success) {
+          setActiveProcesses(processResponse.data)
+        }
+      } else {
+        console.error('终止进程失败:', response.message)
+        alert(`终止进程失败: ${response.message}`)
+      }
+    } catch (error) {
+      console.error('终止进程失败:', error)
+      alert('终止进程失败，请稍后重试')
+    }
   }
   
   const formatBytes = (bytes: number) => {
@@ -663,8 +785,8 @@ const HomePage: React.FC = () => {
         </div>
       )}
       
-      {/* 终端占用、活跃端口和音乐播放器 */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {/* 终端占用、活跃端口、活跃进程 */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
         {/* 终端占用模块 */}
         <div className="card-game p-6">
           <div className="flex items-center space-x-3 mb-4">
@@ -792,9 +914,95 @@ const HomePage: React.FC = () => {
           )}
         </div>
         
-        {/* 音乐播放器 */}
-        <MusicPlayer />
+        {/* 活跃进程模块 */}
+        <div className="card-game p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center space-x-3">
+              <Activity className="w-6 h-6 text-purple-500" />
+              <h3 className="text-lg font-semibold text-black dark:text-white">活跃进程</h3>
+              <span className="text-sm text-gray-600 dark:text-gray-400">({filteredProcesses.length}/{activeProcesses.length} 个进程)</span>
+            </div>
+            <button
+              onClick={handleOpenProcessesModal}
+              className="p-2 text-gray-500 dark:text-gray-400 hover:text-purple-500 dark:hover:text-purple-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+              title="查看所有进程"
+            >
+              <Maximize2 className="w-5 h-5" />
+            </button>
+          </div>
+          
+          {/* 搜索框 */}
+          <div className="relative mb-4">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input
+              type="text"
+              placeholder="搜索进程名、PID或命令..."
+              value={processSearchQuery}
+              onChange={(e) => setProcessSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-black dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+            />
+          </div>
+          
+          {processesLoading && isFirstProcessesLoad ? (
+            <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+              <Activity className="w-12 h-12 mx-auto mb-3 opacity-50 animate-pulse" />
+              <p>正在扫描进程...</p>
+            </div>
+          ) : filteredProcesses.length > 0 ? (
+            <div className="space-y-3">
+              <div className="grid grid-cols-4 gap-4 text-sm font-medium text-gray-600 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700 pb-2">
+                <span>进程名</span>
+                <span>PID</span>
+                <span>CPU</span>
+                <span>操作</span>
+              </div>
+              
+              <div className="max-h-64 overflow-y-auto space-y-2">
+                {filteredProcesses.slice(0, 15).map((process, index) => (
+                  <div key={`${process.pid}-${index}`} className="grid grid-cols-4 gap-4 text-sm py-2 hover:bg-gray-50 dark:hover:bg-gray-800 rounded">
+                    <span className="text-black dark:text-white font-medium truncate" title={process.name}>
+                      {process.name}
+                    </span>
+                    <span className="text-blue-600 dark:text-blue-400 font-mono">
+                      {process.pid}
+                    </span>
+                    <span className="text-green-600 dark:text-green-400 font-mono text-xs">
+                      {process.cpu}%
+                    </span>
+                    <button
+                      onClick={() => handleKillProcess(process.pid)}
+                      className="flex items-center space-x-1 text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 transition-colors text-xs"
+                      title="终止进程"
+                    >
+                      <X className="w-3 h-3" />
+                      <span>终止</span>
+                    </button>
+                  </div>
+                ))}
+                {filteredProcesses.length > 15 && (
+                  <div className="text-center text-sm text-gray-500 dark:text-gray-400 py-2">
+                    还有 {filteredProcesses.length - 15} 个进程未显示
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : activeProcesses.length > 0 ? (
+            <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+              <Search className="w-12 h-12 mx-auto mb-3 opacity-50" />
+              <p>未找到匹配的进程</p>
+              <p className="text-xs mt-1">尝试搜索其他关键词</p>
+            </div>
+          ) : (
+            <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+              <Activity className="w-12 h-12 mx-auto mb-3 opacity-50" />
+              <p>暂无活跃进程</p>
+            </div>
+          )}
+        </div>
       </div>
+
+      {/* 音乐播放器 */}
+      <MusicPlayer />
 
       {/* 端口详情弹窗 */}
       {showPortsModal && (
@@ -910,6 +1118,151 @@ const HomePage: React.FC = () => {
                   <div className="text-center text-gray-500 dark:text-gray-400">
                     <Wifi className="w-12 h-12 mx-auto mb-3 opacity-50" />
                     <p>暂无活跃端口</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 进程详情弹窗 */}
+      {showProcessesModal && (
+        <div 
+          className={`fixed inset-0 bg-black flex items-center justify-center z-50 p-4 transition-all duration-300 ease-in-out ${
+            isProcessesModalClosing 
+              ? 'bg-opacity-0' 
+              : isProcessesModalOpening 
+                ? 'bg-opacity-0' 
+                : 'bg-opacity-50'
+          }`}
+          onClick={handleCloseProcessesModal}
+        >
+          <div 
+            className={`bg-white dark:bg-gray-900 rounded-lg shadow-xl w-full max-w-5xl max-h-[90vh] flex flex-col transition-all duration-300 ease-in-out transform ${
+              isProcessesModalClosing 
+                ? 'scale-95 opacity-0' 
+                : isProcessesModalOpening 
+                  ? 'scale-95 opacity-0' 
+                  : 'scale-100 opacity-100'
+            }`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* 弹窗头部 */}
+            <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
+              <div className="flex items-center space-x-3">
+                <Activity className="w-6 h-6 text-purple-500" />
+                <h2 className="text-xl font-semibold text-black dark:text-white">活跃进程详情</h2>
+                <span className="text-sm text-gray-600 dark:text-gray-400">
+                  ({modalFilteredProcesses.length}/{activeProcesses.length} 个进程)
+                </span>
+              </div>
+              <button
+                onClick={handleCloseProcessesModal}
+                className="p-2 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            {/* 搜索框 */}
+            <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="搜索进程名、PID或命令..."
+                  value={modalProcessSearchQuery}
+                  onChange={(e) => setModalProcessSearchQuery(e.target.value)}
+                  className="w-full pl-12 pr-4 py-3 bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-black dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                />
+              </div>
+            </div>
+            
+            {/* 进程列表 */}
+            <div className="flex-1 overflow-hidden">
+              {processesLoading && isFirstProcessesLoad ? (
+                <div className="flex items-center justify-center h-64">
+                  <div className="text-center text-gray-500 dark:text-gray-400">
+                    <Activity className="w-12 h-12 mx-auto mb-3 opacity-50 animate-pulse" />
+                    <p>正在扫描进程...</p>
+                  </div>
+                </div>
+              ) : modalFilteredProcesses.length > 0 ? (
+                <div className="p-6">
+                  {/* 表头 */}
+                  <div className="grid grid-cols-7 gap-4 text-sm font-medium text-gray-600 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700 pb-3 mb-4">
+                    <span>进程名</span>
+                    <span>PID</span>
+                    <span>CPU</span>
+                    <span>内存</span>
+                    <span>状态</span>
+                    <span>启动时间</span>
+                    <span>操作</span>
+                  </div>
+                  
+                  {/* 进程列表 */}
+                  <div className="max-h-96 overflow-y-auto space-y-2">
+                    {modalFilteredProcesses.map((process, index) => (
+                      <div 
+                        key={`${process.pid}-${index}`} 
+                        className="grid grid-cols-7 gap-4 text-sm py-3 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg px-2 transition-colors"
+                      >
+                        <span className="text-black dark:text-white font-medium truncate" title={process.name}>
+                          {process.name}
+                        </span>
+                        <span className="text-blue-600 dark:text-blue-400 font-mono font-bold">
+                          {process.pid}
+                        </span>
+                        <span className="text-green-600 dark:text-green-400 font-mono">
+                          {process.cpu}%
+                        </span>
+                        <span className="text-orange-600 dark:text-orange-400 font-mono">
+                          {typeof process.memory === 'number' ? `${process.memory.toFixed(1)}MB` : process.memory}
+                        </span>
+                        <span className={`text-xs ${
+                          process.status === 'Running' ? 'text-green-600 dark:text-green-400' : 'text-gray-600 dark:text-gray-400'
+                        }`}>
+                          {process.status}
+                        </span>
+                        <span className="text-gray-600 dark:text-gray-400 text-xs">
+                          {new Date(process.startTime).toLocaleString()}
+                        </span>
+                        <div className="flex space-x-2">
+                          <button
+                            onClick={() => handleKillProcess(process.pid, false)}
+                            className="flex items-center space-x-1 text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 transition-colors text-xs px-2 py-1 rounded hover:bg-red-50 dark:hover:bg-red-900/20"
+                            title="终止进程"
+                          >
+                            <X className="w-3 h-3" />
+                            <span>终止</span>
+                          </button>
+                          <button
+                            onClick={() => handleKillProcess(process.pid, true)}
+                            className="flex items-center space-x-1 text-red-700 dark:text-red-500 hover:text-red-900 dark:hover:text-red-400 transition-colors text-xs px-2 py-1 rounded hover:bg-red-100 dark:hover:bg-red-900/30"
+                            title="强制终止进程"
+                          >
+                            <AlertTriangle className="w-3 h-3" />
+                            <span>强制</span>
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : activeProcesses.length > 0 ? (
+                <div className="flex items-center justify-center h-64">
+                  <div className="text-center text-gray-500 dark:text-gray-400">
+                    <Search className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                    <p>未找到匹配的进程</p>
+                    <p className="text-xs mt-1">尝试搜索其他关键词</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center justify-center h-64">
+                  <div className="text-center text-gray-500 dark:text-gray-400">
+                    <Activity className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                    <p>暂无活跃进程</p>
                   </div>
                 </div>
               )}
