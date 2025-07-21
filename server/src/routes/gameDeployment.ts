@@ -3,6 +3,7 @@ import { promises as fs } from 'fs'
 import path from 'path'
 import os from 'os'
 import axios from 'axios'
+import http from 'http'
 import { fileURLToPath } from 'url'
 import { TerminalManager } from '../modules/terminal/TerminalManager.js'
 import { InstanceManager } from '../modules/instance/InstanceManager.js'
@@ -249,12 +250,93 @@ router.post('/install', authenticateToken, async (req: Request, res: Response) =
         data: fullCommand + '\r'
       })
       
+      // 查询实例市场获取启动命令
+      let startCommand = 'none'
+      try {
+        // 确定系统类型
+        const platform = os.platform()
+        let systemType = 'Linux'
+        if (platform === 'win32') {
+          systemType = 'Windows'
+        }
+        
+        // 请求实例市场数据
+        const marketUrl = `http://gsm.server.xiaozhuhouses.asia:10002/api/instances?system_type=${systemType}`
+        
+        const marketData = await new Promise<any>((resolve, reject) => {
+          const url = new URL(marketUrl)
+          const options = {
+            hostname: url.hostname,
+            port: url.port,
+            path: url.pathname + url.search,
+            method: 'GET',
+            headers: {
+              'Content-Type': 'application/json',
+              'User-Agent': 'GSM3-Server/1.0'
+            }
+          }
+          
+          const req = http.request(options, (response: any) => {
+            let data = ''
+            
+            response.on('data', (chunk: any) => {
+              data += chunk
+            })
+            
+            response.on('end', () => {
+              try {
+                if (response.statusCode && response.statusCode >= 200 && response.statusCode < 300) {
+                  const jsonData = JSON.parse(data)
+                  resolve(jsonData)
+                } else {
+                  reject(new Error(`HTTP error! status: ${response.statusCode}`))
+                }
+              } catch (parseError) {
+                reject(new Error(`JSON parse error: ${parseError}`))
+              }
+            })
+          })
+          
+          req.on('error', (error: any) => {
+            reject(error)
+          })
+          
+          req.setTimeout(5000, () => {
+            req.destroy()
+            reject(new Error('Request timeout'))
+          })
+          
+          req.end()
+        })
+        
+        // 在实例市场中查找匹配的游戏
+        if (marketData && marketData.instances && Array.isArray(marketData.instances)) {
+          const gameNameToMatch = gameName || gameKey
+          const matchedInstance = marketData.instances.find((instance: any) => {
+            // 尝试多种匹配方式
+            return instance.name && (
+              instance.name.toLowerCase().includes(gameNameToMatch.toLowerCase()) ||
+              gameNameToMatch.toLowerCase().includes(instance.name.toLowerCase())
+            )
+          })
+          
+          if (matchedInstance && matchedInstance.command) {
+            startCommand = matchedInstance.command
+            logger.info(`从实例市场找到匹配的启动命令: ${gameNameToMatch} -> ${startCommand}`)
+          } else {
+            logger.info(`实例市场中未找到匹配的游戏: ${gameNameToMatch}，使用默认启动命令`)
+          }
+        }
+      } catch (error: any) {
+        logger.warn('查询实例市场失败，使用默认启动命令:', error.message)
+      }
+      
       // 创建实例（在安装开始时就创建，而不是等安装完成）
       const instanceData = {
         name: instanceName,
         description: `${gameName || gameKey} 服务器实例`,
         workingDirectory: installPath,
-        startCommand: 'none',
+        startCommand,
         autoStart: false,
         stopCommand: 'ctrl+c' as 'ctrl+c' | 'stop' | 'exit'
       }
