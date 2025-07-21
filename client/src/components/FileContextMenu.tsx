@@ -16,6 +16,8 @@ import {
   SoundOutlined
 } from '@ant-design/icons'
 import { FileItem } from '@/types/file'
+import { copyToClipboard } from '@/utils/clipboard'
+import { useNotificationStore } from '@/stores/notificationStore'
 
 interface FileContextMenuProps {
   children: React.ReactNode
@@ -71,6 +73,7 @@ export const FileContextMenu: React.FC<FileContextMenuProps> = ({
   onAddToPlaylist,
   setGlobalContextMenuInfo
 }) => {
+  const { addNotification } = useNotificationStore()
   const isSelected = selectedFiles.has(file.path)
   const selectedCount = selectedFiles.size
   const isMultipleSelected = selectedCount > 1
@@ -123,17 +126,37 @@ export const FileContextMenu: React.FC<FileContextMenuProps> = ({
   setGlobalContextMenuInfo(null);
   };
 
-  // 添加路径复制
-  const handleCopyAbsolutePath = (file: FileItem) => {
-    const absolutePath = file.path; // Assuming `file.path` contains the absolute path
-    navigator.clipboard.writeText(absolutePath)
-      .then(() => {
-        console.log("路径已复制到剪贴板:", absolutePath);
+  // 复制绝对路径到剪贴板
+  const handleCopyAbsolutePath = async (file: FileItem) => {
+    const absolutePath = file.path
+    
+    try {
+      const success = await copyToClipboard(absolutePath)
+      
+      if (success) {
+        addNotification({
+          type: 'success',
+          title: '复制成功',
+          message: `已复制路径到剪贴板: ${absolutePath}`
+        })
+        console.log("路径已复制到剪贴板:", absolutePath)
+      } else {
+        addNotification({
+          type: 'error',
+          title: '复制失败',
+          message: '无法复制路径到剪贴板，请手动复制'
+        })
+        console.error("无法复制路径到剪贴板")
+      }
+    } catch (err) {
+      addNotification({
+        type: 'error',
+        title: '复制失败',
+        message: '复制路径时发生错误'
       })
-      .catch((err) => {
-        console.error("无法复制路径:", err);
-      });
-  };
+      console.error("复制路径时发生错误:", err)
+    }
+  }
 
   React.useEffect(() => {
     if (contextMenuVisible) {
