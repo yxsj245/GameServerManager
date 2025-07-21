@@ -662,6 +662,11 @@ class ApiClient {
   async updateTerminalConfig(config: { defaultUser: string }) {
     return this.put('/config/terminal', config)
   }
+
+  // Steam游戏部署清单API
+  async updateSteamGameList() {
+    return this.post('/game-deployment/update-game-list')
+  }
 }
 
 // 创建单例实例

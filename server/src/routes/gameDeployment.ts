@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express'
 import { promises as fs } from 'fs'
 import path from 'path'
 import os from 'os'
+import axios from 'axios'
 import { fileURLToPath } from 'url'
 import { TerminalManager } from '../modules/terminal/TerminalManager.js'
 import { InstanceManager } from '../modules/instance/InstanceManager.js'
@@ -295,6 +296,118 @@ router.post('/install', authenticateToken, async (req: Request, res: Response) =
         message: error.message
       })
     }
+  }
+})
+
+// 更新Steam游戏部署清单
+router.post('/update-game-list', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const remoteUrl = 'http://gsm.server.xiaozhuhouses.asia:8082/disk1/GSM3/installgame.json'
+    const gamesFilePath = path.join(__dirname, '../data/games/installgame.json')
+    
+    logger.info('开始更新Steam游戏部署清单', { remoteUrl, localPath: gamesFilePath })
+    
+    // 确保目录存在
+    const gamesDir = path.dirname(gamesFilePath)
+    try {
+      await fs.access(gamesDir)
+    } catch {
+      await fs.mkdir(gamesDir, { recursive: true })
+      logger.info('创建games目录:', gamesDir)
+    }
+    
+    // 备份现有文件（如果存在）
+    let backupCreated = false
+    try {
+      await fs.access(gamesFilePath)
+      const backupPath = `${gamesFilePath}.backup.${Date.now()}`
+      await fs.copyFile(gamesFilePath, backupPath)
+      backupCreated = true
+      logger.info('已备份现有文件:', backupPath)
+    } catch {
+      logger.info('没有现有文件需要备份')
+    }
+    
+    try {
+      // 从远程URL下载最新的游戏清单
+      const response = await axios.get(remoteUrl, {
+        timeout: 30000, // 30秒超时
+        headers: {
+          'User-Agent': 'GSManager3/1.0'
+        }
+      })
+      
+      // 验证响应数据格式
+      if (typeof response.data !== 'object' || response.data === null) {
+        throw new Error('远程数据格式无效：不是有效的JSON对象')
+      }
+      
+      // 简单验证数据结构（检查是否包含游戏信息的基本字段）
+      const gameKeys = Object.keys(response.data)
+      if (gameKeys.length === 0) {
+        throw new Error('远程数据为空')
+      }
+      
+      // 检查第一个游戏是否有必要的字段
+      const firstGame = response.data[gameKeys[0]]
+      if (!firstGame || typeof firstGame !== 'object' || !firstGame.game_nameCN || !firstGame.appid) {
+        throw new Error('远程数据格式无效：缺少必要的游戏信息字段')
+      }
+      
+      // 将数据写入本地文件
+      await fs.writeFile(gamesFilePath, JSON.stringify(response.data, null, 2), 'utf-8')
+      
+      logger.info('Steam游戏部署清单更新成功', {
+        gameCount: gameKeys.length,
+        fileSize: JSON.stringify(response.data).length
+      })
+      
+      res.json({
+        success: true,
+        message: '游戏部署清单更新成功',
+        data: {
+          gameCount: gameKeys.length,
+          updateTime: new Date().toISOString(),
+          backupCreated
+        }
+      })
+      
+    } catch (downloadError: any) {
+      logger.error('下载游戏清单失败:', downloadError)
+      
+      // 如果下载失败且创建了备份，恢复备份文件
+      if (backupCreated) {
+        try {
+          const backupFiles = await fs.readdir(gamesDir)
+          const latestBackup = backupFiles
+            .filter(file => file.startsWith('installgame.json.backup.'))
+            .sort()
+            .pop()
+          
+          if (latestBackup) {
+            const backupPath = path.join(gamesDir, latestBackup)
+            await fs.copyFile(backupPath, gamesFilePath)
+            logger.info('已恢复备份文件')
+          }
+        } catch (restoreError) {
+          logger.error('恢复备份文件失败:', restoreError)
+        }
+      }
+      
+      res.status(500).json({
+        success: false,
+        error: '更新游戏部署清单失败',
+        message: downloadError.message || '网络请求失败'
+      })
+    }
+    
+  } catch (error: any) {
+    logger.error('更新游戏部署清单请求处理失败:', error)
+    res.status(500).json({
+      success: false,
+      error: '更新游戏部署清单失败',
+      message: error.message
+    })
   }
 })
 

@@ -19,9 +19,10 @@ import {
   CheckCircle,
   XCircle,
   Loader2,
-              Battery,
+  Battery,
   Moon,
-  MapPin
+  MapPin,
+  RefreshCw
 } from 'lucide-react'
 
 const SettingsPage: React.FC = () => {
@@ -122,6 +123,9 @@ const SettingsPage: React.FC = () => {
     defaultUser: ''
   })
   const [terminalLoading, setTerminalLoading] = useState(false)
+
+  // Steam游戏部署清单更新状态
+  const [gameListUpdateLoading, setGameListUpdateLoading] = useState(false)
 
   // 处理密码修改
   const handlePasswordChange = async (e: React.FormEvent) => {
@@ -714,6 +718,36 @@ const SettingsPage: React.FC = () => {
       title: '设置已重置',
       message: '所有设置已恢复为默认值'
     })
+  }
+
+  // 更新Steam游戏部署清单
+  const handleUpdateGameList = async () => {
+    setGameListUpdateLoading(true)
+    try {
+      const response = await apiClient.updateSteamGameList()
+      
+      if (response.success) {
+        addNotification({
+          type: 'success',
+          title: '更新成功',
+          message: `游戏部署清单已更新，共${response.data?.gameCount || 0}个游戏`
+        })
+      } else {
+        addNotification({
+          type: 'error',
+          title: '更新失败',
+          message: response.message || '更新游戏部署清单失败'
+        })
+      }
+    } catch (error: any) {
+      addNotification({
+        type: 'error',
+        title: '更新失败',
+        message: error.message || '网络错误，请稍后重试'
+      })
+    } finally {
+      setGameListUpdateLoading(false)
+    }
   }
   
   return (
@@ -1430,6 +1464,19 @@ const SettingsPage: React.FC = () => {
           </div>
           
           <div className="flex space-x-3">
+            <button
+              onClick={handleUpdateGameList}
+              disabled={gameListUpdateLoading}
+              className="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-green-600/50 text-white rounded-lg transition-colors flex items-center space-x-2 disabled:cursor-not-allowed"
+            >
+              {gameListUpdateLoading ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <RefreshCw className="w-4 h-4" />
+              )}
+              <span>{gameListUpdateLoading ? '更新中...' : '更新Steam游戏部署清单'}</span>
+            </button>
+            
             <button
               onClick={resetSettings}
               className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors flex items-center space-x-2"
