@@ -98,7 +98,7 @@ const SettingsPage: React.FC = () => {
   // SteamCMD设置状态
   const [steamcmdSettings, setSteamcmdSettings] = useState({
     installMode: 'online' as 'online' | 'manual',
-    installPath: '/home/steam/steamcmd',
+    installPath: '/root/steamcmd',
     isInstalled: false,
     version: '',
     lastChecked: ''
@@ -1065,7 +1065,7 @@ const SettingsPage: React.FC = () => {
               
               {steamcmdSettings.installMode === 'manual' && pathExists === false && (
                 <p className="text-xs text-red-500 mt-1">
-                  在指定路径下未找到steamcmd.exe或steamcmd.sh文件。容器中请填写为/home/steam/steamcmd
+                  在指定路径下未找到steamcmd.exe或steamcmd.sh文件。容器中请填写为/root/steamcmd
                 </p>
               )}
               
