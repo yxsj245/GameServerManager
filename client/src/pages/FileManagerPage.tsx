@@ -130,7 +130,10 @@ const FileManagerPage: React.FC = () => {
   }>({ visible: false, file: null })
   
   const [uploadDialog, setUploadDialog] = useState(false)
-  const [deleteDialog, setDeleteDialog] = useState(false)
+  const [deleteDialog, setDeleteDialog] = useState<{
+    visible: boolean
+    files: FileItem[]
+  }>({ visible: false, files: [] })
   const [compressDialog, setCompressDialog] = useState<{
     visible: boolean
     files: FileItem[]
@@ -517,10 +520,7 @@ const FileManagerPage: React.FC = () => {
   }
   
   const handleContextMenuDelete = (files: FileItem[]) => {
-    // 选中要删除的文件
-    clearSelection()
-    files.forEach(file => selectFile(file.path))
-    setDeleteDialog(true)
+    setDeleteDialog({ visible: true, files })
   }
   
   const handleContextMenuDownload = (file: FileItem) => {
@@ -637,13 +637,17 @@ const FileManagerPage: React.FC = () => {
 
   // 从此文件夹处打开终端
   const handleContextMenuOpenTerminal = (file: FileItem) => {
-    if (file.type === 'directory') {
+    // 如果是文件夹，使用文件夹路径；如果是空白区域（path为空），使用当前目录路径
+    const targetPath = file.path || currentPath
+    const targetName = file.name || '当前文件夹'
+    
+    if (file.type === 'directory' || !file.path) {
       // 导航到终端页面，并传递文件夹路径作为查询参数
-      navigate(`/terminal?cwd=${encodeURIComponent(file.path)}`)
+      navigate(`/terminal?cwd=${encodeURIComponent(targetPath)}`)
       addNotification({
         type: 'success',
         title: '打开终端',
-        message: `已在 "${file.name}" 文件夹中打开终端`
+        message: `已在 "${targetName}" 中打开终端`
       })
     }
   }
@@ -656,6 +660,52 @@ const FileManagerPage: React.FC = () => {
       title: '添加成功',
       message: `已添加 ${files.length} 个文件到播放列表`
     })
+  }
+  
+  // 创建具体类型文件的处理函数
+  const handleCreateTextFile = async () => {
+    const fileName = `新建文本文档.txt`
+    const filePath = await createFile(fileName)
+    if (typeof filePath === 'string') {
+      addNotification({
+        type: 'success',
+        title: '创建成功',
+        message: `文本文档 "${fileName}" 创建成功`
+      })
+      // 自动打开新创建的文件
+      await openFile(filePath)
+      setEditorModalVisible(true)
+    }
+  }
+  
+  const handleCreateJsonFile = async () => {
+    const fileName = `新建文件.json`
+    const filePath = await createFile(fileName, '{\n  \n}')
+    if (typeof filePath === 'string') {
+      addNotification({
+        type: 'success',
+        title: '创建成功',
+        message: `JSON 文件 "${fileName}" 创建成功`
+      })
+      // 自动打开新创建的文件
+      await openFile(filePath)
+      setEditorModalVisible(true)
+    }
+  }
+  
+  const handleCreateIniFile = async () => {
+    const fileName = `新建配置.ini`
+    const filePath = await createFile(fileName, '; INI 配置文件\n[Section]\nkey=value\n')
+    if (typeof filePath === 'string') {
+      addNotification({
+        type: 'success',
+        title: '创建成功',
+        message: `INI 文件 "${fileName}" 创建成功`
+      })
+      // 自动打开新创建的文件
+      await openFile(filePath)
+      setEditorModalVisible(true)
+    }
   }
   
   // 对话框处理
@@ -720,15 +770,21 @@ const FileManagerPage: React.FC = () => {
   }
   
   const handleDeleteConfirm = async () => {
+    if (deleteDialog.files.length === 0) return
+    
+    // 先选中要删除的文件
+    clearSelection()
+    deleteDialog.files.forEach(file => selectFile(file.path))
+    
     const success = await deleteSelectedFiles()
     if (success) {
       addNotification({
         type: 'success',
         title: '删除成功',
-        message: `成功删除 ${selectedFiles.size} 个项目`
+        message: `成功删除 ${deleteDialog.files.length} 个项目`
       })
     }
-    setDeleteDialog(false)
+    setDeleteDialog({ visible: false, files: [] })
   }
 
   const handleCompressConfirm = async (archiveName: string, format: string, compressionLevel: number) => {
@@ -1029,7 +1085,11 @@ const FileManagerPage: React.FC = () => {
                     icon={<DeleteOutlined />}
                     disabled={selectedFiles.size === 0}
                     danger
-                    onClick={() => setDeleteDialog(true)}
+                    onClick={() => {
+                      // 将选中的文件转换为FileItem数组
+                      const selectedFileItems = files.filter(file => selectedFiles.has(file.path))
+                      setDeleteDialog({ visible: true, files: selectedFileItems })
+                    }}
                   />
                 </Tooltip>
               </Space>
@@ -1166,6 +1226,7 @@ const FileManagerPage: React.FC = () => {
                       file={file}
                       selectedFiles={selectedFiles}
                       clipboard={clipboard}
+                      onClose={() => setContextMenuInfo(null)}
                       onOpen={handleContextMenuOpen}
                       onRename={handleContextMenuRename}
                       onDelete={handleContextMenuDelete}
@@ -1181,6 +1242,9 @@ const FileManagerPage: React.FC = () => {
                       onAddToPlaylist={handleAddToPlaylist}
                       onCreateFile={() => setCreateDialog({ visible: true, type: 'file' })}
                       onCreateFolder={() => setCreateDialog({ visible: true, type: 'folder' })}
+                      onCreateTextFile={handleCreateTextFile}
+                      onCreateJsonFile={handleCreateJsonFile}
+                      onCreateIniFile={handleCreateIniFile}
                       // 全局菜单控制
                       globalContextMenuInfo={contextMenuInfo}
                       setGlobalContextMenuInfo={setContextMenuInfo}
@@ -1224,6 +1288,7 @@ const FileManagerPage: React.FC = () => {
                       file={file}
                       selectedFiles={selectedFiles}
                       clipboard={clipboard}
+                      onClose={() => setContextMenuInfo(null)}
                       onOpen={handleContextMenuOpen}
                       onRename={handleContextMenuRename}
                       onDelete={handleContextMenuDelete}
@@ -1239,6 +1304,9 @@ const FileManagerPage: React.FC = () => {
                       onAddToPlaylist={handleAddToPlaylist}
                       onCreateFile={() => setCreateDialog({ visible: true, type: 'file' })}
                       onCreateFolder={() => setCreateDialog({ visible: true, type: 'folder' })}
+                      onCreateTextFile={handleCreateTextFile}
+                      onCreateJsonFile={handleCreateJsonFile}
+                      onCreateIniFile={handleCreateIniFile}
                       // 全局菜单控制
                       globalContextMenuInfo={contextMenuInfo}
                       setGlobalContextMenuInfo={setContextMenuInfo}
@@ -1279,9 +1347,13 @@ const FileManagerPage: React.FC = () => {
         file={null}
         selectedFiles={selectedFiles}
         clipboard={clipboard}
+        onClose={() => setContextMenuInfo(null)}
         onPaste={handlePaste}
         onCreateFile={() => setCreateDialog({ visible: true, type: 'file' })}
         onCreateFolder={() => setCreateDialog({ visible: true, type: 'folder' })}
+        onCreateTextFile={handleCreateTextFile}
+        onCreateJsonFile={handleCreateJsonFile}
+        onCreateIniFile={handleCreateIniFile}
         onOpenTerminal={handleContextMenuOpenTerminal}
         // 全局菜单控制
         globalContextMenuInfo={contextMenuInfo}
@@ -1312,10 +1384,10 @@ const FileManagerPage: React.FC = () => {
       />
       
       <DeleteConfirmDialog
-        visible={deleteDialog}
-        fileNames={Array.from(selectedFiles).map(path => path.split('/').pop() || '')}
+        visible={deleteDialog.visible}
+        fileNames={deleteDialog.files.map(file => file.name)}
         onConfirm={handleDeleteConfirm}
-        onCancel={() => setDeleteDialog(false)}
+        onCancel={() => setDeleteDialog({ visible: false, files: [] })}
       />
       
       <CompressDialog

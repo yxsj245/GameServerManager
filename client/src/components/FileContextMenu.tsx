@@ -13,7 +13,9 @@ import {
   FileZipOutlined,
   FolderOutlined,
   ConsoleSqlOutlined,
-  SoundOutlined
+  SoundOutlined,
+  RightOutlined,
+  PlusOutlined
 } from '@ant-design/icons'
 import { FileItem } from '@/types/file'
 import { copyToClipboard } from '@/utils/clipboard'
@@ -32,6 +34,7 @@ interface FileContextMenuProps {
     file: FileItem | null
     position: { x: number; y: number }
   } | null
+  onClose?: () => void // 新增：关闭菜单回调
   onOpen?: (file: FileItem) => void
   onRename?: (file: FileItem) => void
   onDelete?: (files: FileItem[]) => void
@@ -47,6 +50,9 @@ interface FileContextMenuProps {
   onAddToPlaylist?: (files: FileItem[]) => void
   onCreateFile?: () => void // 新增：创建文件
   onCreateFolder?: () => void // 新增：创建文件夹
+  onCreateTextFile?: () => void // 新增：创建文本文档
+  onCreateJsonFile?: () => void // 新增：创建JSON文件
+  onCreateIniFile?: () => void // 新增：创建INI文件
   // 菜单全局状态props
   setGlobalContextMenuInfo: React.Dispatch<React.SetStateAction<{
     file: FileItem | null
@@ -60,6 +66,7 @@ export const FileContextMenu: React.FC<FileContextMenuProps> = ({
   selectedFiles,
   clipboard,
   globalContextMenuInfo,
+  onClose,
   onOpen,
   onRename,
   onDelete,
@@ -75,9 +82,13 @@ export const FileContextMenu: React.FC<FileContextMenuProps> = ({
   onAddToPlaylist,
   onCreateFile,
   onCreateFolder,
+  onCreateTextFile,
+  onCreateJsonFile,
+  onCreateIniFile,
   setGlobalContextMenuInfo
 }) => {
   const { addNotification } = useNotificationStore()
+  const [showNewSubmenu, setShowNewSubmenu] = React.useState(false)
   
   // 空白区域菜单的处理
   const isBlankAreaMenu = file === null
@@ -265,27 +276,89 @@ export const FileContextMenu: React.FC<FileContextMenuProps> = ({
                 </>
               )}
               
-              {/* 新建文件夹 */}
-              {onCreateFolder && (
-                <div
-                  className="px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer flex items-center"
-                  onClick={onCreateFolder}
-                >
-                  <FolderOutlined className="mr-2" />
-                  新建文件夹
-                </div>
-              )}
-              
-              {/* 新建文件 */}
-              {onCreateFile && (
-                <div
-                  className="px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer flex items-center"
-                  onClick={onCreateFile}
-                >
-                  <FileOutlined className="mr-2" />
-                  新建文件
-                </div>
-              )}
+              {/* 新建菜单 - 折叠模式 */}
+               {(onCreateFolder || onCreateFile || onCreateTextFile || onCreateJsonFile || onCreateIniFile) && (
+                 <div className="relative">
+                   <div
+                     className="px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer flex items-center justify-between"
+                     onMouseEnter={() => setShowNewSubmenu(true)}
+                   >
+                     <div className="flex items-center">
+                       <PlusOutlined className="mr-2" />
+                       新建
+                     </div>
+                     <RightOutlined className="text-xs" />
+                   </div>
+                   
+                   {/* 子菜单 */}
+                   {showNewSubmenu && (
+                     <div 
+                       className="absolute left-full top-0 ml-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-2 min-w-[160px] z-10"
+                       onMouseLeave={() => setShowNewSubmenu(false)}
+                     >
+                       {onCreateFolder && (
+                         <div
+                           className="px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer flex items-center"
+                           onClick={() => {
+                             onCreateFolder()
+                             setShowNewSubmenu(false)
+                             onClose()
+                           }}
+                         >
+                           <FolderOutlined className="mr-2" />
+                           文件夹
+                         </div>
+                       )}
+                       
+                       {(onCreateTextFile || onCreateJsonFile || onCreateIniFile) && onCreateFolder && (
+                         <div className="border-t border-gray-200 dark:border-gray-600 my-1"></div>
+                       )}
+                       
+                       {onCreateTextFile && (
+                         <div
+                           className="px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer flex items-center"
+                           onClick={() => {
+                             onCreateTextFile()
+                             setShowNewSubmenu(false)
+                             onClose()
+                           }}
+                         >
+                           <FileOutlined className="mr-2" />
+                           文本文档
+                         </div>
+                       )}
+                       
+                       {onCreateJsonFile && (
+                         <div
+                           className="px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer flex items-center"
+                           onClick={() => {
+                             onCreateJsonFile()
+                             setShowNewSubmenu(false)
+                             onClose()
+                           }}
+                         >
+                           <FileOutlined className="mr-2" />
+                           JSON 文件
+                         </div>
+                       )}
+                       
+                       {onCreateIniFile && (
+                         <div
+                           className="px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer flex items-center"
+                           onClick={() => {
+                             onCreateIniFile()
+                             setShowNewSubmenu(false)
+                             onClose()
+                           }}
+                         >
+                           <FileOutlined className="mr-2" />
+                           INI 文件
+                         </div>
+                       )}
+                     </div>
+                   )}
+                 </div>
+               )}
               
               {/* 从此文件夹处打开终端 */}
               {onOpenTerminal && (onCreateFolder || onCreateFile) && (
