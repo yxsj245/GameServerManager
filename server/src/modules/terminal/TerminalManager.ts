@@ -30,6 +30,7 @@ interface PtySession {
   enableStreamForward?: boolean // 是否启用输出流转发
   programPath?: string // 程序启动参数的绝对路径
   autoCloseOnForwardExit?: boolean // 转发进程退出时是否自动关闭终端会话
+  fallbackRetried?: boolean // 是否已尝试过回退重试
 }
 
 interface CreatePtyData {
@@ -73,8 +74,8 @@ export class TerminalManager {
     const arch = os.arch()
     
     if (platform === 'win32') {
-      // this.ptyPath = path.resolve(__dirname, '../../../PTY/pty_win32_x64.exe')
-      this.ptyPath = path.resolve(__dirname, '../../PTY/pty_win32_x64.exe')
+      this.ptyPath = path.resolve(__dirname, '../../../PTY/pty_win32_x64.exe')
+      // this.ptyPath = path.resolve(__dirname, '../../PTY/pty_win32_x64.exe')
     } else {
       // Linux平台根据架构选择对应的PTY文件
       if (arch === 'arm64' || arch === 'aarch64') {
@@ -113,6 +114,10 @@ export class TerminalManager {
     try {
       const { sessionId, name, cols, rows, workingDirectory = process.cwd(), enableStreamForward = false, programPath, autoCloseOnForwardExit = false } = data
       const sessionName = name || `终端会话 ${sessionId.slice(-8)}`
+      
+       // 获取终端配置和默认用户（提升到方法开始处）
+      const terminalConfig = this.configManager.getTerminalConfig()
+      const defaultUser = terminalConfig.defaultUser
       
       // 验证输出流转发参数
       if (enableStreamForward && os.platform() !== 'win32') {
@@ -186,25 +191,45 @@ export class TerminalManager {
         args.push('-cmd', JSON.stringify(['powershell.exe']))
       } else {
         // Linux下检查是否配置了默认用户
-        const terminalConfig = this.configManager.getTerminalConfig()
-        const defaultUser = terminalConfig.defaultUser
-        
         if (defaultUser && defaultUser.trim() !== '') {
           // 检查用户是否存在
           const userExists = await this.checkUserExists(defaultUser)
           if (userExists) {
-            // 如果配置了默认用户且用户存在，使用su命令切换到该用户
-            // 使用 su -c 来在指定的工作目录中启动bash
-            args.push('-cmd', JSON.stringify(['su', defaultUser, '-c', `cd '${workingDirectory}' && exec /bin/bash`]))
-            this.logger.info(`使用默认用户启动终端: ${defaultUser}，工作目录: ${workingDirectory}`)
+            // 检查sudo命令是否存在
+            const sudoExists = await this.checkCommandExists('sudo')
+            
+            if (sudoExists) {
+              // 如果sudo存在，使用sudo切换用户，使用简化的方式
+              args.push('-cmd', JSON.stringify([
+                'sudo', '-u', defaultUser, '/bin/bash', '-c', 
+                `cd "${workingDirectory}" && /bin/bash --login`
+              ]))
+              this.logger.info(`使用sudo切换到默认用户启动终端: ${defaultUser}，工作目录: ${workingDirectory}`)
+            } else {
+              // 如果sudo不存在，检查su命令
+              const suExists = await this.checkCommandExists('su')
+              
+              if (suExists) {
+                // 使用su命令切换用户，使用简化的方式
+                args.push('-cmd', JSON.stringify([
+                  'su', defaultUser, '-c', 
+                  `cd "${workingDirectory}" && /bin/bash --login`
+                ]))
+                this.logger.info(`使用su切换到默认用户启动终端: ${defaultUser}，工作目录: ${workingDirectory}`)
+              } else {
+                // 既没有sudo也没有su，记录警告并使用当前用户
+                this.logger.warn(`系统中既没有sudo也没有su命令，无法切换到用户 '${defaultUser}'，使用当前用户`)
+                args.push('-cmd', JSON.stringify(['/bin/bash', '--login']))
+              }
+            }
           } else {
             // 用户不存在，记录警告并使用默认bash
             this.logger.warn(`配置的默认用户 '${defaultUser}' 不存在，使用默认bash`)
-            args.push('-cmd', JSON.stringify(['/bin/bash']))
+            args.push('-cmd', JSON.stringify(['/bin/bash', '--login']))
           }
         } else {
           // 没有配置默认用户，使用默认bash
-          args.push('-cmd', JSON.stringify(['/bin/bash']))
+          args.push('-cmd', JSON.stringify(['/bin/bash', '--login']))
         }
       }
       
@@ -218,7 +243,9 @@ export class TerminalManager {
           ...process.env,
           TERM: 'xterm-256color',
           COLORTERM: 'truecolor'
-        }
+        },
+        // Linux下创建新的进程组，确保信号正确传递
+        detached: os.platform() !== 'win32'
       })
       
       this.logger.info(`PTY进程已启动，PID: ${ptyProcess.pid}`)
@@ -293,6 +320,24 @@ export class TerminalManager {
       ptyProcess.on('exit', (code, signal) => {
         this.logger.info(`PTY进程退出: ${sessionId}, 退出码: ${code}, 信号: ${signal}`)
         
+        // 如果退出码为0但进程立即退出，可能是命令执行有问题
+        if (code === 0 && (Date.now() - session.createdAt.getTime()) < 1000) {
+          this.logger.warn(`PTY进程启动后立即退出，可能是用户切换命令有问题: ${sessionId}`)
+          this.logger.warn(`使用的命令参数: ${JSON.stringify(args)}`)
+          
+          // 如果是用户切换失败，尝试使用当前用户重新启动
+          if (defaultUser && defaultUser.trim() !== '' && !session.fallbackRetried) {
+            this.logger.info(`尝试使用当前用户重新启动终端: ${sessionId}`)
+            session.fallbackRetried = true
+            
+            // 使用当前用户重新启动
+            setTimeout(() => {
+              this.createPtyFallback(sessionId, sessionName, workingDirectory, socket, enableStreamForward, programPath, autoCloseOnForwardExit)
+            }, 100)
+            return
+          }
+        }
+        
         // 清理输出流转发进程
         if (session.streamForwardProcess && !session.streamForwardProcess.killed) {
           this.logger.info(`PTY退出时清理输出流转发进程: ${sessionId}`)
@@ -341,6 +386,17 @@ export class TerminalManager {
           this.logger.error(`PTY错误时从配置文件删除会话失败: ${sessionId}`, error)
         })
       })
+      
+      // Linux下设置进程组，确保信号正确传递
+      if (os.platform() !== 'win32' && ptyProcess.pid) {
+        try {
+          // 将PTY进程设置为新进程组的组长
+          process.kill(-ptyProcess.pid, 0) // 测试进程组是否存在
+          this.logger.info(`PTY进程组设置成功: ${ptyProcess.pid}`)
+        } catch (error) {
+          this.logger.warn(`设置PTY进程组失败: ${error}`)
+        }
+      }
       
       // 如果启用了输出流转发，启动转发进程
       if (enableStreamForward && programPath) {
@@ -393,16 +449,42 @@ export class TerminalManager {
     process.once('exit', onExit)
 
     try {
-      // 首先尝试发送SIGINT信号
-      process.kill('SIGINT')
-      this.logger.info(`已向${processName}发送SIGINT信号: ${pid}`)
+      // Linux下优先处理进程组
+      if (os.platform() !== 'win32' && pid) {
+        try {
+          // 首先尝试向整个进程组发送SIGINT信号
+          process.kill(-pid, 'SIGINT')
+          this.logger.info(`已向${processName}进程组发送SIGINT信号: -${pid}`)
+        } catch (error) {
+          // 如果进程组不存在，向单个进程发送信号
+          this.logger.warn(`向进程组发送信号失败，尝试向单个进程发送: ${error}`)
+          process.kill('SIGINT')
+          this.logger.info(`已向${processName}发送SIGINT信号: ${pid}`)
+        }
+      } else {
+        // Windows下直接向进程发送信号
+        process.kill('SIGINT')
+        this.logger.info(`已向${processName}发送SIGINT信号: ${pid}`)
+      }
 
-      // 设置2秒超时，如果进程还没退出就强制杀死
+      // 设置2秒超时，如果进程还没退出就使用SIGTERM
       setTimeout(() => {
         if (!process.killed) {
           this.logger.warn(`${processName}未响应SIGINT信号，尝试SIGTERM: ${pid}`)
           try {
-            process.kill('SIGTERM')
+            if (os.platform() !== 'win32' && pid) {
+              try {
+                // 向进程组发送SIGTERM
+                process.kill(-pid, 'SIGTERM')
+                this.logger.info(`已向${processName}进程组发送SIGTERM信号: -${pid}`)
+              } catch (error) {
+                // 向单个进程发送SIGTERM
+                process.kill('SIGTERM')
+                this.logger.info(`已向${processName}发送SIGTERM信号: ${pid}`)
+              }
+            } else {
+              process.kill('SIGTERM')
+            }
           } catch (error) {
             this.logger.warn(`发送SIGTERM信号失败:`, error)
           }
@@ -412,7 +494,19 @@ export class TerminalManager {
             if (!process.killed) {
               this.logger.warn(`${processName}未响应SIGTERM信号，强制杀死: ${pid}`)
               try {
-                process.kill('SIGKILL')
+                if (os.platform() !== 'win32' && pid) {
+                  try {
+                    // 向进程组发送SIGKILL
+                    process.kill(-pid, 'SIGKILL')
+                    this.logger.info(`已向${processName}进程组发送SIGKILL信号: -${pid}`)
+                  } catch (error) {
+                    // 向单个进程发送SIGKILL
+                    process.kill('SIGKILL')
+                    this.logger.info(`已向${processName}发送SIGKILL信号: ${pid}`)
+                  }
+                } else {
+                  process.kill('SIGKILL')
+                }
               } catch (error) {
                 this.logger.error(`强制杀死进程失败:`, error)
                 
@@ -431,9 +525,25 @@ export class TerminalManager {
                     }
                   })
                 } else {
-                  // 非Windows平台，如果所有方法都失败，强制清理引用
-                  process.removeListener('exit', onExit)
-                  onKilled?.()
+                  // 非Windows平台，尝试使用系统命令强制杀死进程组
+                  if (pid) {
+                    exec(`pkill -9 -g ${pid}`, (error: any) => {
+                      if (error) {
+                        this.logger.error(`pkill命令执行失败:`, error)
+                      } else {
+                        this.logger.info(`使用pkill成功终止${processName}进程组: ${pid}`)
+                      }
+                      // 强制清理引用
+                      if (!process.killed) {
+                        process.removeListener('exit', onExit)
+                        onKilled?.()
+                      }
+                    })
+                  } else {
+                    // 如果所有方法都失败，强制清理引用
+                    process.removeListener('exit', onExit)
+                    onKilled?.()
+                  }
                 }
               }
             }
@@ -714,45 +824,76 @@ export class TerminalManager {
         return
       }
       
-      // 检查是否为Ctrl+C信号 (ASCII码3)
-      if (inputData === '\x03') {
-        this.logger.info(`检测到Ctrl+C信号: ${sessionId}`)
+      // 检查是否为控制字符
+      const controlChar = this.detectControlCharacter(inputData)
+      if (controlChar) {
+        this.logger.info(`检测到控制字符: ${controlChar.name} (${controlChar.code}) - ${sessionId}`)
+        
+        // 对于某些控制字符，直接传递给PTY而不发送信号
+        if (controlChar.signal === 'EOF' || controlChar.signal === 'KILL_LINE' || controlChar.signal === 'CLEAR') {
+          this.logger.info(`直接传递控制字符 ${controlChar.name} 到 PTY 进程: ${sessionId}`)
+          if (session.process.stdin && !session.process.stdin.destroyed) {
+            session.process.stdin.write(inputData)
+          }
+          return
+        }
         
         // 如果有输出流转发进程，优先处理它
         if (session.streamForwardProcess && !session.streamForwardProcess.killed) {
           const pid = session.streamForwardProcess.pid
-          this.logger.info(`向输出流转发进程(PID: ${pid})及其子进程发送关闭信号...`)
+          this.logger.info(`向输出流转发进程(PID: ${pid})及其子进程发送${controlChar.name}信号...`)
 
           if (os.platform() === 'win32') {
-            // 在Windows上，使用 taskkill /T 来优雅地终止整个进程树
-            exec(`taskkill /PID ${pid} /T`, (err) => {
-              if (err) {
-                this.logger.error(`使用 taskkill /T 终止进程树 PID: ${pid} 失败:`, err)
-                // 如果 taskkill 失败, 可能是进程已经退出.
-                // 作为后备，仍然可以尝试原来的方法
+            // Windows下的处理
+            if (controlChar.signal === 'SIGINT') {
+              // 使用 taskkill /T 来优雅地终止整个进程树
+              exec(`taskkill /PID ${pid} /T`, (err) => {
+                if (err) {
+                  this.logger.error(`使用 taskkill /T 终止进程树 PID: ${pid} 失败:`, err)
+                  // 作为后备，尝试原来的方法
+                  try {
+                    session.streamForwardProcess.kill('SIGINT')
+                  } catch (killError) {
+                    this.logger.error(`后备的 kill SIGINT 信号也失败了:`, killError)
+                  }
+                } else {
+                  this.logger.info(`成功通过 taskkill /T 向进程树 PID: ${pid} 发送关闭信号`)
+                }
+              })
+            } else {
+              // 其他信号直接发送，但需要确保是有效的信号类型
+              if (typeof controlChar.signal === 'string' && controlChar.signal.startsWith('SIG')) {
                 try {
-                  session.streamForwardProcess.kill('SIGINT')
-                } catch (killError) {
-                  this.logger.error(`后备的 kill SIGINT 信号也失败了:`, killError)
+                  session.streamForwardProcess.kill(controlChar.signal as NodeJS.Signals)
+                } catch (error) {
+                  this.logger.error(`发送${controlChar.signal}信号失败:`, error)
                 }
               } else {
-                this.logger.info(`成功通过 taskkill /T 向进程树 PID: ${pid} 发送关闭信号`)
+                this.logger.warn(`Windows下不支持的信号类型: ${controlChar.signal}`)
               }
-            })
+            }
           } else {
-            // 在 Linux/macOS上，向整个进程组发送 SIGINT
-            try {
-              // process.kill 的 PID 为负数时，会向整个进程组发送信号
-              process.kill(-pid, 'SIGINT')
-              this.logger.info(`成功向进程组 -${pid} 发送 SIGINT 信号`)
-            } catch (error) {
-              this.logger.error(`向进程组 -${pid} 发送SIGINT失败，将只发送给主进程:`, error)
-              session.streamForwardProcess.kill('SIGINT')
+            // Linux/macOS下的处理
+            if (typeof controlChar.signal === 'string' && controlChar.signal.startsWith('SIG')) {
+              try {
+                // 向整个进程组发送信号
+                process.kill(-pid, controlChar.signal as NodeJS.Signals)
+                this.logger.info(`成功向进程组 -${pid} 发送 ${controlChar.signal} 信号`)
+              } catch (error) {
+                this.logger.error(`向进程组 -${pid} 发送${controlChar.signal}失败，将只发送给主进程:`, error)
+                try {
+                  session.streamForwardProcess.kill(controlChar.signal as NodeJS.Signals)
+                } catch (killError) {
+                  this.logger.error(`向主进程发送${controlChar.signal}失败:`, killError)
+                }
+              }
+            } else {
+              this.logger.warn(`Linux/macOS下不支持的信号类型: ${controlChar.signal}`)
             }
           }
         } else {
-          // 如果没有输出流转发进程，则将Ctrl+C发送到PTY进程
-          this.logger.info(`向 PTY 进程发送 Ctrl+C: ${sessionId}`)
+          // 如果没有输出流转发进程，则将控制字符发送到PTY进程
+          this.logger.info(`向 PTY 进程发送 ${controlChar.name}: ${sessionId}`)
           if (session.process.stdin && !session.process.stdin.destroyed) {
             session.process.stdin.write(inputData)
           }
@@ -1237,6 +1378,26 @@ export class TerminalManager {
   }
 
   /**
+   * 检查系统命令是否存在
+   */
+  private async checkCommandExists(command: string): Promise<boolean> {
+    try {
+      if (os.platform() === 'win32') {
+        // Windows下使用where命令
+        await execAsync(`where ${command}`)
+        return true
+      } else {
+        // Linux/Unix下使用which命令
+        await execAsync(`which ${command}`)
+        return true
+      }
+    } catch (error) {
+      this.logger.debug(`命令 '${command}' 不存在:`, error)
+      return false
+    }
+  }
+
+  /**
    * 检查Linux用户是否存在
    */
   private async checkUserExists(username: string): Promise<boolean> {
@@ -1253,6 +1414,126 @@ export class TerminalManager {
       // 如果命令执行失败，说明用户不存在
       this.logger.debug(`检查用户 '${username}' 是否存在时出错:`, error)
       return false
+    }
+  }
+
+  /**
+   * 检测控制字符
+   * @param input 输入字符
+   * @returns 控制字符信息或null
+   */
+  private detectControlCharacter(input: string): { name: string; code: string; signal: NodeJS.Signals | string } | null {
+    const controlChars: Record<string, { name: string; code: string; signal: NodeJS.Signals | string }> = {
+      '\x03': { name: 'Ctrl+C', code: '\\x03', signal: 'SIGINT' as NodeJS.Signals },    // 中断信号
+      '\x1a': { name: 'Ctrl+Z', code: '\\x1a', signal: 'SIGTSTP' as NodeJS.Signals },   // 暂停信号
+      '\x1c': { name: 'Ctrl+\\', code: '\\x1c', signal: 'SIGQUIT' as NodeJS.Signals },  // 退出信号
+      '\x04': { name: 'Ctrl+D', code: '\\x04', signal: 'EOF' },       // 文件结束
+      '\x15': { name: 'Ctrl+U', code: '\\x15', signal: 'KILL_LINE' }, // 删除行
+      '\x0c': { name: 'Ctrl+L', code: '\\x0c', signal: 'CLEAR' },     // 清屏
+    }
+    
+    return controlChars[input] || null
+  }
+
+  /**
+   * 使用当前用户创建PTY会话（回退方案）
+   */
+  private async createPtyFallback(sessionId: string, sessionName: string, workingDirectory: string, socket: Socket, enableStreamForward?: boolean, programPath?: string, autoCloseOnForwardExit?: boolean): Promise<void> {
+    try {
+      this.logger.info(`使用当前用户创建PTY回退会话: ${sessionId}`)
+      
+      // 构建PTY命令参数，使用当前用户
+      const args = [
+        '-dir', workingDirectory,
+        '-size', '100,30', // 使用默认大小
+        '-coder', 'UTF-8'
+      ]
+      
+      // 使用默认bash，不切换用户
+      args.push('-cmd', JSON.stringify(['/bin/bash', '--login']))
+      this.logger.info(`使用当前用户启动终端，工作目录: ${workingDirectory}`)
+      
+      this.logger.info(`启动PTY回退进程: ${this.ptyPath} ${args.join(' ')}`)
+      
+      // 启动PTY进程
+      const ptyProcess = spawn(this.ptyPath, args, {
+        stdio: ['pipe', 'pipe', 'pipe'],
+        cwd: workingDirectory,
+        env: {
+          ...process.env,
+          TERM: 'xterm-256color',
+          COLORTERM: 'truecolor'
+        },
+        detached: os.platform() !== 'win32'
+      })
+      
+      this.logger.info(`PTY回退进程已启动，PID: ${ptyProcess.pid}`)
+      
+      // 创建会话对象
+      const session: PtySession = {
+        id: sessionId,
+        name: sessionName,
+        process: ptyProcess,
+        socket,
+        workingDirectory,
+        createdAt: new Date(),
+        lastActivity: new Date(),
+        outputBuffer: [],
+        enableStreamForward,
+        programPath,
+        autoCloseOnForwardExit,
+        fallbackRetried: true // 标记为已重试
+      }
+      
+      // 保存会话到内存
+      this.sessions.set(sessionId, session)
+      
+      // 处理PTY输出
+      ptyProcess.stdout?.on('data', (data: Buffer) => {
+        session.lastActivity = new Date()
+        const output = data.toString()
+        session.outputBuffer.push(output)
+        if (session.outputBuffer.length > 1000) {
+          session.outputBuffer.shift()
+        }
+        socket.emit('terminal-output', { sessionId, data: output })
+      })
+      
+      // 处理PTY错误输出
+      ptyProcess.stderr?.on('data', (data: Buffer) => {
+        session.lastActivity = new Date()
+        const output = data.toString()
+        session.outputBuffer.push(output)
+        if (session.outputBuffer.length > 1000) {
+          session.outputBuffer.shift()
+        }
+        socket.emit('terminal-output', { sessionId, data: output })
+      })
+      
+      // 处理进程退出
+      ptyProcess.on('exit', (code, signal) => {
+        this.logger.info(`PTY回退进程退出: ${sessionId}, 退出码: ${code}, 信号: ${signal}`)
+        socket.emit('terminal-exit', { sessionId, code: code || 0, signal })
+        this.sessions.delete(sessionId)
+      })
+      
+      // 处理进程错误
+      ptyProcess.on('error', (error) => {
+        this.logger.error(`PTY回退进程错误 ${sessionId}:`, error)
+        socket.emit('terminal-error', { sessionId, error: error.message })
+        this.sessions.delete(sessionId)
+      })
+      
+      // 发送创建成功事件
+      socket.emit('pty-created', { sessionId, workingDirectory })
+      this.logger.info(`PTY回退会话创建成功: ${sessionId}`)
+      
+    } catch (error) {
+      this.logger.error(`创建PTY回退会话失败:`, error)
+      socket.emit('terminal-error', {
+        sessionId,
+        error: error instanceof Error ? error.message : '未知错误'
+      })
     }
   }
 
