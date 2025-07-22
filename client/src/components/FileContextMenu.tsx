@@ -245,20 +245,25 @@ export const FileContextMenu: React.FC<FileContextMenuProps> = ({
           {isBlankAreaMenu ? (
             // 空白区域菜单
             <>
-              {/* 粘贴 */}
-              <div
-                className={`px-4 py-2 cursor-pointer flex items-center ${
-                  clipboard.operation && clipboard.items.length > 0 
-                    ? 'hover:bg-gray-100 dark:hover:bg-gray-700' 
-                    : 'opacity-50 cursor-not-allowed'
-                }`}
-                onClick={clipboard.operation && clipboard.items.length > 0 ? onPaste : undefined}
-              >
-                <SnippetsOutlined className="mr-2" />
-                {clipboard.operation && clipboard.items.length > 0 ? `粘贴 ${clipboard.items.length} 项` : '粘贴'}
-              </div>
-              
-              <div className="border-t border-gray-200 dark:border-gray-600 my-1"></div>
+              {/* 粘贴 - Windows 11风格 - 仅在有内容时显示 */}
+              {clipboard.operation && clipboard.items.length > 0 && (
+                <>
+                  <div className="px-2 py-1">
+                    <div className="flex items-center gap-1">
+                      <div
+                        className="flex-1 px-2 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer flex flex-col items-center justify-center rounded-md transition-all duration-200 min-h-[60px] group"
+                        onClick={onPaste}
+                        title={`粘贴 ${clipboard.items.length} 项`}
+                      >
+                        <SnippetsOutlined className="text-lg mb-1 group-hover:scale-110 transition-transform duration-200" />
+                        <span className="text-xs text-gray-600 dark:text-gray-400 whitespace-nowrap">粘贴</span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="border-t border-gray-200 dark:border-gray-600 my-1"></div>
+                </>
+              )}
               
               {/* 新建文件夹 */}
               {onCreateFolder && (
@@ -283,17 +288,17 @@ export const FileContextMenu: React.FC<FileContextMenuProps> = ({
               )}
               
               {/* 从此文件夹处打开终端 */}
+              {onOpenTerminal && (onCreateFolder || onCreateFile) && (
+                <div className="border-t border-gray-200 dark:border-gray-600 my-1"></div>
+              )}
               {onOpenTerminal && (
-                <>
-                  <div className="border-t border-gray-200 dark:border-gray-600 my-1"></div>
-                  <div
-                    className="px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer flex items-center"
-                    onClick={() => onOpenTerminal({ name: '', path: '', type: 'directory', size: 0, modified: '' })}
-                  >
-                    <ConsoleSqlOutlined className="mr-2" />
-                    从此文件夹处打开终端
-                  </div>
-                </>
+                <div
+                  className="px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer flex items-center"
+                  onClick={() => onOpenTerminal({ name: '', path: '', type: 'directory', size: 0, modified: '' })}
+                >
+                  <ConsoleSqlOutlined className="mr-2" />
+                  从此文件夹处打开终端
+                </div>
               )}
             </>
           ) : (
