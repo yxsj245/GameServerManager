@@ -783,16 +783,28 @@ export class SystemManager extends EventEmitter {
       }
       
       // 转换数据格式以匹配客户端期望的格式
-      return processes.map(process => ({
-        id: `${process.pid}`, // 添加 id 字段
-        pid: process.pid,
-        name: process.name,
-        cpu: process.cpu,
-        memory: process.memory,
-        status: process.status,
-        startTime: process.startTime.toISOString(), // 转换为 ISO 字符串
-        command: process.command
-      }))
+      return processes.map(process => {
+        // 确保startTime是有效的Date对象
+        let startTimeStr = new Date().toISOString()
+        try {
+          if (process.startTime && !isNaN(process.startTime.getTime())) {
+            startTimeStr = process.startTime.toISOString()
+          }
+        } catch (e) {
+          this.logger.warn(`进程 ${process.pid} 的启动时间无效，使用当前时间代替`)
+        }
+        
+        return {
+          id: `${process.pid}`, // 添加 id 字段
+          pid: process.pid,
+          name: process.name,
+          cpu: process.cpu,
+          memory: process.memory,
+          status: process.status,
+          startTime: startTimeStr, // 转换为 ISO 字符串
+          command: process.command
+        }
+      })
     } catch (error) {
       this.logger.error('获取进程列表失败:', error)
       return []
@@ -844,8 +856,15 @@ export class SystemManager extends EventEmitter {
               const minute = parseInt(creationDate.substring(10, 12))
               const second = parseInt(creationDate.substring(12, 14))
               startTime = new Date(year, month, day, hour, minute, second)
+              
+              // 验证日期是否有效
+              if (isNaN(startTime.getTime())) {
+                // 如果日期无效，使用当前时间
+                startTime = new Date()
+              }
             } catch (e) {
               // 使用默认时间
+              startTime = new Date()
             }
           }
           
@@ -929,6 +948,12 @@ export class SystemManager extends EventEmitter {
                   // 月日格式，假设是今年
                   startTime = new Date(`${start} ${today.getFullYear()}`)
                 }
+              }
+              
+              // 验证日期是否有效
+              if (isNaN(startTime.getTime())) {
+                // 如果日期无效，使用当前时间
+                startTime = new Date()
               }
             } catch (e) {
               // 解析失败，使用当前时间
