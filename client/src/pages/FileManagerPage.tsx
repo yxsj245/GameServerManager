@@ -1071,6 +1071,32 @@ const FileManagerPage: React.FC = () => {
       <div 
         className="flex-1 p-4 overflow-auto"
         style={{ maxHeight: 'calc(100vh - 200px)' }}
+        onContextMenu={(e) => {
+          // 检查是否点击在空白区域（不是文件项）
+          const target = e.target as HTMLElement
+          const isFileItem = target.closest('[data-file-item]')
+          
+          if (!isFileItem) {
+            e.preventDefault()
+            // 清除选择
+            clearSelection()
+            // 设置空白区域右键菜单
+            setContextMenuInfo({
+              file: null, // null 表示空白区域
+              position: { x: e.clientX, y: e.clientY }
+            })
+          }
+        }}
+        onClick={(e) => {
+          // 点击空白区域时清除选择和关闭菜单
+          const target = e.target as HTMLElement
+          const isFileItem = target.closest('[data-file-item]')
+          
+          if (!isFileItem) {
+            clearSelection()
+            setContextMenuInfo(null)
+          }
+        }}
         onScroll={(e) => {
           const { scrollTop, scrollHeight, clientHeight } = e.currentTarget
           const distanceFromBottom = scrollHeight - scrollTop - clientHeight
@@ -1153,6 +1179,8 @@ const FileManagerPage: React.FC = () => {
                       onExtract={handleContextMenuExtract}
                       onOpenTerminal={handleContextMenuOpenTerminal}
                       onAddToPlaylist={handleAddToPlaylist}
+                      onCreateFile={() => setCreateDialog({ visible: true, type: 'file' })}
+                      onCreateFolder={() => setCreateDialog({ visible: true, type: 'folder' })}
                       // 全局菜单控制
                       globalContextMenuInfo={contextMenuInfo}
                       setGlobalContextMenuInfo={setContextMenuInfo}
@@ -1209,6 +1237,8 @@ const FileManagerPage: React.FC = () => {
                       onExtract={handleContextMenuExtract}
                       onOpenTerminal={handleContextMenuOpenTerminal}
                       onAddToPlaylist={handleAddToPlaylist}
+                      onCreateFile={() => setCreateDialog({ visible: true, type: 'file' })}
+                      onCreateFolder={() => setCreateDialog({ visible: true, type: 'folder' })}
                       // 全局菜单控制
                       globalContextMenuInfo={contextMenuInfo}
                       setGlobalContextMenuInfo={setContextMenuInfo}
@@ -1243,6 +1273,22 @@ const FileManagerPage: React.FC = () => {
           </div>
         )}
       </div>
+      
+      {/* 空白区域右键菜单 */}
+      <FileContextMenu
+        file={null}
+        selectedFiles={selectedFiles}
+        clipboard={clipboard}
+        onPaste={handlePaste}
+        onCreateFile={() => setCreateDialog({ visible: true, type: 'file' })}
+        onCreateFolder={() => setCreateDialog({ visible: true, type: 'folder' })}
+        onOpenTerminal={handleContextMenuOpenTerminal}
+        // 全局菜单控制
+        globalContextMenuInfo={contextMenuInfo}
+        setGlobalContextMenuInfo={setContextMenuInfo}
+      >
+        <div />
+      </FileContextMenu>
       
       {/* 对话框 */}
       <CreateDialog
