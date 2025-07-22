@@ -1,5 +1,5 @@
 import axios, { AxiosInstance } from 'axios'
-import { FileItem, FileOperationResult, FileSearchResult, FileContent, Task } from '@/types/file'
+import { FileItem, FileOperationResult, FileSearchResult, FileContent, Task, FileListResponse } from '@/types/file'
 import { useNotificationStore } from '@/stores/notificationStore'
 
 const API_BASE = '/api/files'
@@ -55,9 +55,9 @@ export class FileApiClient {
     )
   }
   // 获取目录内容
-  async listDirectory(path: string = '/'): Promise<FileItem[]> {
+  async listDirectory(path: string = '/', page: number = 1, pageSize: number = 50): Promise<FileListResponse> {
     const response = await this.client.get(`${API_BASE}/list`, {
-      params: { path }
+      params: { path, page, pageSize }
     })
     return response.data.data
   }

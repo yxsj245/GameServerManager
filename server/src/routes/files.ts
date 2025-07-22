@@ -155,7 +155,11 @@ const fixWindowsPath = (filePath: string): string => {
 // 获取目录列表
 router.get('/list', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const { path: dirPath = '/' } = req.query
+    const { 
+      path: dirPath = '/', 
+      page = '1', 
+      pageSize = '50' 
+    } = req.query
     
     if (!isValidPath(dirPath as string)) {
       return res.status(400).json({
@@ -176,13 +180,13 @@ router.get('/list', authenticateToken, async (req: Request, res: Response) => {
     }
 
     const items = await fs.readdir(fixedDirPath)
-    const files = []
+    const allFiles = []
 
     for (const item of items) {
       const itemPath = path.join(fixedDirPath, item)
       try {
         const itemStats = await fs.stat(itemPath)
-        files.push({
+        allFiles.push({
           name: item,
           path: itemPath,
           type: itemStats.isDirectory() ? 'directory' : 'file',
@@ -195,9 +199,33 @@ router.get('/list', authenticateToken, async (req: Request, res: Response) => {
       }
     }
 
+    // 排序：文件夹优先，然后按名称排序
+    allFiles.sort((a, b) => {
+      if (a.type !== b.type) {
+        return a.type === 'directory' ? -1 : 1
+      }
+      return a.name.localeCompare(b.name)
+    })
+
+    // 分页处理
+    const pageNum = parseInt(page as string, 10)
+    const pageSizeNum = parseInt(pageSize as string, 10)
+    const startIndex = (pageNum - 1) * pageSizeNum
+    const endIndex = startIndex + pageSizeNum
+    const paginatedFiles = allFiles.slice(startIndex, endIndex)
+
     res.json({
       status: 'success',
-      data: files
+      data: {
+        files: paginatedFiles,
+        pagination: {
+          page: pageNum,
+          pageSize: pageSizeNum,
+          total: allFiles.length,
+          totalPages: Math.ceil(allFiles.length / pageSizeNum),
+          hasMore: endIndex < allFiles.length
+        }
+      }
     })
   } catch (error: any) {
     console.error('List request - Error occurred:', error)

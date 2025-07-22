@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react'
+import React, { useEffect, useState, useCallback, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { 
@@ -78,8 +78,11 @@ const FileManagerPage: React.FC = () => {
     activeFile,
     tasks,
     activeTasks,
+    pagination,
+    loadingMore,
     setCurrentPath,
     loadFiles,
+    loadMoreFiles,
     selectFile,
     unselectFile,
     clearSelection,
@@ -173,6 +176,10 @@ const FileManagerPage: React.FC = () => {
     position: { x: number; y: number }
   } | null>(null);
   
+  // 滚动防抖处理
+  const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const lastScrollTopRef = useRef(0)
+  
   // 盘符选择状态
   const [drives, setDrives] = useState<Array<{ label: string; value: string; type: string }>>([])
   const [selectedDrive, setSelectedDrive] = useState<string>('')
@@ -262,9 +269,10 @@ const FileManagerPage: React.FC = () => {
     if (pathFromUrl) {
       // 如果 URL 中有路径参数，设置为当前路径并加载
       setCurrentPath(pathFromUrl)
+      loadFiles(pathFromUrl, true) // 重置分页
     } else {
       // 否则加载默认路径
-      loadFiles()
+      loadFiles(undefined, true) // 重置分页
     }
     
     // 初始加载任务列表
@@ -294,7 +302,7 @@ const FileManagerPage: React.FC = () => {
           task.status === 'completed' || task.status === 'failed'
         )
         if (hasCompletedTasks) {
-          loadFiles()
+          loadFiles(undefined, true) // 重置分页
         }
       }
     }, 2000) // 每2秒刷新一次
@@ -366,6 +374,15 @@ const FileManagerPage: React.FC = () => {
       setError(null)
     }
   }, [error, addNotification, setError])
+  
+  // 清理定时器
+  useEffect(() => {
+    return () => {
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current)
+      }
+    }
+  }, [])
   
   // 获取显示路径（相对于当前盘符的路径）
   const getDisplayPath = () => {
@@ -1051,7 +1068,38 @@ const FileManagerPage: React.FC = () => {
       </div>
       
       {/* 主内容区 */}
-      <div className="flex-1 p-4">
+      <div 
+        className="flex-1 p-4 overflow-auto"
+        style={{ maxHeight: 'calc(100vh - 200px)' }}
+        onScroll={(e) => {
+          const { scrollTop, scrollHeight, clientHeight } = e.currentTarget
+          const distanceFromBottom = scrollHeight - scrollTop - clientHeight
+          
+          // 清除之前的定时器
+          if (scrollTimeoutRef.current) {
+            clearTimeout(scrollTimeoutRef.current)
+          }
+          
+          // 检查是否向下滚动
+          const isScrollingDown = scrollTop > lastScrollTopRef.current
+          lastScrollTopRef.current = scrollTop
+          
+          // 立即检查是否需要加载更多（针对快速滚动）
+          if (distanceFromBottom <= 50 && pagination.hasMore && !loadingMore && isScrollingDown) {
+            console.log('立即触发加载更多文件 - 距离底部:', distanceFromBottom, 'px')
+            loadMoreFiles()
+            return
+          }
+          
+          // 防抖处理，延迟检查（针对慢速滚动）
+          scrollTimeoutRef.current = setTimeout(() => {
+            if (distanceFromBottom < 100 && pagination.hasMore && !loadingMore && isScrollingDown) {
+              console.log('延迟触发加载更多文件 - 距离底部:', distanceFromBottom, 'px')
+              loadMoreFiles()
+            }
+          }, 150)
+        }}
+      >
         {loading ? (
           <div className="flex items-center justify-center h-64">
             <Spin size="large" />
@@ -1072,17 +1120,22 @@ const FileManagerPage: React.FC = () => {
                 transition={{ duration: 0.3, ease: "easeInOut" }}
                 className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-4"
               >
-                {filteredFiles.map((file, index) => (
-                  <motion.div
-                    key={file.path}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ 
-                      duration: 0.3, 
-                      delay: index * 0.02,
-                      ease: "easeOut"
-                    }}
-                  >
+                {filteredFiles.map((file, index) => {
+                  // 对于加载更多的情况，新加载的文件使用很小的延迟
+                  const isNewlyLoaded = pagination.page > 1 && index >= (pagination.page - 1) * 50
+                  const animationDelay = isNewlyLoaded ? Math.min((index % 5) * 0.01, 0.05) : Math.min(index * 0.02, 0.5)
+                  
+                  return (
+                    <motion.div
+                      key={file.path}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ 
+                        duration: isNewlyLoaded ? 0.2 : 0.3, 
+                        delay: animationDelay,
+                        ease: "easeOut"
+                      }}
+                    >
                     <FileContextMenu
                       file={file}
                       selectedFiles={selectedFiles}
@@ -1112,7 +1165,7 @@ const FileManagerPage: React.FC = () => {
                       />
                     </FileContextMenu>
                   </motion.div>
-                ))}
+                )})}
               </motion.div>
             ) : (
               <motion.div
@@ -1123,17 +1176,22 @@ const FileManagerPage: React.FC = () => {
                 transition={{ duration: 0.3, ease: "easeInOut" }}
                 className="space-y-2"
               >
-                {filteredFiles.map((file, index) => (
-                  <motion.div
-                    key={file.path}
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ 
-                      duration: 0.3, 
-                      delay: index * 0.02,
-                      ease: "easeOut"
-                    }}
-                  >
+                {filteredFiles.map((file, index) => {
+                  // 对于加载更多的情况，新加载的文件使用很小的延迟
+                  const isNewlyLoaded = pagination.page > 1 && index >= (pagination.page - 1) * 50
+                  const animationDelay = isNewlyLoaded ? Math.min((index % 5) * 0.01, 0.05) : Math.min(index * 0.02, 0.5)
+                  
+                  return (
+                    <motion.div
+                      key={file.path}
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ 
+                        duration: isNewlyLoaded ? 0.2 : 0.3, 
+                        delay: animationDelay,
+                        ease: "easeOut"
+                      }}
+                    >
                     <FileContextMenu
                       file={file}
                       selectedFiles={selectedFiles}
@@ -1163,10 +1221,26 @@ const FileManagerPage: React.FC = () => {
                       />
                     </FileContextMenu>
                   </motion.div>
-                ))}
+                )})}
               </motion.div>
             )}
           </AnimatePresence>
+        )}
+        
+        {/* 加载更多指示器 */}
+        {loadingMore && (
+          <div className="flex items-center justify-center py-4">
+            <Spin size="small" />
+            <span className="ml-2 text-gray-500">加载更多...</span>
+          </div>
+        )}
+        
+        {/* 分页信息 */}
+        {pagination.total > 0 && (
+          <div className="text-center text-gray-500 text-sm mt-4">
+            已显示 {files.length} / {pagination.total} 个项目
+            {pagination.hasMore && ' (滚动到底部加载更多)'}
+          </div>
         )}
       </div>
       

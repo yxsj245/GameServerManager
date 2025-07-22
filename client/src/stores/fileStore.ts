@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { FileItem, Task, FileOperationResult } from '@/types/file'
+import { FileItem, Task, FileOperationResult, FilePagination } from '@/types/file'
 import { fileApiClient } from '@/utils/fileApi'
 
 interface FileStore {
@@ -9,6 +9,10 @@ interface FileStore {
   selectedFiles: Set<string>
   loading: boolean
   error: string | null
+  
+  // 分页相关
+  pagination: FilePagination
+  loadingMore: boolean
   
   // 剪贴板相关
   clipboard: {
@@ -27,7 +31,8 @@ interface FileStore {
   
   // 操作方法
   setCurrentPath: (path: string) => void
-  loadFiles: (path?: string) => Promise<void>
+  loadFiles: (path?: string, reset?: boolean) => Promise<void>
+  loadMoreFiles: () => Promise<void>
   selectFile: (path: string) => void
   selectMultipleFiles: (paths: string[]) => void
   unselectFile: (path: string) => void
@@ -79,6 +84,14 @@ export const useFileStore = create<FileStore>((set, get) => ({
   selectedFiles: new Set(),
   loading: false,
   error: null,
+  pagination: {
+    page: 1,
+    pageSize: 50,
+    total: 0,
+    totalPages: 0,
+    hasMore: false
+  },
+  loadingMore: false,
   clipboard: {
     items: [],
     operation: null
@@ -100,32 +113,56 @@ export const useFileStore = create<FileStore>((set, get) => ({
   },
 
   // 加载文件列表
-  loadFiles: async (path?: string) => {
+  loadFiles: async (path?: string, reset: boolean = true) => {
     const targetPath = path || get().currentPath
-    set({ loading: true, error: null })
+    const currentState = get()
+    
+    // 如果是重置加载，设置loading状态
+    if (reset) {
+      set({ loading: true, error: null })
+    }
     
     try {
-      const files = await fileApiClient.listDirectory(targetPath)
-      // 排序：文件夹优先，然后按名称排序
-      const sortedFiles = files.sort((a, b) => {
-        if (a.type !== b.type) {
-          return a.type === 'directory' ? -1 : 1
-        }
-        return a.name.localeCompare(b.name)
-      })
+      const page = reset ? 1 : currentState.pagination.page + 1
+      const response = await fileApiClient.listDirectory(targetPath, page, 50)
+      
+      let newFiles: FileItem[]
+      if (reset) {
+        // 重置加载，替换所有文件
+        newFiles = response.files
+      } else {
+        // 追加加载，合并文件列表
+        newFiles = [...currentState.files, ...response.files]
+      }
       
       set({ 
-        files: sortedFiles, 
+        files: newFiles,
         currentPath: targetPath,
+        pagination: response.pagination,
         loading: false,
-        selectedFiles: new Set() // 清空选择
+        loadingMore: false,
+        selectedFiles: reset ? new Set() : currentState.selectedFiles // 重置时清空选择
       })
     } catch (error: any) {
       set({ 
         error: error.message || '加载文件列表失败', 
-        loading: false 
+        loading: false,
+        loadingMore: false
       })
     }
+  },
+
+  // 加载更多文件
+  loadMoreFiles: async () => {
+    const { pagination, loadingMore } = get()
+    
+    // 如果正在加载或没有更多数据，直接返回
+    if (loadingMore || !pagination.hasMore) {
+      return
+    }
+    
+    set({ loadingMore: true })
+    await get().loadFiles(undefined, false)
   },
 
   // 选择文件
