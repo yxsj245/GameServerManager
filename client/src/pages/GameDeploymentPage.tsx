@@ -2130,7 +2130,7 @@ const GameDeploymentPage: React.FC = () => {
                       value={minecraftInstallPath}
                       onChange={(e) => setMinecraftInstallPath(e.target.value)}
                       className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                      placeholder="输入服务端安装路径"
+                      placeholder="例如/home/steam/games/xxx 或 D:\Games"
                     />
                   </div>
 
@@ -2807,7 +2807,7 @@ const GameDeploymentPage: React.FC = () => {
                     value={mrpackInstallPath}
                     onChange={(e) => setMrpackInstallPath(e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                    placeholder="输入整合包的安装路径"
+                    placeholder="例如/home/steam/games/xxx 或 D:\Games"
                   />
                 </div>
                 
@@ -3015,7 +3015,7 @@ const GameDeploymentPage: React.FC = () => {
                     value={installPath}
                     onChange={(e) => setInstallPath(e.target.value)}
                     className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                    placeholder="输入安装路径"
+                    placeholder="例如/home/steam/games/xxx 或 D:\Games"
                   />
                   <button
                     onClick={selectInstallPath}
@@ -3252,7 +3252,7 @@ const GameDeploymentPage: React.FC = () => {
                     value={onlineGameInstallPath}
                     onChange={(e) => setOnlineGameInstallPath(e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                    placeholder="输入游戏安装路径"
+                    placeholder="例如/home/steam/games/xxx 或 D:\Games"
                   />
                 </div>
               )}
