@@ -263,6 +263,12 @@ const HomePage: React.FC = () => {
   const [isKillConfirmVisible, setIsKillConfirmVisible] = useState(false)
   const [killProcessInfo, setKillProcessInfo] = useState<{ pid: number; name: string; force: boolean } | null>(null)
   
+  // 警报相关状态
+  const [alertsShown, setAlertsShown] = useState<Set<string>>(new Set())
+  const [showSystemAlert, setShowSystemAlert] = useState(false)
+  const [systemAlertType, setSystemAlertType] = useState<'memory' | 'disk' | null>(null)
+  const [isSystemAlertClosing, setIsSystemAlertClosing] = useState(false)
+  
   useEffect(() => {
     // 获取系统信息
     const fetchSystemInfo = async () => {
@@ -462,6 +468,85 @@ const HomePage: React.FC = () => {
     }
   }, [])
   
+  // 监控系统状态并检查是否需要发出警报
+  useEffect(() => {
+    if (!systemStats) return
+    
+    const checkSystemAlerts = () => {
+      const currentTime = Date.now()
+      const alertKey = `${currentTime}-${Math.floor(currentTime / 60000)}` // 每分钟最多一次相同类型的警报
+      
+      // 检查内存使用率
+      if (systemStats.memory.usage >= 90) {
+        const memoryAlertKey = `memory-${Math.floor(currentTime / 60000)}`
+        if (!alertsShown.has(memoryAlertKey)) {
+          // 发送通知
+          addNotification({
+            type: 'warning',
+            title: '⚠️ 内存使用率警报',
+            message: `内存使用率已达到 ${systemStats.memory.usage.toFixed(1)}%，请及时处理！`,
+            duration: 10000 // 10秒后自动消失
+          })
+          
+          // 显示系统警报弹窗
+          setSystemAlertType('memory')
+          setShowSystemAlert(true)
+          setIsSystemAlertClosing(false)
+          
+          // 记录已显示的警报
+          setAlertsShown(prev => new Set([...prev, memoryAlertKey]))
+        }
+      }
+      
+      // 检查磁盘使用率
+      if (systemStats.disk.usage >= 90) {
+        const diskAlertKey = `disk-${Math.floor(currentTime / 60000)}`
+        if (!alertsShown.has(diskAlertKey)) {
+          // 发送通知
+          addNotification({
+            type: 'warning',
+            title: '⚠️ 磁盘使用率警报',
+            message: `磁盘使用率已达到 ${systemStats.disk.usage.toFixed(1)}%，请及时清理磁盘空间！`,
+            duration: 10000 // 10秒后自动消失
+          })
+          
+          // 如果没有其他警报正在显示，则显示磁盘警报弹窗
+          if (!showSystemAlert) {
+            setSystemAlertType('disk')
+            setShowSystemAlert(true)
+            setIsSystemAlertClosing(false)
+          }
+          
+          // 记录已显示的警报
+          setAlertsShown(prev => new Set([...prev, diskAlertKey]))
+        }
+      }
+    }
+    
+    checkSystemAlerts()
+  }, [systemStats, alertsShown, showSystemAlert, addNotification])
+  
+  // 清理过期的警报记录（每5分钟清理一次）
+  useEffect(() => {
+    const cleanupInterval = setInterval(() => {
+      const currentTime = Date.now()
+      const fiveMinutesAgo = Math.floor((currentTime - 5 * 60 * 1000) / 60000)
+      
+      setAlertsShown(prev => {
+        const newSet = new Set<string>()
+        prev.forEach(key => {
+          const [type, timeKey] = key.split('-')
+          if (parseInt(timeKey) > fiveMinutesAgo) {
+            newSet.add(key)
+          }
+        })
+        return newSet
+      })
+    }, 5 * 60 * 1000) // 每5分钟执行一次
+    
+    return () => clearInterval(cleanupInterval)
+  }, [])
+  
   // 处理端口搜索过滤
   useEffect(() => {
     if (portSearchQuery.trim() === '') {
@@ -630,6 +715,16 @@ const HomePage: React.FC = () => {
       setIsKillConfirmClosing(false)
       setIsKillConfirmVisible(false)
       setKillProcessInfo(null)
+    }, 300) // 与CSS动画时间匹配
+  }
+  
+  // 关闭系统警报弹窗
+  const closeSystemAlert = () => {
+    setIsSystemAlertClosing(true)
+    setTimeout(() => {
+      setShowSystemAlert(false)
+      setIsSystemAlertClosing(false)
+      setSystemAlertType(null)
     }, 300) // 与CSS动画时间匹配
   }
   
@@ -1420,6 +1515,153 @@ const HomePage: React.FC = () => {
                 } focus:outline-none focus:ring-2 focus:ring-offset-2`}
               >
                 {killProcessInfo.force ? '强制终止' : '确认终止'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 系统警报弹窗 */}
+      {showSystemAlert && systemAlertType && (
+        <div 
+          className={`fixed inset-0 bg-black flex items-center justify-center z-50 p-4 transition-all duration-300 ease-in-out ${
+            isSystemAlertClosing ? 'bg-opacity-0' : 'bg-opacity-50'
+          }`}
+          onClick={closeSystemAlert}
+        >
+          <div 
+            className={`bg-white dark:bg-gray-900 rounded-lg shadow-xl w-full max-w-lg transition-all duration-300 ease-in-out transform ${
+              isSystemAlertClosing ? 'scale-95 opacity-0' : 'scale-100 opacity-100'
+            }`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* 弹窗头部 */}
+            <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
+              <div className="flex items-center space-x-3">
+                <AlertTriangle className="w-8 h-8 text-red-600 animate-pulse" />
+                <h2 className="text-xl font-semibold text-black dark:text-white">
+                  ⚠️ 系统资源警报
+                </h2>
+              </div>
+              <button
+                onClick={closeSystemAlert}
+                className="p-2 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            {/* 弹窗内容 */}
+            <div className="p-6">
+              <div className="mb-6">
+                {systemAlertType === 'memory' && systemStats && (
+                  <div>
+                    <div className="flex items-center space-x-3 mb-4">
+                      <MemoryStick className="w-6 h-6 text-red-500" />
+                      <h3 className="text-lg font-semibold text-red-600 dark:text-red-400">
+                        内存使用率过高
+                      </h3>
+                    </div>
+                    <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 mb-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-red-800 dark:text-red-300 font-medium">当前内存使用率</span>
+                        <span className="text-2xl font-bold text-red-600 dark:text-red-400">
+                          {systemStats.memory.usage.toFixed(1)}%
+                        </span>
+                      </div>
+                      <div className="w-full bg-red-200 dark:bg-red-800 rounded-full h-3 mb-2">
+                        <div
+                          className="h-3 bg-red-500 rounded-full transition-all duration-300"
+                          style={{ width: `${systemStats.memory.usage}%` }}
+                        ></div>
+                      </div>
+                      <div className="flex justify-between text-sm text-red-700 dark:text-red-400">
+                        <span>已用: {formatBytes(systemStats.memory.used)}</span>
+                        <span>总计: {formatBytes(systemStats.memory.total)}</span>
+                      </div>
+                    </div>
+                    <div className="text-sm text-gray-700 dark:text-gray-300">
+                      <p className="mb-2">
+                        <strong>建议操作：</strong>
+                      </p>
+                      <ul className="list-disc list-inside space-y-1 text-gray-600 dark:text-gray-400">
+                        <li>关闭不必要的应用程序和进程</li>
+                        <li>检查是否有内存泄漏的程序</li>
+                        <li>重启占用内存较大的服务</li>
+                        <li>考虑增加系统内存</li>
+                      </ul>
+                    </div>
+                  </div>
+                )}
+                
+                {systemAlertType === 'disk' && systemStats && (
+                  <div>
+                    <div className="flex items-center space-x-3 mb-4">
+                      <HardDrive className="w-6 h-6 text-red-500" />
+                      <h3 className="text-lg font-semibold text-red-600 dark:text-red-400">
+                        磁盘使用率过高
+                      </h3>
+                    </div>
+                    <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 mb-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-red-800 dark:text-red-300 font-medium">当前磁盘使用率</span>
+                        <span className="text-2xl font-bold text-red-600 dark:text-red-400">
+                          {systemStats.disk.usage.toFixed(1)}%
+                        </span>
+                      </div>
+                      <div className="w-full bg-red-200 dark:bg-red-800 rounded-full h-3 mb-2">
+                        <div
+                          className="h-3 bg-red-500 rounded-full transition-all duration-300"
+                          style={{ width: `${systemStats.disk.usage}%` }}
+                        ></div>
+                      </div>
+                      <div className="flex justify-between text-sm text-red-700 dark:text-red-400">
+                        <span>已用: {formatBytes(systemStats.disk.used)}</span>
+                        <span>总计: {formatBytes(systemStats.disk.total)}</span>
+                      </div>
+                    </div>
+                    <div className="text-sm text-gray-700 dark:text-gray-300">
+                      <p className="mb-2">
+                        <strong>建议操作：</strong>
+                      </p>
+                      <ul className="list-disc list-inside space-y-1 text-gray-600 dark:text-gray-400">
+                        <li>清理临时文件和缓存</li>
+                        <li>删除不需要的文件和程序</li>
+                        <li>清空回收站</li>
+                        <li>移动大文件到其他磁盘</li>
+                        <li>使用磁盘清理工具</li>
+                      </ul>
+                    </div>
+                  </div>
+                )}
+              </div>
+              
+              {/* 警告提示 */}
+              <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3">
+                <div className="flex items-start space-x-2">
+                  <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0 text-yellow-600" />
+                  <div className="text-sm">
+                    <p className="font-medium text-yellow-800 dark:text-yellow-300">
+                      ⚠️ 重要提醒
+                    </p>
+                    <p className="mt-1 text-yellow-700 dark:text-yellow-400">
+                      {systemAlertType === 'memory' 
+                        ? '内存使用率过高可能导致系统响应缓慢、程序崩溃或系统不稳定。'
+                        : '磁盘空间不足可能导致程序无法正常运行、数据无法保存或系统崩溃。'
+                      }
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            {/* 弹窗按钮 */}
+            <div className="flex items-center justify-end space-x-3 p-6 border-t border-gray-200 dark:border-gray-700">
+              <button
+                onClick={closeSystemAlert}
+                className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+              >
+                我知道了
               </button>
             </div>
           </div>
