@@ -200,15 +200,21 @@ const InstanceManagerPage: React.FC = () => {
       return
     }
 
-    console.log('准备保存配置:', {
-      selectedInstance,
-      selectedConfigId,
-      configData: JSON.stringify(configData, null, 2)
-    })
+    console.log('=== 保存配置调试信息 ===')
+    console.log('选中的实例:', selectedInstance)
+    console.log('选中的配置ID:', selectedConfigId)
+    console.log('当前configData状态:', JSON.stringify(configData, null, 2))
+    console.log('configData对象引用:', configData)
+    console.log('configData的键:', Object.keys(configData))
+    
+    // 检查configData是否为空或只包含默认值
+    const hasUserData = Object.keys(configData).length > 0
+    console.log('configData是否包含数据:', hasUserData)
 
     try {
       setIsSavingConfig(true)
-      await apiClient.saveGameConfig(selectedInstance, selectedConfigId, configData)
+      const response = await apiClient.saveGameConfig(selectedInstance, selectedConfigId, configData)
+      console.log('保存响应:', response)
       addNotification({
         type: 'success',
         title: '保存成功',
@@ -320,15 +326,20 @@ const InstanceManagerPage: React.FC = () => {
 
   // 处理配置数据变化
   const handleConfigDataChange = (path: string, value: any) => {
-    console.log('配置数据变化:', { path, value, currentConfigData: configData })
+    console.log('=== 配置数据变化调试 ===')
+    console.log('变化路径:', path)
+    console.log('新值:', value)
+    console.log('变化前的configData:', JSON.stringify(configData, null, 2))
+    
     setConfigData((prev) => {
+      console.log('setConfigData回调 - 之前的数据:', prev)
       const newData = { ...prev }
       const pathParts = path.split('.')
 
       if (pathParts.length === 1) {
         // 如果只有一层，直接更新顶级属性
         newData[path] = value
-        console.log('更新后的配置数据:', newData)
+        console.log('单层路径更新 - 更新后的配置数据:', newData)
         return newData
       }
 
@@ -348,7 +359,8 @@ const InstanceManagerPage: React.FC = () => {
       const lastPart = pathParts[pathParts.length - 1]
       current[lastPart] = value
 
-      console.log('更新后的配置数据:', newData)
+      console.log('多层路径更新 - 更新后的配置数据:', newData)
+      console.log('更新的具体路径:', pathParts.join('.'), '=', value)
       return newData
     })
   }

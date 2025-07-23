@@ -96,7 +96,7 @@ router.get('/instances/:instanceId/:gameName', authenticateToken, async (req: Re
 
     // 使用实例的真实工作目录
     const instancePath = instance.workingDirectory
-    logger.info(`读取实例 ${instanceId} 的配置，工作目录: ${instancePath}`)
+    logger.info(`读取实例 ${instanceId} 的配置，工作目录: ${instancePath}`, { service: 'gsm3-server' })
     
     // 读取配置
     const configData = await gameConfigManager.readGameConfig(instancePath, template)
@@ -157,7 +157,7 @@ router.post('/instances/:instanceId/:gameName', authenticateToken, async (req: R
 
     // 使用实例的真实工作目录
     const instancePath = instance.workingDirectory
-    logger.info(`保存实例 ${instanceId} 的配置，工作目录: ${instancePath}`)
+    logger.info(`保存实例 ${instanceId} 的配置，工作目录: ${instancePath}`, { service: 'gsm3-server' })
     
     // 保存配置
     const success = await gameConfigManager.saveGameConfig(instancePath, template, config)

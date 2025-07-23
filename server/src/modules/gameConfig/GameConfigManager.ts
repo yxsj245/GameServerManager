@@ -43,6 +43,7 @@ export interface ParsedConfigData {
 export class GameConfigManager {
   private configSchemasDir: string
   private supportedParsers: Map<string, (configPath: string, schema: GameConfigSchema) => Promise<ParsedConfigData>>
+  private configsCache: GameConfigSchema[] | null = null
 
   constructor() {
     // 确保路径指向正确的配置目录
@@ -62,14 +63,17 @@ export class GameConfigManager {
    * 获取所有可用的游戏配置模板
    */
   async getAvailableGameConfigs(): Promise<GameConfigSchema[]> {
+    if (this.configsCache) {
+      return this.configsCache
+    }
+
     try {
-      logger.info(`正在扫描配置目录: ${this.configSchemasDir}`)
       const files = await fs.readdir(this.configSchemasDir)
-      logger.info(`找到文件: ${files.join(', ')}`)
       const ymlFiles = files.filter(file => file.endsWith('.yml') || file.endsWith('.yaml'))
-      logger.info(`YAML配置文件: ${ymlFiles.join(', ')}`)
       
       const configs: GameConfigSchema[] = []
+      const loadedGames: string[] = []
+      const failedFiles: string[] = []
       
       for (const file of ymlFiles) {
         try {
@@ -79,16 +83,27 @@ export class GameConfigManager {
           
           if (schema && schema.meta && schema.sections) {
             configs.push(schema)
-            logger.info(`成功加载配置: ${schema.meta.game_name}`)
+            loadedGames.push(schema.meta.game_name)
           } else {
+            failedFiles.push(file)
             logger.warn(`配置文件格式不正确: ${file}`)
           }
         } catch (error) {
+          failedFiles.push(file)
           logger.warn(`解析配置模板文件失败: ${file}`, error)
         }
       }
       
-      logger.info(`总共加载了 ${configs.length} 个游戏配置模板`)
+      // 统一输出加载结果
+      if (configs.length > 0) {
+        logger.info(`成功加载 ${configs.length} 个游戏配置模板: ${loadedGames.join(', ')}`)
+      }
+      
+      if (failedFiles.length > 0) {
+        logger.warn(`${failedFiles.length} 个配置文件加载失败: ${failedFiles.join(', ')}`)
+      }
+      
+      this.configsCache = configs
       return configs
     } catch (error) {
       logger.error('获取游戏配置模板失败:', error)
@@ -125,7 +140,7 @@ export class GameConfigManager {
       try {
         await fs.access(fullConfigPath)
       } catch {
-        logger.warn(`配置文件不存在: ${fullConfigPath}，正在创建默认配置文件`)
+        logger.warn(`配置文件不存在: ${fullConfigPath}，正在创建默认配置文件`, { service: 'gsm3-server' })
         const defaultConfig = this.getDefaultValues(configSchema)
         await this.saveGameConfig(serverPath, configSchema, defaultConfig)
         return defaultConfig
@@ -177,7 +192,7 @@ export class GameConfigManager {
           throw new Error(`不支持的解析器类型: ${parserType}`)
       }
 
-      logger.info(`配置文件保存成功: ${fullConfigPath}`)
+      logger.info(`配置文件保存成功: ${fullConfigPath}`, { service: 'gsm3-server' })
       return true
     } catch (error) {
       logger.error('保存游戏配置文件失败:', error)

@@ -156,6 +156,19 @@ async function createPackage() {
     } else {
       console.log('⚠️  警告: server/data/games 目录不存在，跳过复制')
     }
+
+        // 复制server/data/gameconfig目录（包含游戏配置文件）
+    const serverGamesConfigPath = path.join(__dirname, '..', 'server', 'data', 'gameconfig')
+    if (await fs.pathExists(serverGamesConfigPath)) {
+      await fs.ensureDir(path.join(packageDir, 'server', 'data'))
+      await fs.copy(
+        serverGamesConfigPath,
+        path.join(packageDir, 'server', 'data', 'gameconfig')
+      )
+      console.log('📋 复制游戏配置文件...')
+    } else {
+      console.log('⚠️  警告: server/data/gameconfig 目录不存在，跳过复制')
+    }
     
     console.log('📥 安装服务端生产依赖...')
     // 在打包的服务端目录中安装生产依赖
