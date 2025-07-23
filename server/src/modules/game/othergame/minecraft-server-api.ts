@@ -265,9 +265,82 @@ export class FileManager {
   }
 
   /**
+   * 检查是否为forge或neoforge安装器
+   */
+  static isForgeInstaller(jarPath: string): boolean {
+    const fileName = path.basename(jarPath).toLowerCase();
+    return fileName.startsWith('forge-') || fileName.startsWith('neoforge-');
+  }
+
+  /**
+   * 运行forge/neoforge安装器
+   */
+  static async runForgeInstaller(jarPath: string, onLog?: LogCallback): Promise<void> {
+    return new Promise((resolve, reject) => {
+      if (onLog) {
+        onLog('检测到Forge/NeoForge安装器，正在执行静默安装...', 'info');
+      }
+      
+      const installerProcess: ChildProcess = spawn('java', ['-jar', path.basename(jarPath), '--installServer'], {
+        cwd: path.dirname(jarPath),
+        stdio: ['pipe', 'pipe', 'pipe']
+      });
+
+      // 监听标准输出
+      installerProcess.stdout?.on('data', (data: Buffer) => {
+        const output = data.toString();
+        if (onLog) {
+          onLog(output, 'info');
+        }
+      });
+
+      // 监听标准错误
+      installerProcess.stderr?.on('data', (data: Buffer) => {
+        const output = data.toString();
+        if (onLog) {
+          onLog(output, 'error');
+        }
+      });
+
+      // 监听进程退出
+      installerProcess.on('close', (code: number | null) => {
+        if (code === 0) {
+          if (onLog) {
+            onLog('Forge/NeoForge安装器执行完成。', 'success');
+          }
+          resolve();
+        } else {
+          reject(new Error(`Forge/NeoForge安装器异常退出，退出码: ${code}`));
+        }
+      });
+
+      // 监听进程错误
+      installerProcess.on('error', (error: Error) => {
+        reject(new Error(`启动Forge/NeoForge安装器失败: ${error.message}`));
+      });
+
+      // 设置超时（10分钟）
+      setTimeout(() => {
+        if (!installerProcess.killed) {
+          if (onLog) {
+            onLog('Forge/NeoForge安装器运行超时，正在强制关闭...', 'warn');
+          }
+          installerProcess.kill('SIGKILL');
+          resolve();
+        }
+      }, 10 * 60 * 1000);
+    });
+  }
+
+  /**
    * 运行服务端直到EULA协议出现
    */
   static async runServerUntilEula(jarPath: string, onLog?: LogCallback): Promise<void> {
+    // 检查是否为forge或neoforge安装器
+    if (this.isForgeInstaller(jarPath)) {
+      return this.runForgeInstaller(jarPath, onLog);
+    }
+
     return new Promise((resolve, reject) => {
       if (onLog) {
         onLog('正在启动服务端...', 'info');
@@ -689,9 +762,100 @@ export class MinecraftServerDownloader {
   }
 
   /**
+   * 运行forge/neoforge安装器（支持取消）
+   */
+  private async runForgeInstallerWithCancel(jarPath: string, onLog?: LogCallback): Promise<ChildProcess | undefined> {
+    return new Promise((resolve, reject) => {
+      if (this.cancelled) {
+        reject(new Error('操作已取消'));
+        return;
+      }
+
+      if (onLog) {
+        onLog('检测到Forge/NeoForge安装器，正在执行静默安装...', 'info');
+      }
+      
+      const installerProcess: ChildProcess = spawn('java', ['-jar', path.basename(jarPath), '--installServer'], {
+        cwd: path.dirname(jarPath),
+        stdio: ['pipe', 'pipe', 'pipe']
+      });
+
+      this.currentProcess = installerProcess;
+
+      // 监听标准输出
+      installerProcess.stdout?.on('data', (data: Buffer) => {
+        if (this.cancelled) {
+          installerProcess.kill('SIGTERM');
+          return;
+        }
+
+        const output = data.toString();
+        if (onLog) {
+          onLog(output, 'info');
+        }
+      });
+
+      // 监听标准错误
+      installerProcess.stderr?.on('data', (data: Buffer) => {
+        if (this.cancelled) {
+          installerProcess.kill('SIGTERM');
+          return;
+        }
+
+        const output = data.toString();
+        if (onLog) {
+          onLog(output, 'error');
+        }
+      });
+
+      // 监听进程退出
+      installerProcess.on('close', (code: number | null) => {
+        this.currentProcess = undefined;
+        
+        if (this.cancelled) {
+          reject(new Error('操作已取消'));
+          return;
+        }
+
+        if (code === 0) {
+          if (onLog) {
+            onLog('Forge/NeoForge安装器执行完成。', 'success');
+          }
+          resolve(installerProcess);
+        } else {
+          reject(new Error(`Forge/NeoForge安装器异常退出，退出码: ${code}`));
+        }
+      });
+
+      // 监听进程错误
+      installerProcess.on('error', (error: Error) => {
+        this.currentProcess = undefined;
+        reject(new Error(`启动Forge/NeoForge安装器失败: ${error.message}`));
+      });
+
+      // 设置超时（10分钟）
+      setTimeout(() => {
+        if (!installerProcess.killed && !this.cancelled) {
+          if (onLog) {
+            onLog('Forge/NeoForge安装器运行超时，正在强制关闭...', 'warn');
+          }
+          installerProcess.kill('SIGKILL');
+          this.currentProcess = undefined;
+          resolve(installerProcess);
+        }
+      }, 10 * 60 * 1000);
+    });
+  }
+
+  /**
    * 运行服务端直到EULA协议（支持取消）
    */
   private async runServerUntilEulaWithCancel(jarPath: string, onLog?: LogCallback): Promise<ChildProcess | undefined> {
+    // 检查是否为forge或neoforge安装器
+    if (FileManager.isForgeInstaller(jarPath)) {
+      return this.runForgeInstallerWithCancel(jarPath, onLog);
+    }
+
     return new Promise((resolve, reject) => {
       if (this.cancelled) {
         reject(new Error('操作已取消'));
