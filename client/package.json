@@ -46,6 +46,7 @@
     "vite": "^5.4.19"
   },
   "overrides": {
-    "esbuild": "0.25.0"
+    "esbuild": "0.25.0",
+    "form-data": "^4.0.4"
   }
 }
