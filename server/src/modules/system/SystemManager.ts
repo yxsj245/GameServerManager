@@ -151,7 +151,7 @@ export class SystemManager extends EventEmitter {
     // 默认告警阈值
     this.alertThresholds = {
       cpu: { warning: 70, critical: 90 },
-      memory: { warning: 80, critical: 95 },
+      memory: { warning: 50, critical: 60 },
       disk: { warning: 85, critical: 95 },
       network: { warning: 100 * 1024 * 1024, critical: 500 * 1024 * 1024 } // MB/s
     }

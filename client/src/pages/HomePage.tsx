@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '@/stores/authStore'
 import { useNotificationStore } from '@/stores/notificationStore'
-import { SystemStats, SystemInfo, ProcessInfo, WeatherData, ActivePort } from '@/types'
+import { SystemStats, SystemInfo, ProcessInfo, WeatherData, ActivePort, SystemAlert } from '@/types'
 import socketClient from '@/utils/socket'
 import apiClient from '@/utils/api'
 import {
@@ -266,7 +266,7 @@ const HomePage: React.FC = () => {
   // 警报相关状态
   const [alertsShown, setAlertsShown] = useState<Set<string>>(new Set())
   const [showSystemAlert, setShowSystemAlert] = useState(false)
-  const [systemAlertType, setSystemAlertType] = useState<'memory' | 'disk' | null>(null)
+  const [systemAlertType, setSystemAlertType] = useState<'memory' | 'disk' | 'cpu' | null>(null)
   const [isSystemAlertClosing, setIsSystemAlertClosing] = useState(false)
   
   // 将原先的 useEffect 拆分为两个
@@ -390,6 +390,38 @@ const HomePage: React.FC = () => {
         }
       })
       
+      // 监听系统告警
+      socketClient.on('system-alert', (alert: SystemAlert) => {
+        const currentTime = Date.now()
+        const alertKey = `${alert.type}-${Math.floor(currentTime / 60000)}` // 每分钟最多一次相同类型的警报
+        
+        if (!alertsShown.has(alertKey)) {
+          // 发送通知
+          addNotification({
+            type: alert.level === 'critical' ? 'error' : 'warning',
+            title: `⚠️ ${alert.type === 'memory' ? '内存' : alert.type === 'disk' ? '磁盘' : alert.type === 'cpu' ? 'CPU' : '系统'}使用率警报`,
+            message: `${alert.message}，当前值: ${alert.value.toFixed(1)}%`,
+            duration: 10000 // 10秒后自动消失
+          })
+          
+          // 显示系统警报弹窗
+          if (!showSystemAlert) {
+            setSystemAlertType(alert.type as 'memory' | 'disk' | 'cpu')
+            setShowSystemAlert(true)
+            setIsSystemAlertClosing(false)
+          }
+          
+          // 记录已显示的警报
+          setAlertsShown(prev => new Set([...prev, alertKey]))
+        }
+      })
+      
+      // 监听系统告警解除
+      socketClient.on('system-alert-resolved', (alert: SystemAlert) => {
+        // 可以在这里添加告警解除的通知
+        console.log('系统告警已解除:', alert.message)
+      })
+      
       // 订阅系统状态、端口和进程信息
       socketClient.subscribeSystemStats()
       socketClient.subscribeSystemPorts()
@@ -404,6 +436,8 @@ const HomePage: React.FC = () => {
       socketClient.off('system-stats')
       socketClient.off('system-ports')
       socketClient.off('system-processes')
+      socketClient.off('system-alert')
+      socketClient.off('system-alert-resolved')
       
       if (socketClient.isConnected()) {
         socketClient.emit('unsubscribe-system-stats')
@@ -412,66 +446,6 @@ const HomePage: React.FC = () => {
       }
     }
   }, [connected])
-  
-  // 监控系统状态并检查是否需要发出警报
-  useEffect(() => {
-    if (!systemStats) return
-    
-    const checkSystemAlerts = () => {
-      const currentTime = Date.now()
-      const alertKey = `${currentTime}-${Math.floor(currentTime / 60000)}` // 每分钟最多一次相同类型的警报
-      
-      // 检查内存使用率
-      if (systemStats.memory.usage >= 90) {
-        const memoryAlertKey = `memory-${Math.floor(currentTime / 60000)}`
-        if (!alertsShown.has(memoryAlertKey)) {
-          // 发送通知
-          addNotification({
-            type: 'warning',
-            title: '⚠️ 内存使用率警报',
-            message: `内存使用率已达到 ${systemStats.memory.usage.toFixed(1)}%，请及时处理！`,
-            duration: 10000 // 10秒后自动消失
-          })
-          
-          // 显示系统警报弹窗
-          setSystemAlertType('memory')
-          setShowSystemAlert(true)
-          setIsSystemAlertClosing(false)
-          
-          // 记录已显示的警报
-          setAlertsShown(prev => new Set([...prev, memoryAlertKey]))
-        }
-      }
-      
-      // 检查磁盘使用率
-      if (systemStats.disk.usage >= 90) {
-        const diskAlertKey = `disk-${Math.floor(currentTime / 60000)}`
-        if (!alertsShown.has(diskAlertKey)) {
-          // 发送通知
-          addNotification({
-            type: 'warning',
-            title: '⚠️ 磁盘使用率警报',
-            message: `磁盘使用率已达到 ${systemStats.disk.usage.toFixed(1)}%，请及时清理磁盘空间！`,
-            duration: 10000 // 10秒后自动消失
-          })
-          
-          // 如果没有其他警报正在显示，则显示磁盘警报弹窗
-          if (!showSystemAlert) {
-            setSystemAlertType('disk')
-            setShowSystemAlert(true)
-            setIsSystemAlertClosing(false)
-          }
-          
-          // 记录已显示的警报
-          setAlertsShown(prev => new Set([...prev, diskAlertKey]))
-        }
-      }
-    }
-    
-    const interval = setInterval(checkSystemAlerts, 60000) // 每分钟检查一次
-    
-    return () => clearInterval(interval)
-  }, [systemStats, addNotification, alertsShown])
   
   // 清理过期的警报记录（每5分钟清理一次）
   useEffect(() => {
@@ -1581,6 +1555,47 @@ const HomePage: React.FC = () => {
                     </div>
                   </div>
                 )}
+
+                {systemAlertType === 'cpu' && systemStats && (
+                  <div>
+                    <div className="flex items-center space-x-3 mb-4">
+                      <Cpu className="w-6 h-6 text-red-500" />
+                      <h3 className="text-lg font-semibold text-red-600 dark:text-red-400">
+                        CPU使用率过高
+                      </h3>
+                    </div>
+                    <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 mb-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-red-800 dark:text-red-300 font-medium">当前CPU使用率</span>
+                        <span className="text-2xl font-bold text-red-600 dark:text-red-400">
+                          {systemStats.cpu.usage.toFixed(1)}%
+                        </span>
+                      </div>
+                      <div className="w-full bg-red-200 dark:bg-red-800 rounded-full h-3 mb-2">
+                        <div
+                          className="h-3 bg-red-500 rounded-full transition-all duration-300"
+                          style={{ width: `${systemStats.cpu.usage}%` }}
+                        ></div>
+                      </div>
+                      <div className="flex justify-between text-sm text-red-700 dark:text-red-400">
+                         <span>核心数: {systemStats.cpu.cores}</span>
+                         <span>型号: {systemStats.cpu.model}</span>
+                       </div>
+                    </div>
+                    <div className="text-sm text-gray-700 dark:text-gray-300">
+                      <p className="mb-2">
+                        <strong>建议操作：</strong>
+                      </p>
+                      <ul className="list-disc list-inside space-y-1 text-gray-600 dark:text-gray-400">
+                        <li>关闭占用CPU较高的进程</li>
+                        <li>检查是否有恶意软件或病毒</li>
+                        <li>重启占用CPU较高的服务</li>
+                        <li>检查系统后台任务</li>
+                        <li>考虑升级CPU硬件</li>
+                      </ul>
+                    </div>
+                  </div>
+                )}
               </div>
               
               {/* 警告提示 */}
@@ -1594,7 +1609,9 @@ const HomePage: React.FC = () => {
                     <p className="mt-1 text-yellow-700 dark:text-yellow-400">
                       {systemAlertType === 'memory' 
                         ? '内存使用率过高可能导致系统响应缓慢、程序崩溃或系统不稳定。'
-                        : '磁盘空间不足可能导致程序无法正常运行、数据无法保存或系统崩溃。'
+                        : systemAlertType === 'disk'
+                        ? '磁盘空间不足可能导致程序无法正常运行、数据无法保存或系统崩溃。'
+                        : 'CPU使用率过高可能导致系统响应缓慢、程序运行异常或系统过热。'
                       }
                     </p>
                   </div>
