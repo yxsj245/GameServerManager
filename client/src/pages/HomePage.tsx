@@ -366,64 +366,49 @@ const HomePage: React.FC = () => {
   
   // 第二个 useEffect：处理 WebSocket 相关逻辑，依赖于 connected 状态
   useEffect(() => {
-    // 获取活跃端口列表
-    const fetchActivePorts = async () => {
-      try {
-        if (isFirstPortsLoad) setPortsLoading(true)
-        const response = await apiClient.getActivePorts()
-        if (response.success) setActivePorts(response.data)
-      } catch (error) {
-        console.error('获取活跃端口失败:', error)
-      } finally {
-        if (isFirstPortsLoad) {
-          setPortsLoading(false)
-          setIsFirstPortsLoad(false)
-        }
-      }
-    }
-    
-    // 获取活跃进程列表
-    const fetchActiveProcesses = async () => {
-      try {
-        if (isFirstProcessesLoad) setProcessesLoading(true)
-        const response = await apiClient.getProcessList()
-        if (response.success) setActiveProcesses(response.data)
-      } catch (error) {
-        console.error('获取活跃进程失败:', error)
-      } finally {
-        if (isFirstProcessesLoad) {
-          setProcessesLoading(false)
-          setIsFirstProcessesLoad(false)
-        }
-      }
-    }
-
-    let portsInterval: NodeJS.Timeout | null = null
-    let processesInterval: NodeJS.Timeout | null = null
-
     if (connected) {
-      fetchActivePorts()
-      fetchActiveProcesses()
-
-      portsInterval = setInterval(fetchActivePorts, 10000)
-      processesInterval = setInterval(fetchActiveProcesses, 8000)
-
       // 监听系统状态更新
       socketClient.on('system-stats', (stats: SystemStats) => {
         setSystemStats(stats)
       })
       
-      // 订阅系统状态
+      // 监听端口信息更新
+      socketClient.on('system-ports', (ports: ActivePort[]) => {
+        setActivePorts(ports)
+        if (isFirstPortsLoad) {
+          setPortsLoading(false)
+          setIsFirstPortsLoad(false)
+        }
+      })
+      
+      // 监听进程信息更新
+      socketClient.on('system-processes', (processes: ProcessInfo[]) => {
+        setActiveProcesses(processes)
+        if (isFirstProcessesLoad) {
+          setProcessesLoading(false)
+          setIsFirstProcessesLoad(false)
+        }
+      })
+      
+      // 订阅系统状态、端口和进程信息
       socketClient.subscribeSystemStats()
+      socketClient.subscribeSystemPorts()
+      socketClient.subscribeSystemProcesses()
+      
+      // 初始加载状态
+      if (isFirstPortsLoad) setPortsLoading(true)
+      if (isFirstProcessesLoad) setProcessesLoading(true)
     }
     
     return () => {
-      if (portsInterval) clearInterval(portsInterval)
-      if (processesInterval) clearInterval(processesInterval)
-      
       socketClient.off('system-stats')
+      socketClient.off('system-ports')
+      socketClient.off('system-processes')
+      
       if (socketClient.isConnected()) {
         socketClient.emit('unsubscribe-system-stats')
+        socketClient.emit('unsubscribe-system-ports')
+        socketClient.emit('unsubscribe-system-processes')
       }
     }
   }, [connected])

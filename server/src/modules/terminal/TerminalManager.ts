@@ -74,8 +74,8 @@ export class TerminalManager {
     const arch = os.arch()
     
     if (platform === 'win32') {
-      // this.ptyPath = path.resolve(__dirname, '../../../PTY/pty_win32_x64.exe')
-      this.ptyPath = path.resolve(__dirname, '../../PTY/pty_win32_x64.exe')
+      this.ptyPath = path.resolve(__dirname, '../../../PTY/pty_win32_x64.exe')
+      // this.ptyPath = path.resolve(__dirname, '../../PTY/pty_win32_x64.exe')
     } else {
       // Linux平台根据架构选择对应的PTY文件
       if (arch === 'arm64' || arch === 'aarch64') {

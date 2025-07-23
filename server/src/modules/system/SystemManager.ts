@@ -138,6 +138,8 @@ export class SystemManager extends EventEmitter {
   private alerts: Map<string, SystemAlert> = new Map()
   private alertThresholds: AlertThresholds
   private monitoringInterval?: NodeJS.Timeout
+  private portsMonitoringInterval?: NodeJS.Timeout
+  private processesMonitoringInterval?: NodeJS.Timeout
   private lastNetworkStats: any = null
 
   constructor(io: SocketIOServer, logger: winston.Logger) {
@@ -215,6 +217,26 @@ export class SystemManager extends EventEmitter {
         this.logger.error('收集系统统计信息失败:', error)
       }
     }, 5000)
+
+    // 每10秒收集一次端口信息
+    this.portsMonitoringInterval = setInterval(async () => {
+      try {
+        const ports = await this.getActivePorts()
+        this.io.to('system-ports').emit('system-ports', ports)
+      } catch (error) {
+        this.logger.error('收集端口信息失败:', error)
+      }
+    }, 10000)
+
+    // 每8秒收集一次进程信息
+    this.processesMonitoringInterval = setInterval(async () => {
+      try {
+        const processes = await this.getProcessList()
+        this.io.to('system-processes').emit('system-processes', processes)
+      } catch (error) {
+        this.logger.error('收集进程信息失败:', error)
+      }
+    }, 8000)
   }
 
   /**
@@ -224,6 +246,14 @@ export class SystemManager extends EventEmitter {
     if (this.monitoringInterval) {
       clearInterval(this.monitoringInterval)
       this.monitoringInterval = undefined
+    }
+    if (this.portsMonitoringInterval) {
+      clearInterval(this.portsMonitoringInterval)
+      this.portsMonitoringInterval = undefined
+    }
+    if (this.processesMonitoringInterval) {
+      clearInterval(this.processesMonitoringInterval)
+      this.processesMonitoringInterval = undefined
     }
   }
 
