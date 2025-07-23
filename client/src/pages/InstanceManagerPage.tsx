@@ -104,14 +104,6 @@ const InstanceManagerPage: React.FC = () => {
   const [configData, setConfigData] = useState<any>({})
   const [isConfigLoading, setIsConfigLoading] = useState(false)
   const [isSavingConfig, setIsSavingConfig] = useState(false)
-  
-  // Python环境检测状态
-  const [pythonStatus, setPythonStatus] = useState<{
-    available: boolean
-    version?: string
-    error?: string
-    checking: boolean
-  }>({ available: false, checking: true })
 
   // 获取实例列表
   const fetchInstances = async () => {
@@ -141,49 +133,6 @@ const InstanceManagerPage: React.FC = () => {
       setAvailableConfigs(response.data)
     } catch (error) {
       console.error('获取配置列表失败:', error)
-    }
-  }
-
-  // 检测Python环境
-  const checkPythonEnvironment = async () => {
-    try {
-      setPythonStatus(prev => ({ ...prev, checking: true }))
-      const response = await apiClient.checkPythonEnvironment()
-      
-      if (response.success) {
-        setPythonStatus({
-          available: response.data.available,
-          version: response.data.version,
-          error: response.data.error,
-          checking: false
-        })
-        
-        if (!response.data.available) {
-          addNotification({
-            type: 'warning',
-            title: 'Python环境检测',
-            message: `当前系统中未检测到Python环境，游戏配置功能将无法使用`
-          })
-        }
-      } else {
-        setPythonStatus({
-          available: false,
-          error: response.error || '检测失败',
-          checking: false
-        })
-      }
-    } catch (error) {
-      console.error('Python环境检测失败:', error)
-      setPythonStatus({
-        available: false,
-        error: '检测异常',
-        checking: false
-      })
-      addNotification({
-        type: 'error',
-        title: 'Python环境检测失败',
-        message: '无法检测Python环境状态'
-      })
     }
   }
 
@@ -432,10 +381,6 @@ const InstanceManagerPage: React.FC = () => {
   useEffect(() => {
     if (activeTab === 'market' && marketInstances.length === 0) {
       fetchMarketInstances()
-    }
-    // 当切换到游戏配置标签时检测Python环境
-    if (activeTab === 'gameConfig') {
-      checkPythonEnvironment()
     }
   }, [activeTab])
 
@@ -1211,62 +1156,7 @@ const InstanceManagerPage: React.FC = () => {
         </div>
       ) : (
         /* 游戏配置文件 */
-        <div className="relative space-y-6">
-          {/* Python环境检测覆盖层 */}
-          {pythonStatus.checking && (
-            <div className="absolute inset-0 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm z-10 flex items-center justify-center rounded-lg">
-              <div className="text-center">
-                <Loader className="w-8 h-8 animate-spin text-blue-500 mx-auto mb-2" />
-                <p className="text-gray-600 dark:text-gray-400">正在检测Python环境...</p>
-              </div>
-            </div>
-          )}
-          
-          {!pythonStatus.checking && !pythonStatus.available && (
-            <div className="absolute inset-0 bg-white/90 dark:bg-gray-900/90 backdrop-blur-sm z-10 flex items-center justify-center rounded-lg">
-              <div className="text-center max-w-md mx-auto p-6">
-                <div className="w-16 h-16 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <svg className="w-8 h-8 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
-                  </svg>
-                </div>
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-                  Python环境未检测到
-                </h3>
-                <p className="text-gray-600 dark:text-gray-400 mb-4">
-                  当前系统中未检测到Python环境，游戏配置功能需要Python支持才能正常使用。
-                </p>
-                {pythonStatus.error && (
-                  <p className="text-sm text-red-600 dark:text-red-400 mb-4">
-                    错误信息: {pythonStatus.error}
-                  </p>
-                )}
-                <div className="flex flex-col sm:flex-row gap-3 justify-center">
-                  <button
-                    onClick={() => window.open('https://www.python.org/downloads/', '_blank')}
-                    className="inline-flex items-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                    </svg>
-                    <span>前往下载Python</span>
-                  </button>
-                  <button
-                    onClick={checkPythonEnvironment}
-                    className="inline-flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                    </svg>
-                    <span>重新检测</span>
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-          
-          {/* 原有内容，当Python不可用时会被覆盖层遮挡 */}
-          <div className={`${!pythonStatus.available && !pythonStatus.checking ? 'pointer-events-none opacity-50' : ''}`}>
+        <div className="space-y-6">
           {/* 选择区域 */}
           <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
@@ -1672,7 +1562,6 @@ const InstanceManagerPage: React.FC = () => {
               </p>
             </div>
           )}
-          </div>
         </div>
       )}
 
