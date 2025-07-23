@@ -32,22 +32,19 @@ const getNestedValue = (obj: any, path: string): any => {
     return obj[path]
   }
 
-  // 2. 如果直接访问不到，假定路径是 'section.field' 格式
-  const lastDotIndex = path.lastIndexOf('.')
-  if (lastDotIndex === -1) {
-    // 如果没有点，并且在第1步中也找不到，说明这个键不存在
-    return undefined
+  // 2. 使用点分割路径，支持多层嵌套
+  const pathParts = path.split('.')
+  let current = obj
+  
+  for (const part of pathParts) {
+    if (current && typeof current === 'object' && Object.prototype.hasOwnProperty.call(current, part)) {
+      current = current[part]
+    } else {
+      return undefined
+    }
   }
-
-  const sectionKey = path.substring(0, lastDotIndex)
-  const fieldKey = path.substring(lastDotIndex + 1)
-
-  // 3. 检查节是否存在，并且是一个对象
-  if (Object.prototype.hasOwnProperty.call(obj, sectionKey) && obj[sectionKey] && typeof obj[sectionKey] === 'object') {
-    return obj[sectionKey][fieldKey]
-  }
-
-  return undefined
+  
+  return current
 }
 
 // 实例市场相关类型
@@ -140,7 +137,7 @@ const InstanceManagerPage: React.FC = () => {
   // 获取可用配置列表
   const fetchAvailableConfigs = async () => {
     try {
-      const response = await apiClient.getAvailableConfigs()
+      const response = await apiClient.getGameConfigTemplates()
       setAvailableConfigs(response.data)
     } catch (error) {
       console.error('获取配置列表失败:', error)
@@ -194,7 +191,7 @@ const InstanceManagerPage: React.FC = () => {
   const fetchConfigSchema = async (configId: string) => {
     try {
       setIsConfigLoading(true)
-      const response = await apiClient.getConfigSchema(configId)
+      const response = await apiClient.getGameConfigTemplate(configId)
       setConfigSchema(response.data)
       return response.data // 返回获取到的配置模式数据
     } catch (error) {
@@ -215,10 +212,15 @@ const InstanceManagerPage: React.FC = () => {
     try {
       setIsConfigLoading(true)
       const response = await apiClient.readGameConfig(instanceId, configId)
-      console.log('从服务器读取的配置数据:', response.data)
+      console.log('从服务器读取的完整响应:', response)
+      
+      // 正确提取配置数据：response.data.config 而不是 response.data
+      const configData = response.data?.config || {}
+      console.log('提取的配置数据:', configData)
+      
       // 使用传入的配置模式或当前的配置模式填充默认值
       const currentSchema = schema || configSchema
-      const filledData = fillDefaultValues(currentSchema, response.data)
+      const filledData = fillDefaultValues(currentSchema, configData)
       console.log('填充默认值后的配置数据:', filledData)
       setConfigData(filledData)
     } catch (error) {
@@ -311,8 +313,23 @@ const InstanceManagerPage: React.FC = () => {
         
         if (section.fields && Array.isArray(section.fields)) {
           section.fields.forEach((field: any) => {
-            if (filledData[sectionKey][field.name] === undefined && field.default !== undefined) {
-              filledData[sectionKey][field.name] = field.default
+            if (field.type === 'nested' && field.nested_fields) {
+              // 处理嵌套字段
+              if (!filledData[sectionKey][field.name]) {
+                filledData[sectionKey][field.name] = {}
+              }
+              
+              // 填充嵌套字段的默认值
+              field.nested_fields.forEach((nestedField: any) => {
+                if (filledData[sectionKey][field.name][nestedField.name] === undefined && nestedField.default !== undefined) {
+                  filledData[sectionKey][field.name][nestedField.name] = nestedField.default
+                }
+              })
+            } else {
+              // 处理普通字段
+              if (filledData[sectionKey][field.name] === undefined && field.default !== undefined) {
+                filledData[sectionKey][field.name] = field.default
+              }
             }
           })
         }
@@ -326,8 +343,23 @@ const InstanceManagerPage: React.FC = () => {
         
         if (section.fields && Array.isArray(section.fields)) {
           section.fields.forEach((field: any) => {
-            if (filledData[sectionKey][field.name] === undefined && field.default !== undefined) {
-              filledData[sectionKey][field.name] = field.default
+            if (field.type === 'nested' && field.nested_fields) {
+              // 处理嵌套字段
+              if (!filledData[sectionKey][field.name]) {
+                filledData[sectionKey][field.name] = {}
+              }
+              
+              // 填充嵌套字段的默认值
+              field.nested_fields.forEach((nestedField: any) => {
+                if (filledData[sectionKey][field.name][nestedField.name] === undefined && nestedField.default !== undefined) {
+                  filledData[sectionKey][field.name][nestedField.name] = nestedField.default
+                }
+              })
+            } else {
+              // 处理普通字段
+              if (filledData[sectionKey][field.name] === undefined && field.default !== undefined) {
+                filledData[sectionKey][field.name] = field.default
+              }
             }
           })
         }
@@ -342,24 +374,30 @@ const InstanceManagerPage: React.FC = () => {
     console.log('配置数据变化:', { path, value, currentConfigData: configData })
     setConfigData((prev) => {
       const newData = { ...prev }
-      const lastDotIndex = path.lastIndexOf('.')
+      const pathParts = path.split('.')
 
-      if (lastDotIndex === -1) {
-        // 如果没有点，直接更新顶级属性
+      if (pathParts.length === 1) {
+        // 如果只有一层，直接更新顶级属性
         newData[path] = value
         console.log('更新后的配置数据:', newData)
         return newData
       }
 
-      const sectionKey = path.substring(0, lastDotIndex)
-      const fieldKey = path.substring(lastDotIndex + 1)
-
-      const oldSection = prev[sectionKey]
-      // 确保我们总是基于一个对象进行扩展，如果原始节不是对象，则创建一个新对象
-      const newSection = oldSection && typeof oldSection === 'object' ? { ...oldSection } : {}
-
-      newSection[fieldKey] = value
-      newData[sectionKey] = newSection
+      // 多层嵌套路径处理
+      let current = newData
+      for (let i = 0; i < pathParts.length - 1; i++) {
+        const part = pathParts[i]
+        if (!current[part] || typeof current[part] !== 'object') {
+          current[part] = {}
+        } else {
+          current[part] = { ...current[part] }
+        }
+        current = current[part]
+      }
+      
+      // 设置最终值
+      const lastPart = pathParts[pathParts.length - 1]
+      current[lastPart] = value
 
       console.log('更新后的配置数据:', newData)
       return newData
@@ -1447,7 +1485,149 @@ const InstanceManagerPage: React.FC = () => {
                               )}
                               
                               {/* 默认处理未知类型为文本输入 */}
-                               {!['string', 'integer', 'number', 'boolean', 'enum', 'select', 'float', 'double'].includes(field.type) && (
+                              {field.type === 'nested' && field.nested_fields && (
+                                <div className="space-y-4 pl-4 border-l-2 border-gray-200 dark:border-gray-600">
+                                  <p className="text-sm text-gray-600 dark:text-gray-400 font-medium">
+                                    嵌套配置项:
+                                  </p>
+                                  {field.nested_fields.map((nestedField: any, nestedIndex: number) => {
+                                    const nestedFieldPath = `${fieldPath}.${nestedField.name}`
+                                    const nestedFieldValue = getNestedValue(configData, nestedFieldPath)
+                                    
+                                    return (
+                                      <div key={nestedField.name || nestedIndex} className="space-y-2">
+                                        <label className="block text-sm font-medium text-gray-600 dark:text-gray-400">
+                                          {nestedField.display || nestedField.name}
+                                          {nestedField.required && <span className="text-red-500 ml-1">*</span>}
+                                        </label>
+                                        
+                                        {nestedField.description && (
+                                          <p className="text-xs text-gray-500 dark:text-gray-400">
+                                            {nestedField.description}
+                                          </p>
+                                        )}
+                                        
+                                        {nestedField.type === 'string' && (
+                                          <input
+                                            type="text"
+                                            value={nestedFieldValue !== undefined && nestedFieldValue !== null ? nestedFieldValue : (nestedField.default || '')}
+                                            onChange={(e) => handleConfigDataChange(nestedFieldPath, e.target.value)}
+                                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                            placeholder="请输入值"
+                                          />
+                                        )}
+                                        
+                                        {(nestedField.type === 'integer' || nestedField.type === 'number') && (
+                                          <input
+                                            type="number"
+                                            value={nestedFieldValue !== undefined && nestedFieldValue !== null ? nestedFieldValue.toString() : (nestedField.default !== undefined ? nestedField.default.toString() : '')}
+                                            onChange={(e) => {
+                                              const value = e.target.value
+                                              if (value === '') {
+                                                handleConfigDataChange(nestedFieldPath, nestedField.default !== undefined ? nestedField.default : (nestedField.type === 'integer' ? 0 : 0.0))
+                                              } else {
+                                                const numValue = nestedField.type === 'integer' ? parseInt(value) : parseFloat(value)
+                                                handleConfigDataChange(nestedFieldPath, isNaN(numValue) ? (nestedField.default !== undefined ? nestedField.default : (nestedField.type === 'integer' ? 0 : 0.0)) : numValue)
+                                              }
+                                            }}
+                                            step={nestedField.type === 'integer' ? '1' : 'any'}
+                                            min={nestedField.min}
+                                            max={nestedField.max}
+                                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                            placeholder="请输入数值"
+                                          />
+                                        )}
+                                        
+                                        {nestedField.type === 'boolean' && (
+                                          <div className="flex items-center space-x-3">
+                                            <label className="flex items-center cursor-pointer">
+                                              <input
+                                                type="checkbox"
+                                                checked={nestedFieldValue !== undefined ? Boolean(nestedFieldValue) : Boolean(nestedField.default)}
+                                                onChange={(e) => {
+                                                  handleConfigDataChange(nestedFieldPath, e.target.checked)
+                                                }}
+                                                className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
+                                              />
+                                              <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
+                                                {nestedFieldValue !== undefined ? Boolean(nestedFieldValue) : Boolean(nestedField.default) ? '启用' : '禁用'}
+                                              </span>
+                                            </label>
+                                            <span className="text-xs text-gray-500 dark:text-gray-400">
+                                              当前值: {nestedFieldValue !== undefined ? (Boolean(nestedFieldValue) ? 'true' : 'false') : (Boolean(nestedField.default) ? 'true' : 'false')}
+                                            </span>
+                                          </div>
+                                        )}
+                                        
+                                        {(nestedField.type === 'enum' || nestedField.type === 'select') && (
+                                          <select
+                                            value={nestedFieldValue !== undefined && nestedFieldValue !== null ? nestedFieldValue : (nestedField.default || '')}
+                                            onChange={(e) => handleConfigDataChange(nestedFieldPath, e.target.value)}
+                                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                          >
+                                            <option value="">请选择</option>
+                                            {nestedField.options?.map((option: any) => {
+                                              if (typeof option === 'string') {
+                                                return (
+                                                  <option key={option} value={option}>
+                                                    {option}
+                                                  </option>
+                                                )
+                                              } else if (option && typeof option === 'object' && option.value) {
+                                                return (
+                                                  <option key={option.value} value={option.value}>
+                                                    {option.label || option.value}
+                                                  </option>
+                                                )
+                                              }
+                                              return null
+                                            })}
+                                          </select>
+                                        )}
+                                        
+                                        {(nestedField.type === 'float' || nestedField.type === 'double') && (
+                                          <input
+                                            type="number"
+                                            value={nestedFieldValue !== undefined && nestedFieldValue !== null ? nestedFieldValue.toString() : (nestedField.default !== undefined ? nestedField.default.toString() : '')}
+                                            onChange={(e) => {
+                                              const value = e.target.value
+                                              if (value === '') {
+                                                handleConfigDataChange(nestedFieldPath, nestedField.default !== undefined ? nestedField.default : 0.0)
+                                              } else {
+                                                const numValue = parseFloat(value)
+                                                handleConfigDataChange(nestedFieldPath, isNaN(numValue) ? (nestedField.default !== undefined ? nestedField.default : 0.0) : numValue)
+                                              }
+                                            }}
+                                            step="any"
+                                            min={nestedField.min}
+                                            max={nestedField.max}
+                                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                            placeholder="请输入小数值"
+                                          />
+                                        )}
+                                        
+                                        {/* 嵌套字段的默认处理 */}
+                                        {!['string', 'integer', 'number', 'boolean', 'enum', 'select', 'float', 'double'].includes(nestedField.type) && (
+                                          <div className="space-y-2">
+                                            <input
+                                              type="text"
+                                              value={nestedFieldValue !== undefined && nestedFieldValue !== null ? nestedFieldValue.toString() : (nestedField.default !== undefined ? nestedField.default.toString() : '')}
+                                              onChange={(e) => handleConfigDataChange(nestedFieldPath, e.target.value)}
+                                              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                              placeholder="请输入值"
+                                            />
+                                            <p className="text-xs text-yellow-600 dark:text-yellow-400">
+                                              未知类型 '{nestedField.type}' - 作为文本处理
+                                            </p>
+                                          </div>
+                                        )}
+                                      </div>
+                                    )
+                                  })}
+                                </div>
+                              )}
+                              
+                               {!['string', 'integer', 'number', 'boolean', 'enum', 'select', 'float', 'double', 'nested'].includes(field.type) && (
                                 <div className="space-y-2">
                                   <input
                                     type="text"

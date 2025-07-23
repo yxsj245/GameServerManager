@@ -620,20 +620,28 @@ class ApiClient {
   }
 
   // 游戏配置文件API
-  async getAvailableConfigs() {
-    return this.get('/instances/configs/available')
+  async getGameConfigTemplates() {
+    return this.get('/gameconfig/templates')
   }
 
-  async getConfigSchema(configId: string) {
-    return this.get(`/instances/configs/schema/${encodeURIComponent(configId)}`)
+  async getGameConfigTemplate(gameName: string) {
+    return this.get(`/gameconfig/templates/${encodeURIComponent(gameName)}`)
   }
 
-  async readGameConfig(instanceId: string, configId: string) {
-    return this.get(`/instances/${instanceId}/configs/${encodeURIComponent(configId)}`)
+  async readGameConfig(instanceId: string, gameName: string) {
+    return this.get(`/gameconfig/instances/${instanceId}/${encodeURIComponent(gameName)}`)
   }
 
-  async saveGameConfig(instanceId: string, configId: string, configData: any) {
-    return this.post(`/instances/${instanceId}/configs/${encodeURIComponent(configId)}`, { configData })
+  async saveGameConfig(instanceId: string, gameName: string, config: any) {
+    return this.post(`/gameconfig/instances/${instanceId}/${encodeURIComponent(gameName)}`, { config })
+  }
+
+  async validateGameConfig(gameName: string, config: any) {
+    return this.post(`/gameconfig/validate/${encodeURIComponent(gameName)}`, { config })
+  }
+
+  async getGameConfigRaw(instanceId: string, gameName: string) {
+    return this.get(`/gameconfig/instances/${instanceId}/${encodeURIComponent(gameName)}/raw`)
   }
 
   // Python环境检测API

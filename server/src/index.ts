@@ -37,6 +37,7 @@ import pluginsRouter, { setPluginManager } from './routes/plugins.js'
 import pluginApiRouter, { setPluginApiDependencies } from './routes/pluginApi.js'
 import sponsorRouter, { setSponsorDependencies } from './routes/sponsor.js'
 import onlineDeployRouter from './routes/onlineDeploy.js'
+import gameConfigRouter from './routes/gameconfig.js'
 
 // 获取当前文件目录
 const __filename = fileURLToPath(import.meta.url)
@@ -519,6 +520,11 @@ async function startServer() {
     const { setOnlineDeployDependencies } = await import('./routes/onlineDeploy.js')
     setOnlineDeployDependencies(io, configManager)
     app.use('/api/online-deploy', onlineDeployRouter)
+    
+    // 设置游戏配置路由
+    const { setInstanceManager: setGameConfigInstanceManager } = await import('./routes/gameconfig.js')
+    setGameConfigInstanceManager(instanceManager)
+    app.use('/api/gameconfig', gameConfigRouter)
 
     // 前端路由处理（SPA支持）
     app.get('*', (req, res) => {

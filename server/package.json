@@ -33,7 +33,9 @@
     "mime-types": "^2.1.35",
     "adm-zip": "^0.5.10",
     "tar-stream": "^3.1.7",
-    "form-data": "^4.0.4"
+    "form-data": "^4.0.4",
+    "yaml": "^2.3.4",
+    "properties-reader": "^2.3.0"
   },
   "devDependencies": {
     "@types/cors": "^2.8.17",
