@@ -6,6 +6,19 @@ export interface FileItem {
   modified: string
 }
 
+export interface FilePagination {
+  page: number
+  pageSize: number
+  total: number
+  totalPages: number
+  hasMore: boolean
+}
+
+export interface FileListResponse {
+  files: FileItem[]
+  pagination: FilePagination
+}
+
 export interface FileOperationResult {
   success: boolean
   status: 'success' | 'error'

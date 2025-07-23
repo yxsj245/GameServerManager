@@ -1,5 +1,5 @@
 import axios, { AxiosInstance } from 'axios'
-import { FileItem, FileOperationResult, FileSearchResult, FileContent, Task } from '@/types/file'
+import { FileItem, FileOperationResult, FileSearchResult, FileContent, Task, FileListResponse } from '@/types/file'
 import { useNotificationStore } from '@/stores/notificationStore'
 
 const API_BASE = '/api/files'
@@ -55,9 +55,9 @@ export class FileApiClient {
     )
   }
   // 获取目录内容
-  async listDirectory(path: string = '/'): Promise<FileItem[]> {
+  async listDirectory(path: string = '/', page: number = 1, pageSize: number = 50): Promise<FileListResponse> {
     const response = await this.client.get(`${API_BASE}/list`, {
-      params: { path }
+      params: { path, page, pageSize }
     })
     return response.data.data
   }
@@ -427,6 +427,57 @@ export class FileApiClient {
   async getDrives(): Promise<Array<{ label: string; value: string; type: string }>> {
     const response = await this.client.get(`${API_BASE}/drives`)
     return response.data.data
+  }
+
+  // 获取文件权限信息
+  async getFilePermissions(path: string): Promise<{
+    owner: string
+    group: string
+    permissions: {
+      owner: { read: boolean; write: boolean; execute: boolean }
+      group: { read: boolean; write: boolean; execute: boolean }
+      others: { read: boolean; write: boolean; execute: boolean }
+    }
+    octal: string
+  }> {
+    const response = await this.client.get(`${API_BASE}/permissions`, {
+      params: { path }
+    })
+    return response.data.data
+  }
+
+  // 修改文件权限
+  async setFilePermissions(
+    path: string,
+    permissions: {
+      owner: { read: boolean; write: boolean; execute: boolean }
+      group: { read: boolean; write: boolean; execute: boolean }
+      others: { read: boolean; write: boolean; execute: boolean }
+    },
+    recursive?: boolean
+  ): Promise<FileOperationResult> {
+    const response = await this.client.post(`${API_BASE}/permissions`, {
+      path,
+      permissions,
+      recursive
+    })
+    return response.data
+  }
+
+  // 修改文件所有者
+  async setFileOwnership(
+    path: string,
+    owner?: string,
+    group?: string,
+    recursive?: boolean
+  ): Promise<FileOperationResult> {
+    const response = await this.client.post(`${API_BASE}/ownership`, {
+      path,
+      owner,
+      group,
+      recursive
+    })
+    return response.data
   }
 }
 

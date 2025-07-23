@@ -138,6 +138,8 @@ export class SystemManager extends EventEmitter {
   private alerts: Map<string, SystemAlert> = new Map()
   private alertThresholds: AlertThresholds
   private monitoringInterval?: NodeJS.Timeout
+  private portsMonitoringInterval?: NodeJS.Timeout
+  private processesMonitoringInterval?: NodeJS.Timeout
   private lastNetworkStats: any = null
 
   constructor(io: SocketIOServer, logger: winston.Logger) {
@@ -148,13 +150,23 @@ export class SystemManager extends EventEmitter {
     
     // 默认告警阈值
     this.alertThresholds = {
-      cpu: { warning: 70, critical: 90 },
-      memory: { warning: 80, critical: 95 },
-      disk: { warning: 85, critical: 95 },
+      cpu: { warning: 100, critical: 100 }, // 禁用CPU告警
+      memory: { warning: 80, critical: 90 },
+      disk: { warning: 70, critical: 80 },
       network: { warning: 100 * 1024 * 1024, critical: 500 * 1024 * 1024 } // MB/s
     }
     
     this.logger.info('系统监控管理器初始化完成')
+    
+    // 清理现有的CPU告警（因为已禁用CPU告警）
+    setTimeout(() => {
+      const cpuAlert = this.alerts.get('cpu-alert')
+      if (cpuAlert && !cpuAlert.resolved) {
+        cpuAlert.resolved = true
+        this.io.emit('system-alert-resolved', cpuAlert)
+        this.logger.info('CPU告警已禁用，现有CPU告警已解除')
+      }
+    }, 1000)
     
     // 检测并输出当前系统的资源获取方法
     this.detectResourceMethods()
@@ -215,6 +227,26 @@ export class SystemManager extends EventEmitter {
         this.logger.error('收集系统统计信息失败:', error)
       }
     }, 5000)
+
+    // 每10秒收集一次端口信息
+    this.portsMonitoringInterval = setInterval(async () => {
+      try {
+        const ports = await this.getActivePorts()
+        this.io.to('system-ports').emit('system-ports', ports)
+      } catch (error) {
+        this.logger.error('收集端口信息失败:', error)
+      }
+    }, 10000)
+
+    // 每8秒收集一次进程信息
+    this.processesMonitoringInterval = setInterval(async () => {
+      try {
+        const processes = await this.getProcessList()
+        this.io.to('system-processes').emit('system-processes', processes)
+      } catch (error) {
+        this.logger.error('收集进程信息失败:', error)
+      }
+    }, 8000)
   }
 
   /**
@@ -224,6 +256,14 @@ export class SystemManager extends EventEmitter {
     if (this.monitoringInterval) {
       clearInterval(this.monitoringInterval)
       this.monitoringInterval = undefined
+    }
+    if (this.portsMonitoringInterval) {
+      clearInterval(this.portsMonitoringInterval)
+      this.portsMonitoringInterval = undefined
+    }
+    if (this.processesMonitoringInterval) {
+      clearInterval(this.processesMonitoringInterval)
+      this.processesMonitoringInterval = undefined
     }
   }
 
@@ -783,16 +823,28 @@ export class SystemManager extends EventEmitter {
       }
       
       // 转换数据格式以匹配客户端期望的格式
-      return processes.map(process => ({
-        id: `${process.pid}`, // 添加 id 字段
-        pid: process.pid,
-        name: process.name,
-        cpu: process.cpu,
-        memory: process.memory,
-        status: process.status,
-        startTime: process.startTime.toISOString(), // 转换为 ISO 字符串
-        command: process.command
-      }))
+      return processes.map(process => {
+        // 确保startTime是有效的Date对象
+        let startTimeStr = new Date().toISOString()
+        try {
+          if (process.startTime && !isNaN(process.startTime.getTime())) {
+            startTimeStr = process.startTime.toISOString()
+          }
+        } catch (e) {
+          this.logger.warn(`进程 ${process.pid} 的启动时间无效，使用当前时间代替`)
+        }
+        
+        return {
+          id: `${process.pid}`, // 添加 id 字段
+          pid: process.pid,
+          name: process.name,
+          cpu: process.cpu,
+          memory: process.memory,
+          status: process.status,
+          startTime: startTimeStr, // 转换为 ISO 字符串
+          command: process.command
+        }
+      })
     } catch (error) {
       this.logger.error('获取进程列表失败:', error)
       return []
@@ -844,8 +896,15 @@ export class SystemManager extends EventEmitter {
               const minute = parseInt(creationDate.substring(10, 12))
               const second = parseInt(creationDate.substring(12, 14))
               startTime = new Date(year, month, day, hour, minute, second)
+              
+              // 验证日期是否有效
+              if (isNaN(startTime.getTime())) {
+                // 如果日期无效，使用当前时间
+                startTime = new Date()
+              }
             } catch (e) {
               // 使用默认时间
+              startTime = new Date()
             }
           }
           
@@ -929,6 +988,12 @@ export class SystemManager extends EventEmitter {
                   // 月日格式，假设是今年
                   startTime = new Date(`${start} ${today.getFullYear()}`)
                 }
+              }
+              
+              // 验证日期是否有效
+              if (isNaN(startTime.getTime())) {
+                // 如果日期无效，使用当前时间
+                startTime = new Date()
               }
             } catch (e) {
               // 解析失败，使用当前时间
@@ -1058,8 +1123,8 @@ export class SystemManager extends EventEmitter {
    * 检查告警
    */
   private checkAlerts(stats: SystemStats): void {
-    // CPU告警
-    this.checkAlert('cpu', stats.cpu.usage, this.alertThresholds.cpu, 'CPU使用率')
+    // CPU告警已禁用
+    // this.checkAlert('cpu', stats.cpu.usage, this.alertThresholds.cpu, 'CPU使用率')
     
     // 内存告警
     this.checkAlert('memory', stats.memory.usage, this.alertThresholds.memory, '内存使用率')
@@ -1133,6 +1198,17 @@ export class SystemManager extends EventEmitter {
    */
   public setAlertThresholds(thresholds: Partial<AlertThresholds>): void {
     this.alertThresholds = { ...this.alertThresholds, ...thresholds }
+    
+    // 如果禁用了CPU告警（阈值设为100%），则解除现有的CPU告警
+    if (thresholds.cpu && thresholds.cpu.warning >= 100 && thresholds.cpu.critical >= 100) {
+      const cpuAlert = this.alerts.get('cpu-alert')
+      if (cpuAlert && !cpuAlert.resolved) {
+        cpuAlert.resolved = true
+        this.io.emit('system-alert-resolved', cpuAlert)
+        this.logger.info('CPU告警已禁用，现有CPU告警已解除')
+      }
+    }
+    
     this.logger.info('告警阈值已更新:', this.alertThresholds)
   }
 

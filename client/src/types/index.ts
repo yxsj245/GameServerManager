@@ -135,6 +135,17 @@ export interface ProcessInfo {
   command: string
 }
 
+export interface SystemAlert {
+  id: string
+  type: 'cpu' | 'memory' | 'disk' | 'network' | 'process'
+  level: 'info' | 'warning' | 'critical'
+  message: string
+  value: number
+  threshold: number
+  timestamp: string
+  resolved: boolean
+}
+
 export interface ActivePort {
   port: number
   protocol: 'tcp' | 'udp'
@@ -186,7 +197,8 @@ export interface SocketEvents {
   
   // 系统监控事件
   'system-stats': (data: SystemStats) => void
-  'system-alert': (data: { type: string; message: string; level: 'info' | 'warning' | 'error' }) => void
+  'system-alert': (data: SystemAlert) => void
+  'system-alert-resolved': (data: SystemAlert) => void
   
   // 游戏服务器事件
   'game-status': (data: { gameId: string; status: GameServer['status'] }) => void

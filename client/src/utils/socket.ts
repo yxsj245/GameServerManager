@@ -246,6 +246,24 @@ class SocketClient {
     this.emit('unsubscribe-system-stats')
   }
 
+  // 端口监控相关方法
+  subscribeSystemPorts() {
+    this.emit('subscribe-system-ports')
+  }
+
+  unsubscribeSystemPorts() {
+    this.emit('unsubscribe-system-ports')
+  }
+
+  // 进程监控相关方法
+  subscribeSystemProcesses() {
+    this.emit('subscribe-system-processes')
+  }
+
+  unsubscribeSystemProcesses() {
+    this.emit('unsubscribe-system-processes')
+  }
+
   // 游戏服务器相关方法
   startGame(gameId: string) {
     this.emit('game-start', { gameId })

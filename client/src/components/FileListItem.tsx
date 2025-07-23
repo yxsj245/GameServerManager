@@ -105,6 +105,7 @@ export const FileListItem: React.FC<FileListItemProps> = ({
 
   return (
     <motion.div
+      data-file-item="true"
       className={`
         relative group cursor-pointer p-3 rounded-lg border select-none
         hover:shadow-md hover:border-blue-300 transition-all duration-200

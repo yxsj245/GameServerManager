@@ -620,11 +620,35 @@ async function startServer() {
         logger.info(`客户端 ${socket.id} 取消订阅系统状态`)
       })
 
+      // 端口监控事件
+      socket.on('subscribe-system-ports', () => {
+        socket.join('system-ports')
+        logger.info(`客户端 ${socket.id} 开始订阅端口信息`)
+      })
+
+      socket.on('unsubscribe-system-ports', () => {
+        socket.leave('system-ports')
+        logger.info(`客户端 ${socket.id} 取消订阅端口信息`)
+      })
+
+      // 进程监控事件
+      socket.on('subscribe-system-processes', () => {
+        socket.join('system-processes')
+        logger.info(`客户端 ${socket.id} 开始订阅进程信息`)
+      })
+
+      socket.on('unsubscribe-system-processes', () => {
+        socket.leave('system-processes')
+        logger.info(`客户端 ${socket.id} 取消订阅进程信息`)
+      })
+
       // 断开连接处理
       socket.on('disconnect', (reason) => {
         logger.info(`客户端断开连接: ${socket.id}, 原因: ${reason}`)
         terminalManager.handleDisconnect(socket)
         socket.leave('system-stats')
+        socket.leave('system-ports')
+        socket.leave('system-processes')
       })
       
       // 错误处理
