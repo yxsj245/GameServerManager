@@ -24,26 +24,17 @@ import apiClient from '@/utils/api'
 import { ConfirmDeleteDialog } from '@/components/ConfirmDeleteDialog'
 
 // 获取嵌套对象值的工具函数
-const getNestedValue = (obj: any, path: string): any => {
-  if (!obj || !path) return undefined
+const getNestedValue = (obj: any, ...path: string[]): any => {
+  if (!obj || path.length === 0) return undefined
 
-  // 1. 尝试将路径作为单个键直接访问，处理 'server.properties' 这样的顶级键
-  if (Object.prototype.hasOwnProperty.call(obj, path)) {
-    return obj[path]
-  }
-
-  // 2. 使用点分割路径，支持多层嵌套
-  const pathParts = path.split('.')
   let current = obj
-  
-  for (const part of pathParts) {
+  for (const part of path) {
     if (current && typeof current === 'object' && Object.prototype.hasOwnProperty.call(current, part)) {
       current = current[part]
     } else {
       return undefined
     }
   }
-  
   return current
 }
 
@@ -162,15 +153,39 @@ const InstanceManagerPage: React.FC = () => {
       setIsConfigLoading(true)
       const response = await apiClient.readGameConfig(instanceId, configId)
       console.log('从服务器读取的完整响应:', response)
-      
+
       // 正确提取配置数据：response.data.config 而不是 response.data
-      const configData = response.data?.config || {}
-      console.log('提取的配置数据:', configData)
-      
+      let configFromServer = response.data?.config || {}
+      console.log('从服务器提取的原始配置数据:', JSON.stringify(configFromServer, null, 2))
+
+      // 规范化数据：如果存在 server: { properties: ... }，则将其内容合并到 'server.properties'
+      if (
+        configFromServer.server &&
+        typeof configFromServer.server === 'object' &&
+        configFromServer.server.properties &&
+        typeof configFromServer.server.properties === 'object'
+      ) {
+        // 创建一个新的对象副本以进行修改
+        const newConfig = { ...configFromServer }
+
+        // 将 server.properties 的内容合并到 'server.properties'
+        newConfig['server.properties'] = {
+          ...(newConfig['server.properties'] || {}),
+          ...newConfig.server.properties
+        }
+
+        // 删除旧的 server 键
+        delete newConfig.server
+
+        // 更新配置数据
+        configFromServer = newConfig
+        console.log('规范化后的配置数据:', JSON.stringify(configFromServer, null, 2))
+      }
+
       // 使用传入的配置模式或当前的配置模式填充默认值
       const currentSchema = schema || configSchema
-      const filledData = fillDefaultValues(currentSchema, configData)
-      console.log('填充默认值后的配置数据:', filledData)
+      const filledData = fillDefaultValues(currentSchema, configFromServer)
+      console.log('填充默认值后的配置数据:', JSON.stringify(filledData, null, 2))
       setConfigData(filledData)
     } catch (error) {
       console.error('读取配置失败:', error)
@@ -325,42 +340,35 @@ const InstanceManagerPage: React.FC = () => {
   }
 
   // 处理配置数据变化
-  const handleConfigDataChange = (path: string, value: any) => {
+  const handleConfigDataChange = (value: any, ...path: string[]) => {
     console.log('=== 配置数据变化调试 ===')
-    console.log('变化路径:', path)
+    console.log('变化路径:', path.join('.'))
     console.log('新值:', value)
-    console.log('变化前的configData:', JSON.stringify(configData, null, 2))
     
     setConfigData((prev) => {
-      console.log('setConfigData回调 - 之前的数据:', prev)
-      const newData = { ...prev }
-      const pathParts = path.split('.')
+      console.log('setConfigData回调 - 之前的数据:', JSON.stringify(prev, null, 2))
 
-      if (pathParts.length === 1) {
-        // 如果只有一层，直接更新顶级属性
-        newData[path] = value
-        console.log('单层路径更新 - 更新后的配置数据:', newData)
-        return newData
-      }
+      // 使用深拷贝来避免状态更新问题
+      const newData = JSON.parse(JSON.stringify(prev))
 
-      // 多层嵌套路径处理
       let current = newData
-      for (let i = 0; i < pathParts.length - 1; i++) {
-        const part = pathParts[i]
-        if (!current[part] || typeof current[part] !== 'object') {
+      for (let i = 0; i < path.length - 1; i++) {
+        const part = path[i]
+        // 如果路径不存在，创建它
+        if (current[part] === undefined || typeof current[part] !== 'object') {
           current[part] = {}
-        } else {
-          current[part] = { ...current[part] }
         }
         current = current[part]
       }
-      
-      // 设置最终值
-      const lastPart = pathParts[pathParts.length - 1]
-      current[lastPart] = value
 
-      console.log('多层路径更新 - 更新后的配置数据:', newData)
-      console.log('更新的具体路径:', pathParts.join('.'), '=', value)
+      // 设置最终值
+      if (path.length > 0) {
+        const lastPart = path[path.length - 1]
+        current[lastPart] = value
+      }
+
+      console.log('多层路径更新 - 更新后的配置数据:', JSON.stringify(newData, null, 2))
+      console.log('更新的具体路径:', path.join('.'), '=', value)
       return newData
     })
   }
@@ -1270,8 +1278,7 @@ const InstanceManagerPage: React.FC = () => {
                       {/* Section字段 */}
                       <div className="space-y-4 pl-4">
                         {section.fields?.map((field: any, fieldIndex: number) => {
-                          const fieldPath = sectionKey ? `${sectionKey}.${field.name}` : field.name
-                          const fieldValue = getNestedValue(configData, fieldPath)
+                          const fieldValue = getNestedValue(configData, sectionKey, field.name)
                           
                           return (
                             <div key={field.name || fieldIndex} className="space-y-2">
@@ -1290,7 +1297,7 @@ const InstanceManagerPage: React.FC = () => {
                                 <input
                                   type="text"
                                   value={fieldValue !== undefined && fieldValue !== null ? fieldValue : (field.default || '')}
-                                  onChange={(e) => handleConfigDataChange(fieldPath, e.target.value)}
+                                  onChange={(e) => handleConfigDataChange(e.target.value, sectionKey, field.name)}
                                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                   placeholder="请输入值"
                                 />
@@ -1303,10 +1310,10 @@ const InstanceManagerPage: React.FC = () => {
                                   onChange={(e) => {
                                     const value = e.target.value
                                     if (value === '') {
-                                      handleConfigDataChange(fieldPath, field.default !== undefined ? field.default : (field.type === 'integer' ? 0 : 0.0))
+                                      handleConfigDataChange(field.default !== undefined ? field.default : (field.type === 'integer' ? 0 : 0.0), sectionKey, field.name)
                                     } else {
                                       const numValue = field.type === 'integer' ? parseInt(value) : parseFloat(value)
-                                      handleConfigDataChange(fieldPath, isNaN(numValue) ? (field.default !== undefined ? field.default : (field.type === 'integer' ? 0 : 0.0)) : numValue)
+                                      handleConfigDataChange(isNaN(numValue) ? (field.default !== undefined ? field.default : (field.type === 'integer' ? 0 : 0.0)) : numValue, sectionKey, field.name)
                                     }
                                   }}
                                   step={field.type === 'integer' ? '1' : 'any'}
@@ -1324,7 +1331,7 @@ const InstanceManagerPage: React.FC = () => {
                                       type="checkbox"
                                       checked={fieldValue !== undefined ? Boolean(fieldValue) : Boolean(field.default)}
                                       onChange={(e) => {
-                                        handleConfigDataChange(fieldPath, e.target.checked)
+                                        handleConfigDataChange(e.target.checked, sectionKey, field.name)
                                       }}
                                       className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
                                     />
@@ -1341,7 +1348,7 @@ const InstanceManagerPage: React.FC = () => {
                               {(field.type === 'enum' || field.type === 'select') && (
                                 <select
                                   value={fieldValue !== undefined && fieldValue !== null ? fieldValue : (field.default || '')}
-                                  onChange={(e) => handleConfigDataChange(fieldPath, e.target.value)}
+                                  onChange={(e) => handleConfigDataChange(e.target.value, sectionKey, field.name)}
                                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                 >
                                   <option value="">请选择</option>
@@ -1372,10 +1379,10 @@ const InstanceManagerPage: React.FC = () => {
                                   onChange={(e) => {
                                     const value = e.target.value
                                     if (value === '') {
-                                      handleConfigDataChange(fieldPath, field.default !== undefined ? field.default : 0.0)
+                                      handleConfigDataChange(field.default !== undefined ? field.default : 0.0, sectionKey, field.name)
                                     } else {
                                       const numValue = parseFloat(value)
-                                      handleConfigDataChange(fieldPath, isNaN(numValue) ? (field.default !== undefined ? field.default : 0.0) : numValue)
+                                      handleConfigDataChange(isNaN(numValue) ? (field.default !== undefined ? field.default : 0.0) : numValue, sectionKey, field.name)
                                     }
                                   }}
                                   step="any"
@@ -1393,8 +1400,7 @@ const InstanceManagerPage: React.FC = () => {
                                     嵌套配置项:
                                   </p>
                                   {field.nested_fields.map((nestedField: any, nestedIndex: number) => {
-                                    const nestedFieldPath = `${fieldPath}.${nestedField.name}`
-                                    const nestedFieldValue = getNestedValue(configData, nestedFieldPath)
+                                    const nestedFieldValue = getNestedValue(configData, sectionKey, field.name, nestedField.name)
                                     
                                     return (
                                       <div key={nestedField.name || nestedIndex} className="space-y-2">
@@ -1413,7 +1419,7 @@ const InstanceManagerPage: React.FC = () => {
                                           <input
                                             type="text"
                                             value={nestedFieldValue !== undefined && nestedFieldValue !== null ? nestedFieldValue : (nestedField.default || '')}
-                                            onChange={(e) => handleConfigDataChange(nestedFieldPath, e.target.value)}
+                                            onChange={(e) => handleConfigDataChange(e.target.value, sectionKey, field.name, nestedField.name)}
                                             className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                             placeholder="请输入值"
                                           />
@@ -1426,10 +1432,10 @@ const InstanceManagerPage: React.FC = () => {
                                             onChange={(e) => {
                                               const value = e.target.value
                                               if (value === '') {
-                                                handleConfigDataChange(nestedFieldPath, nestedField.default !== undefined ? nestedField.default : (nestedField.type === 'integer' ? 0 : 0.0))
+                                                handleConfigDataChange(nestedField.default !== undefined ? nestedField.default : (nestedField.type === 'integer' ? 0 : 0.0), sectionKey, field.name, nestedField.name)
                                               } else {
                                                 const numValue = nestedField.type === 'integer' ? parseInt(value) : parseFloat(value)
-                                                handleConfigDataChange(nestedFieldPath, isNaN(numValue) ? (nestedField.default !== undefined ? nestedField.default : (nestedField.type === 'integer' ? 0 : 0.0)) : numValue)
+                                                handleConfigDataChange(isNaN(numValue) ? (nestedField.default !== undefined ? nestedField.default : (nestedField.type === 'integer' ? 0 : 0.0)) : numValue, sectionKey, field.name, nestedField.name)
                                               }
                                             }}
                                             step={nestedField.type === 'integer' ? '1' : 'any'}
@@ -1447,7 +1453,7 @@ const InstanceManagerPage: React.FC = () => {
                                                 type="checkbox"
                                                 checked={nestedFieldValue !== undefined ? Boolean(nestedFieldValue) : Boolean(nestedField.default)}
                                                 onChange={(e) => {
-                                                  handleConfigDataChange(nestedFieldPath, e.target.checked)
+                                                  handleConfigDataChange(e.target.checked, sectionKey, field.name, nestedField.name)
                                                 }}
                                                 className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
                                               />
@@ -1464,7 +1470,7 @@ const InstanceManagerPage: React.FC = () => {
                                         {(nestedField.type === 'enum' || nestedField.type === 'select') && (
                                           <select
                                             value={nestedFieldValue !== undefined && nestedFieldValue !== null ? nestedFieldValue : (nestedField.default || '')}
-                                            onChange={(e) => handleConfigDataChange(nestedFieldPath, e.target.value)}
+                                            onChange={(e) => handleConfigDataChange(e.target.value, sectionKey, field.name, nestedField.name)}
                                             className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                           >
                                             <option value="">请选择</option>
@@ -1494,10 +1500,10 @@ const InstanceManagerPage: React.FC = () => {
                                             onChange={(e) => {
                                               const value = e.target.value
                                               if (value === '') {
-                                                handleConfigDataChange(nestedFieldPath, nestedField.default !== undefined ? nestedField.default : 0.0)
+                                                handleConfigDataChange(nestedField.default !== undefined ? nestedField.default : 0.0, sectionKey, field.name, nestedField.name)
                                               } else {
                                                 const numValue = parseFloat(value)
-                                                handleConfigDataChange(nestedFieldPath, isNaN(numValue) ? (nestedField.default !== undefined ? nestedField.default : 0.0) : numValue)
+                                                handleConfigDataChange(isNaN(numValue) ? (nestedField.default !== undefined ? nestedField.default : 0.0) : numValue, sectionKey, field.name, nestedField.name)
                                               }
                                             }}
                                             step="any"
@@ -1514,7 +1520,7 @@ const InstanceManagerPage: React.FC = () => {
                                             <input
                                               type="text"
                                               value={nestedFieldValue !== undefined && nestedFieldValue !== null ? nestedFieldValue.toString() : (nestedField.default !== undefined ? nestedField.default.toString() : '')}
-                                              onChange={(e) => handleConfigDataChange(nestedFieldPath, e.target.value)}
+                                              onChange={(e) => handleConfigDataChange(e.target.value, sectionKey, field.name, nestedField.name)}
                                               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                               placeholder="请输入值"
                                             />
@@ -1534,7 +1540,7 @@ const InstanceManagerPage: React.FC = () => {
                                   <input
                                     type="text"
                                     value={fieldValue !== undefined && fieldValue !== null ? fieldValue.toString() : (field.default !== undefined ? field.default.toString() : '')}
-                                    onChange={(e) => handleConfigDataChange(fieldPath, e.target.value)}
+                                    onChange={(e) => handleConfigDataChange(e.target.value, sectionKey, field.name)}
                                     className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                     placeholder="请输入值"
                                   />
