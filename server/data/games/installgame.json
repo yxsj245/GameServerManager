@@ -501,6 +501,23 @@
 		"tip": "Windows需要开启输出流转发\\HarshDoorstop\\Binaries\\Win64\\HarshDoorstopServer-Win64-Shipping.exe AAS-TestMap?MaxPlayers=16 -log -SteamServerName='Harsh Doorstop Dedicated Server'",
 		"image":"https://shared.cdn.queniuqe.com/store_item_assets/steam/apps/736590/f97103050391e071a864ddd748e3c3f32b6ebe7d/header.jpg",
         "url":"https://store.steampowered.com/app/736590/Operation_Harsh_Doorstop/",
+        "system":["Windows","Linux"]   
+	},
+    "Counter-Strike 2":{
+        "game_nameCN": "反恐精英2",
+        "appid": "730",
+        "tip": "此服务端只提供下载安装，不提供技术服务，如有问题请自行搜索",
+        "image":"https://shared.cdn.queniuqe.com/store_item_assets/steam/apps/730/header.jpg",
+        "url":"https://store.steampowered.com/app/730/CounterStrike_2/",
         "system":["Windows","Linux"]
-	}
+    },
+    "Half-Life Dedicated Server":{
+        "game_nameCN": "半条命 dedicated server",
+        "appid": "90",
+        "tip": "可以使用本服务端开反恐精英1.6，搭建反恐精英1.6方法请自行查找",
+        "image":"https://shared.cdn.queniuqe.com/store_item_assets/steam/apps/90/header.jpg",
+        "url":"https://store.steampowered.com/app/90/Half-Life_Dedicated_Server/",
+        "system":["Windows","Linux"]
+    }
+
 }

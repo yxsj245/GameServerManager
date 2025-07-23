@@ -83,7 +83,7 @@ export interface ModpackDeployOptions {
   mrpackUrl: string;
   targetDirectory: string;
   minecraftVersion?: string;
-  loaderType?: 'forge' | 'fabric' | 'quilt';
+  loaderType?: 'forge' | 'neoforge' | 'fabric' | 'quilt';
   skipJavaCheck?: boolean;
   tempDir?: string;
   onProgress?: (message: string, type?: 'info' | 'error' | 'success' | 'warn') => void;
@@ -611,9 +611,14 @@ export class MrpackServerAPI {
   /**
    * 检测加载器类型
    */
-  private detectLoaderType(indexData: ModrinthIndex): 'forge' | 'fabric' | 'quilt' {
+  private detectLoaderType(indexData: ModrinthIndex): 'forge' | 'neoforge' | 'fabric' | 'quilt' {
+    // 优先检查neoforge
+    if (indexData.dependencies.neoforge) return 'neoforge';
+    // 检查forge
     if (indexData.dependencies.forge) return 'forge';
+    // 检查fabric
     if (indexData.dependencies.fabric || indexData.dependencies['fabric-loader']) return 'fabric';
+    // 检查quilt
     if (indexData.dependencies.quilt || indexData.dependencies['quilt-loader']) return 'quilt';
     
     // 默认返回fabric
@@ -627,6 +632,8 @@ export class MrpackServerAPI {
     switch (loaderType) {
       case 'forge':
         return 'forge';
+      case 'neoforge':
+        return 'neoforge';
       case 'fabric':
         return 'fabric';
       case 'quilt':
