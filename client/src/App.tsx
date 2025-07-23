@@ -3,6 +3,7 @@ import { Routes, Route, Navigate } from 'react-router-dom'
 import { ConfigProvider, theme, App as AntdApp } from 'antd'
 import { useAuthStore } from '@/stores/authStore'
 import { useThemeStore } from '@/stores/themeStore'
+import { useSystemStore } from '@/stores/systemStore'
 import Layout from '@/components/Layout'
 import PageTransition from '@/components/PageTransition'
 import LoginPage from '@/pages/LoginPage'
@@ -73,6 +74,7 @@ const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 function App() {
   const { verifyToken, setLoading } = useAuthStore()
   const { theme: currentTheme, initTheme } = useThemeStore()
+  const { fetchSystemInfo } = useSystemStore()
   
   useEffect(() => {
     // 初始化主题
@@ -83,6 +85,8 @@ function App() {
       setLoading(true)
       try {
         await verifyToken()
+        // 验证成功后预加载系统信息
+        fetchSystemInfo()
       } catch (error) {
         console.error('Token验证失败:', error)
       } finally {

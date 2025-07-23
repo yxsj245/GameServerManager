@@ -21,7 +21,7 @@ import {
 import { FileItem } from '@/types/file'
 import { copyToClipboard } from '@/utils/clipboard'
 import { useNotificationStore } from '@/stores/notificationStore'
-import apiClient from '@/utils/api'
+import { useSystemStore } from '@/stores/systemStore'
 
 interface FileContextMenuProps {
   children: React.ReactNode
@@ -92,26 +92,12 @@ export const FileContextMenu: React.FC<FileContextMenuProps> = ({
   setGlobalContextMenuInfo
 }) => {
   const { addNotification } = useNotificationStore()
+  const { isLinux, fetchSystemInfo } = useSystemStore()
   const [showNewSubmenu, setShowNewSubmenu] = React.useState(false)
-  const [isLinux, setIsLinux] = React.useState(false)
   
-  // 检测操作系统类型
+  // 在组件挂载时获取系统信息（带缓存机制）
   React.useEffect(() => {
-    const checkPlatform = async () => {
-      try {
-        const response = await apiClient.getSystemInfo()
-        if (response.success && response.data) {
-          const platform = response.data.platform.toLowerCase()
-          setIsLinux(platform.includes('linux'))
-        }
-      } catch (error) {
-        console.error('检测操作系统失败:', error)
-        // 如果API调用失败，回退到navigator.platform
-        const platform = navigator.platform.toLowerCase()
-        setIsLinux(platform.includes('linux') || platform.includes('unix'))
-      }
-    }
-    checkPlatform()
+    fetchSystemInfo()
   }, [])
   
   // 空白区域菜单的处理

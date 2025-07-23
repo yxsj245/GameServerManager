@@ -46,6 +46,7 @@ import {
 } from '@ant-design/icons'
 import { useFileStore } from '@/stores/fileStore'
 import { useNotificationStore } from '@/stores/notificationStore'
+import { useSystemStore } from '@/stores/systemStore'
 import { useMusicStore } from '@/stores/musicStore'
 import { FileGridItem } from '@/components/FileGridItem'
 import { FileListItem } from '@/components/FileListItem'
@@ -115,6 +116,7 @@ const FileManagerPage: React.FC = () => {
   } = useFileStore()
   
   const { addNotification } = useNotificationStore()
+  const { fetchSystemInfo } = useSystemStore()
   const { addToPlaylist } = useMusicStore()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
@@ -289,7 +291,10 @@ const FileManagerPage: React.FC = () => {
     
     // 加载系统盘符
     loadDrives()
-  }, [searchParams, setCurrentPath, loadFiles])
+    
+    // 预加载系统信息（用于右键菜单权限判断）
+    fetchSystemInfo()
+  }, [searchParams, setCurrentPath, loadFiles, fetchSystemInfo])
   
   // 当路径变化时更新选中的盘符
   useEffect(() => {
