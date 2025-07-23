@@ -18,6 +18,8 @@ import AboutProjectPage from '@/pages/AboutProjectPage'
 import LoginTransition from '@/components/LoginTransition'
 import NotificationContainer from '@/components/NotificationContainer'
 import GlobalMusicPlayer from '@/components/GlobalMusicPlayer'
+import GlobalSystemAlert from '@/components/GlobalSystemAlert'
+import GlobalSystemAlertManager from '@/components/GlobalSystemAlertManager'
 
 // GlobalMusicPlayer包装器组件 - 只在已登录时显示
 const GlobalMusicPlayerWrapper: React.FC = () => {
@@ -141,6 +143,14 @@ function App() {
           
           {/* 全局通知容器 */}
           <NotificationContainer />
+          
+          {/* 全局系统告警管理器 - 只在已登录时启用 */}
+          <ProtectedRoute>
+            <GlobalSystemAlertManager />
+          </ProtectedRoute>
+          
+          {/* 全局系统告警弹窗 */}
+          <GlobalSystemAlert />
           
           {/* 全局音乐播放器 - 只在已登录时显示 */}
           <GlobalMusicPlayerWrapper />

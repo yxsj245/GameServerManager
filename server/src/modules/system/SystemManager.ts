@@ -150,13 +150,23 @@ export class SystemManager extends EventEmitter {
     
     // 默认告警阈值
     this.alertThresholds = {
-      cpu: { warning: 70, critical: 90 },
-      memory: { warning: 50, critical: 60 },
-      disk: { warning: 85, critical: 95 },
+      cpu: { warning: 100, critical: 100 }, // 禁用CPU告警
+      memory: { warning: 80, critical: 90 },
+      disk: { warning: 70, critical: 80 },
       network: { warning: 100 * 1024 * 1024, critical: 500 * 1024 * 1024 } // MB/s
     }
     
     this.logger.info('系统监控管理器初始化完成')
+    
+    // 清理现有的CPU告警（因为已禁用CPU告警）
+    setTimeout(() => {
+      const cpuAlert = this.alerts.get('cpu-alert')
+      if (cpuAlert && !cpuAlert.resolved) {
+        cpuAlert.resolved = true
+        this.io.emit('system-alert-resolved', cpuAlert)
+        this.logger.info('CPU告警已禁用，现有CPU告警已解除')
+      }
+    }, 1000)
     
     // 检测并输出当前系统的资源获取方法
     this.detectResourceMethods()
@@ -1113,8 +1123,8 @@ export class SystemManager extends EventEmitter {
    * 检查告警
    */
   private checkAlerts(stats: SystemStats): void {
-    // CPU告警
-    this.checkAlert('cpu', stats.cpu.usage, this.alertThresholds.cpu, 'CPU使用率')
+    // CPU告警已禁用
+    // this.checkAlert('cpu', stats.cpu.usage, this.alertThresholds.cpu, 'CPU使用率')
     
     // 内存告警
     this.checkAlert('memory', stats.memory.usage, this.alertThresholds.memory, '内存使用率')
@@ -1188,6 +1198,17 @@ export class SystemManager extends EventEmitter {
    */
   public setAlertThresholds(thresholds: Partial<AlertThresholds>): void {
     this.alertThresholds = { ...this.alertThresholds, ...thresholds }
+    
+    // 如果禁用了CPU告警（阈值设为100%），则解除现有的CPU告警
+    if (thresholds.cpu && thresholds.cpu.warning >= 100 && thresholds.cpu.critical >= 100) {
+      const cpuAlert = this.alerts.get('cpu-alert')
+      if (cpuAlert && !cpuAlert.resolved) {
+        cpuAlert.resolved = true
+        this.io.emit('system-alert-resolved', cpuAlert)
+        this.logger.info('CPU告警已禁用，现有CPU告警已解除')
+      }
+    }
+    
     this.logger.info('告警阈值已更新:', this.alertThresholds)
   }
 
