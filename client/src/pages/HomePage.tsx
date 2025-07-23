@@ -269,6 +269,9 @@ const HomePage: React.FC = () => {
   const [systemAlertType, setSystemAlertType] = useState<'memory' | 'disk' | null>(null)
   const [isSystemAlertClosing, setIsSystemAlertClosing] = useState(false)
   
+  // 将原先的 useEffect 拆分为两个
+  
+  // 第一个 useEffect：处理非 WebSocket 相关的数据获取和定时器
   useEffect(() => {
     // 获取系统信息
     const fetchSystemInfo = async () => {
@@ -293,99 +296,6 @@ const HomePage: React.FC = () => {
         console.error('获取终端进程列表失败:', error)
       }
     }
-    
-    // 获取活跃端口列表
-    const fetchActivePorts = async () => {
-      try {
-        // 只有在首次加载时才设置loading为true
-        if (isFirstPortsLoad) {
-          setPortsLoading(true)
-        }
-        const response = await apiClient.getActivePorts()
-        if (response.success) {
-          setActivePorts(response.data)
-        }
-      } catch (error) {
-        console.error('获取活跃端口失败:', error)
-      } finally {
-        if (isFirstPortsLoad) {
-          setPortsLoading(false)
-          setIsFirstPortsLoad(false)
-        }
-      }
-    }
-    
-    // 获取活跃进程列表
-    const fetchActiveProcesses = async () => {
-      try {
-        // 只有在首次加载时才设置loading为true
-        if (isFirstProcessesLoad) {
-          setProcessesLoading(true)
-        }
-        const response = await apiClient.getProcessList()
-        if (response.success) {
-          setActiveProcesses(response.data)
-        }
-      } catch (error) {
-        console.error('获取活跃进程失败:', error)
-      } finally {
-        if (isFirstProcessesLoad) {
-          setProcessesLoading(false)
-          setIsFirstProcessesLoad(false)
-        }
-      }
-    }
-    
-    fetchSystemInfo()
-    fetchTerminalProcesses()
-    fetchActivePorts()
-    fetchActiveProcesses()
-    
-    // 设置定时刷新终端进程列表
-    const processInterval = setInterval(fetchTerminalProcesses, 5000) // 每5秒刷新一次
-    
-    // 设置定时刷新活跃端口列表（仅在连接时刷新）
-    let portsInterval: NodeJS.Timeout | null = null
-    
-    // 设置定时刷新活跃进程列表（仅在连接时刷新）
-    let processesInterval: NodeJS.Timeout | null = null
-    
-    const startPortsRefresh = () => {
-      if (portsInterval) clearInterval(portsInterval)
-      portsInterval = setInterval(fetchActivePorts, 10000) // 每10秒刷新一次
-    }
-    
-    const stopPortsRefresh = () => {
-      if (portsInterval) {
-        clearInterval(portsInterval)
-        portsInterval = null
-      }
-    }
-    
-    const startProcessesRefresh = () => {
-      if (processesInterval) clearInterval(processesInterval)
-      processesInterval = setInterval(fetchActiveProcesses, 8000) // 每8秒刷新一次
-    }
-    
-    const stopProcessesRefresh = () => {
-      if (processesInterval) {
-        clearInterval(processesInterval)
-        processesInterval = null
-      }
-    }
-    
-    // 如果已连接则开始刷新
-    if (socketClient.isConnected()) {
-      startPortsRefresh()
-      startProcessesRefresh()
-    }
-    
-    // 设置定时更新日期时间
-    const dateTimeInterval = setInterval(() => {
-      setCurrentDateTime(new Date())
-    }, 1000) // 每秒更新一次
-    
-
 
     // 获取天气信息
     const fetchWeatherData = async () => {
@@ -428,45 +338,95 @@ const HomePage: React.FC = () => {
       }
     }
     
+    fetchSystemInfo()
+    fetchTerminalProcesses()
     fetchWeatherData()
-    // 每30分钟更新一次天气信息
-    const weatherInterval = setInterval(fetchWeatherData, 30 * 60 * 1000)
     
+    // 设置定时刷新
+    const processInterval = setInterval(fetchTerminalProcesses, 5000)
+    const dateTimeInterval = setInterval(() => setCurrentDateTime(new Date()), 1000)
+    const weatherInterval = setInterval(fetchWeatherData, 30 * 60 * 1000)
+
+    // 监听Socket连接状态
+    const handleConnectionStatus = ({ connected }) => {
+      setConnected(connected)
+    }
+    socketClient.on('connection-status', handleConnectionStatus)
+
     // 设置初始连接状态
     setConnected(socketClient.isConnected())
     
-    // 监听Socket连接状态
-    socketClient.on('connection-status', ({ connected }) => {
-      setConnected(connected)
-      // 根据连接状态控制端口和进程刷新
-      if (connected) {
-        startPortsRefresh()
-        startProcessesRefresh()
-      } else {
-        stopPortsRefresh()
-        stopProcessesRefresh()
-      }
-    })
-    
-    // 监听系统状态更新
-    socketClient.on('system-stats', (stats: SystemStats) => {
-      setSystemStats(stats)
-    })
-    
-    // 订阅系统状态
-    socketClient.subscribeSystemStats()
-    
     return () => {
-      socketClient.off('connection-status')
-      socketClient.off('system-stats')
-      socketClient.emit('unsubscribe-system-stats')
       clearInterval(processInterval)
-      stopPortsRefresh()
-      stopProcessesRefresh()
       clearInterval(dateTimeInterval)
       clearInterval(weatherInterval)
+      socketClient.off('connection-status', handleConnectionStatus)
     }
   }, [])
+  
+  // 第二个 useEffect：处理 WebSocket 相关逻辑，依赖于 connected 状态
+  useEffect(() => {
+    // 获取活跃端口列表
+    const fetchActivePorts = async () => {
+      try {
+        if (isFirstPortsLoad) setPortsLoading(true)
+        const response = await apiClient.getActivePorts()
+        if (response.success) setActivePorts(response.data)
+      } catch (error) {
+        console.error('获取活跃端口失败:', error)
+      } finally {
+        if (isFirstPortsLoad) {
+          setPortsLoading(false)
+          setIsFirstPortsLoad(false)
+        }
+      }
+    }
+    
+    // 获取活跃进程列表
+    const fetchActiveProcesses = async () => {
+      try {
+        if (isFirstProcessesLoad) setProcessesLoading(true)
+        const response = await apiClient.getProcessList()
+        if (response.success) setActiveProcesses(response.data)
+      } catch (error) {
+        console.error('获取活跃进程失败:', error)
+      } finally {
+        if (isFirstProcessesLoad) {
+          setProcessesLoading(false)
+          setIsFirstProcessesLoad(false)
+        }
+      }
+    }
+
+    let portsInterval: NodeJS.Timeout | null = null
+    let processesInterval: NodeJS.Timeout | null = null
+
+    if (connected) {
+      fetchActivePorts()
+      fetchActiveProcesses()
+
+      portsInterval = setInterval(fetchActivePorts, 10000)
+      processesInterval = setInterval(fetchActiveProcesses, 8000)
+
+      // 监听系统状态更新
+      socketClient.on('system-stats', (stats: SystemStats) => {
+        setSystemStats(stats)
+      })
+      
+      // 订阅系统状态
+      socketClient.subscribeSystemStats()
+    }
+    
+    return () => {
+      if (portsInterval) clearInterval(portsInterval)
+      if (processesInterval) clearInterval(processesInterval)
+      
+      socketClient.off('system-stats')
+      if (socketClient.isConnected()) {
+        socketClient.emit('unsubscribe-system-stats')
+      }
+    }
+  }, [connected])
   
   // 监控系统状态并检查是否需要发出警报
   useEffect(() => {
@@ -523,8 +483,10 @@ const HomePage: React.FC = () => {
       }
     }
     
-    checkSystemAlerts()
-  }, [systemStats, alertsShown, showSystemAlert, addNotification])
+    const interval = setInterval(checkSystemAlerts, 60000) // 每分钟检查一次
+    
+    return () => clearInterval(interval)
+  }, [systemStats, addNotification, alertsShown])
   
   // 清理过期的警报记录（每5分钟清理一次）
   useEffect(() => {
