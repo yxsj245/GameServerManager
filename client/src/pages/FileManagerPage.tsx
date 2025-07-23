@@ -57,6 +57,7 @@ import {
   DeleteConfirmDialog 
 } from '@/components/FileDialogs'
 import { CompressDialog } from '@/components/CompressDialog'
+import { PermissionsDialog } from '@/components/PermissionsDialog'
 import { MonacoEditor } from '@/components/MonacoEditor'
 import { ImagePreview } from '@/components/ImagePreview'
 import { FileItem } from '@/types/file'
@@ -138,6 +139,11 @@ const FileManagerPage: React.FC = () => {
     visible: boolean
     files: FileItem[]
   }>({ visible: false, files: [] })
+  
+  const [permissionsDialog, setPermissionsDialog] = useState<{
+    visible: boolean
+    file: FileItem | null
+  }>({ visible: false, file: null })
   
   // 路径输入
   const [pathInput, setPathInput] = useState('')
@@ -499,7 +505,7 @@ const FileManagerPage: React.FC = () => {
       setPreviewImageName(file.name)
       setImagePreviewVisible(true)
     } else {
-      // 默认使用文本编辑器打开所有非图片文件（包括无后缀文件和非标准后缀文件）
+      // 默认使用文本编辑器打开所有非图片文件（包括无后缀文件和无标准后缀文件）
       openFile(file.path)
       setEditorModalVisible(true)
     }
@@ -798,6 +804,11 @@ const FileManagerPage: React.FC = () => {
       })
     }
     setCompressDialog({ visible: false, files: [] })
+  }
+
+  // 权限处理
+  const handlePermissions = (file: FileItem) => {
+    setPermissionsDialog({ visible: true, file })
   }
   
   // 编辑器相关
@@ -1245,6 +1256,7 @@ const FileManagerPage: React.FC = () => {
                       onCreateTextFile={handleCreateTextFile}
                       onCreateJsonFile={handleCreateJsonFile}
                       onCreateIniFile={handleCreateIniFile}
+                      onPermissions={handlePermissions}
                       // 全局菜单控制
                       globalContextMenuInfo={contextMenuInfo}
                       setGlobalContextMenuInfo={setContextMenuInfo}
@@ -1307,6 +1319,7 @@ const FileManagerPage: React.FC = () => {
                       onCreateTextFile={handleCreateTextFile}
                       onCreateJsonFile={handleCreateJsonFile}
                       onCreateIniFile={handleCreateIniFile}
+                      onPermissions={handlePermissions}
                       // 全局菜单控制
                       globalContextMenuInfo={contextMenuInfo}
                       setGlobalContextMenuInfo={setContextMenuInfo}
@@ -1395,6 +1408,16 @@ const FileManagerPage: React.FC = () => {
         fileCount={compressDialog.files.length}
         onConfirm={handleCompressConfirm}
         onCancel={() => setCompressDialog({ visible: false, files: [] })}
+      />
+      
+      <PermissionsDialog
+        visible={permissionsDialog.visible}
+        file={permissionsDialog.file}
+        onClose={() => setPermissionsDialog({ visible: false, file: null })}
+        onSuccess={async () => {
+          // 刷新文件列表
+          await loadFiles()
+        }}
       />
       
       {/* 编辑器模态框 */}

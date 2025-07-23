@@ -1934,6 +1934,233 @@ router.get('/download-task/:taskId', authenticateToken, async (req: Request, res
   }
 })
 
+// 获取文件权限信息 (仅Linux)
+router.get('/permissions', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    // 仅在Linux系统下支持
+    if (process.platform === 'win32') {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Windows系统不支持此功能'
+      })
+    }
+
+    const { path: filePath } = req.query
+    
+    if (!isValidPath(filePath as string)) {
+      return res.status(400).json({
+        status: 'error',
+        message: '无效的路径'
+      })
+    }
+
+    const fixedFilePath = fixWindowsPath(filePath as string)
+
+    // 检查文件是否存在
+    try {
+      await fs.access(fixedFilePath)
+    } catch (error) {
+      return res.status(404).json({
+        status: 'error',
+        message: '文件或目录不存在'
+      })
+    }
+
+    // 获取文件统计信息
+    const stats = await fs.stat(fixedFilePath)
+    
+    // 获取详细的权限信息
+    const { stdout } = await execAsync(`stat -c "%a %U %G" "${fixedFilePath}"`)
+    const [octalPermissions, owner, group] = stdout.trim().split(' ')
+
+    // 将八进制权限转换为布尔值格式
+    const parseOctalPermissions = (octal: string) => {
+      const ownerPerms = parseInt(octal[0])
+      const groupPerms = parseInt(octal[1])
+      const othersPerms = parseInt(octal[2])
+
+      const parsePermBits = (bits: number) => ({
+        read: (bits & 4) !== 0,
+        write: (bits & 2) !== 0,
+        execute: (bits & 1) !== 0
+      })
+
+      return {
+        owner: parsePermBits(ownerPerms),
+        group: parsePermBits(groupPerms),
+        others: parsePermBits(othersPerms)
+      }
+    }
+
+    res.json({
+      status: 'success',
+      data: {
+        owner: owner,
+        group: group,
+        permissions: parseOctalPermissions(octalPermissions),
+        octal: octalPermissions,
+        isDirectory: stats.isDirectory(),
+        size: stats.size,
+        modified: stats.mtime.toISOString()
+      }
+    })
+  } catch (error: any) {
+    res.status(500).json({
+      status: 'error',
+      message: error.message
+    })
+  }
+})
+
+// 修改文件权限 (仅Linux)
+router.post('/permissions', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    // 仅在Linux系统下支持
+    if (process.platform === 'win32') {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Windows系统不支持此功能'
+      })
+    }
+
+    const { path: filePath, permissions, recursive } = req.body
+    
+    if (!isValidPath(filePath)) {
+      return res.status(400).json({
+        status: 'error',
+        message: '无效的路径'
+      })
+    }
+
+    if (!permissions) {
+      return res.status(400).json({
+        status: 'error',
+        message: '权限参数不能为空'
+      })
+    }
+
+    const fixedFilePath = fixWindowsPath(filePath)
+
+    // 检查文件是否存在
+    try {
+      await fs.access(fixedFilePath)
+    } catch (error) {
+      return res.status(404).json({
+        status: 'error',
+        message: '文件或目录不存在'
+      })
+    }
+
+    // 将布尔值权限转换为八进制
+    let octalPermissions: string
+    
+    if (typeof permissions === 'string' && /^[0-7]{3}$/.test(permissions)) {
+      // 如果已经是八进制格式，直接使用
+      octalPermissions = permissions
+    } else if (typeof permissions === 'object' && permissions.owner && permissions.group && permissions.others) {
+      // 如果是布尔值格式，转换为八进制
+      const convertPermBits = (perms: { read: boolean; write: boolean; execute: boolean }) => {
+        return (perms.read ? 4 : 0) + (perms.write ? 2 : 0) + (perms.execute ? 1 : 0)
+      }
+      
+      const ownerBits = convertPermBits(permissions.owner)
+      const groupBits = convertPermBits(permissions.group)
+      const othersBits = convertPermBits(permissions.others)
+      
+      octalPermissions = `${ownerBits}${groupBits}${othersBits}`
+    } else {
+      return res.status(400).json({
+        status: 'error',
+        message: '权限格式无效'
+      })
+    }
+
+    // 构建chmod命令
+    const chmodCommand = recursive 
+      ? `chmod -R ${octalPermissions} "${fixedFilePath}"`
+      : `chmod ${octalPermissions} "${fixedFilePath}"`
+
+    await execAsync(chmodCommand)
+
+    res.json({
+      status: 'success',
+      message: '权限修改成功'
+    })
+  } catch (error: any) {
+    res.status(500).json({
+      status: 'error',
+      message: error.message
+    })
+  }
+})
+
+// 修改文件所有者 (仅Linux)
+router.post('/ownership', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    // 仅在Linux系统下支持
+    if (process.platform === 'win32') {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Windows系统不支持此功能'
+      })
+    }
+
+    const { path: filePath, owner, group, recursive } = req.body
+    
+    if (!isValidPath(filePath)) {
+      return res.status(400).json({
+        status: 'error',
+        message: '无效的路径'
+      })
+    }
+
+    if (!owner && !group) {
+      return res.status(400).json({
+        status: 'error',
+        message: '必须指定所有者或组'
+      })
+    }
+
+    const fixedFilePath = fixWindowsPath(filePath)
+
+    // 检查文件是否存在
+    try {
+      await fs.access(fixedFilePath)
+    } catch (error) {
+      return res.status(404).json({
+        status: 'error',
+        message: '文件或目录不存在'
+      })
+    }
+
+    // 构建chown命令
+    let ownerGroup = ''
+    if (owner && group) {
+      ownerGroup = `${owner}:${group}`
+    } else if (owner) {
+      ownerGroup = owner
+    } else if (group) {
+      ownerGroup = `:${group}`
+    }
+
+    const chownCommand = recursive 
+      ? `chown -R ${ownerGroup} "${fixedFilePath}"`
+      : `chown ${ownerGroup} "${fixedFilePath}"`
+
+    await execAsync(chownCommand)
+
+    res.json({
+      status: 'success',
+      message: '所有者修改成功'
+    })
+  } catch (error: any) {
+    res.status(500).json({
+      status: 'error',
+      message: error.message
+    })
+  }
+})
+
 // 获取系统盘符
 router.get('/drives', authenticateToken, async (req: Request, res: Response) => {
   try {

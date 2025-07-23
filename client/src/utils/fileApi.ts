@@ -428,6 +428,57 @@ export class FileApiClient {
     const response = await this.client.get(`${API_BASE}/drives`)
     return response.data.data
   }
+
+  // 获取文件权限信息
+  async getFilePermissions(path: string): Promise<{
+    owner: string
+    group: string
+    permissions: {
+      owner: { read: boolean; write: boolean; execute: boolean }
+      group: { read: boolean; write: boolean; execute: boolean }
+      others: { read: boolean; write: boolean; execute: boolean }
+    }
+    octal: string
+  }> {
+    const response = await this.client.get(`${API_BASE}/permissions`, {
+      params: { path }
+    })
+    return response.data.data
+  }
+
+  // 修改文件权限
+  async setFilePermissions(
+    path: string,
+    permissions: {
+      owner: { read: boolean; write: boolean; execute: boolean }
+      group: { read: boolean; write: boolean; execute: boolean }
+      others: { read: boolean; write: boolean; execute: boolean }
+    },
+    recursive?: boolean
+  ): Promise<FileOperationResult> {
+    const response = await this.client.post(`${API_BASE}/permissions`, {
+      path,
+      permissions,
+      recursive
+    })
+    return response.data
+  }
+
+  // 修改文件所有者
+  async setFileOwnership(
+    path: string,
+    owner?: string,
+    group?: string,
+    recursive?: boolean
+  ): Promise<FileOperationResult> {
+    const response = await this.client.post(`${API_BASE}/ownership`, {
+      path,
+      owner,
+      group,
+      recursive
+    })
+    return response.data
+  }
 }
 
 export const fileApiClient = new FileApiClient()

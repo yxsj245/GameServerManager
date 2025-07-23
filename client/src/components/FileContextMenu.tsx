@@ -15,11 +15,13 @@ import {
   ConsoleSqlOutlined,
   SoundOutlined,
   RightOutlined,
-  PlusOutlined
+  PlusOutlined,
+  SafetyOutlined
 } from '@ant-design/icons'
 import { FileItem } from '@/types/file'
 import { copyToClipboard } from '@/utils/clipboard'
 import { useNotificationStore } from '@/stores/notificationStore'
+import apiClient from '@/utils/api'
 
 interface FileContextMenuProps {
   children: React.ReactNode
@@ -53,6 +55,7 @@ interface FileContextMenuProps {
   onCreateTextFile?: () => void // 新增：创建文本文档
   onCreateJsonFile?: () => void // 新增：创建JSON文件
   onCreateIniFile?: () => void // 新增：创建INI文件
+  onPermissions?: (file: FileItem) => void // 新增：权限管理
   // 菜单全局状态props
   setGlobalContextMenuInfo: React.Dispatch<React.SetStateAction<{
     file: FileItem | null
@@ -85,10 +88,31 @@ export const FileContextMenu: React.FC<FileContextMenuProps> = ({
   onCreateTextFile,
   onCreateJsonFile,
   onCreateIniFile,
+  onPermissions,
   setGlobalContextMenuInfo
 }) => {
   const { addNotification } = useNotificationStore()
   const [showNewSubmenu, setShowNewSubmenu] = React.useState(false)
+  const [isLinux, setIsLinux] = React.useState(false)
+  
+  // 检测操作系统类型
+  React.useEffect(() => {
+    const checkPlatform = async () => {
+      try {
+        const response = await apiClient.getSystemInfo()
+        if (response.success && response.data) {
+          const platform = response.data.platform.toLowerCase()
+          setIsLinux(platform.includes('linux'))
+        }
+      } catch (error) {
+        console.error('检测操作系统失败:', error)
+        // 如果API调用失败，回退到navigator.platform
+        const platform = navigator.platform.toLowerCase()
+        setIsLinux(platform.includes('linux') || platform.includes('unix'))
+      }
+    }
+    checkPlatform()
+  }, [])
   
   // 空白区域菜单的处理
   const isBlankAreaMenu = file === null
@@ -521,6 +545,17 @@ export const FileContextMenu: React.FC<FileContextMenuProps> = ({
                 >
                   <FolderOutlined className="mr-2" />
                   解压
+                </div>
+              )}
+              
+              {/* 权限管理（仅Linux系统且单选） */}
+              {isLinux && onPermissions && file && !isMultipleSelected && (
+                <div
+                  className="px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer flex items-center"
+                  onClick={() => onPermissions(file)}
+                >
+                  <SafetyOutlined className="mr-2" />
+                  权限
                 </div>
               )}
               
