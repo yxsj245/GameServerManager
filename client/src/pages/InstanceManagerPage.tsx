@@ -152,11 +152,9 @@ const InstanceManagerPage: React.FC = () => {
     try {
       setIsConfigLoading(true)
       const response = await apiClient.readGameConfig(instanceId, configId)
-      console.log('从服务器读取的完整响应:', response)
 
       // 正确提取配置数据：response.data.config 而不是 response.data
       let configFromServer = response.data?.config || {}
-      console.log('从服务器提取的原始配置数据:', JSON.stringify(configFromServer, null, 2))
 
       // 规范化数据：如果存在 server: { properties: ... }，则将其内容合并到 'server.properties'
       if (
@@ -179,13 +177,11 @@ const InstanceManagerPage: React.FC = () => {
 
         // 更新配置数据
         configFromServer = newConfig
-        console.log('规范化后的配置数据:', JSON.stringify(configFromServer, null, 2))
       }
 
       // 使用传入的配置模式或当前的配置模式填充默认值
       const currentSchema = schema || configSchema
       const filledData = fillDefaultValues(currentSchema, configFromServer)
-      console.log('填充默认值后的配置数据:', JSON.stringify(filledData, null, 2))
       setConfigData(filledData)
     } catch (error) {
       console.error('读取配置失败:', error)
@@ -197,7 +193,6 @@ const InstanceManagerPage: React.FC = () => {
       // 即使读取失败，也尝试使用默认值创建配置
       const currentSchema = schema || configSchema
       const defaultData = fillDefaultValues(currentSchema, {})
-      console.log('使用默认值的配置数据:', defaultData)
       setConfigData(defaultData)
     } finally {
       setIsConfigLoading(false)
@@ -341,13 +336,7 @@ const InstanceManagerPage: React.FC = () => {
 
   // 处理配置数据变化
   const handleConfigDataChange = (value: any, ...path: string[]) => {
-    console.log('=== 配置数据变化调试 ===')
-    console.log('变化路径:', path.join('.'))
-    console.log('新值:', value)
-    
     setConfigData((prev) => {
-      console.log('setConfigData回调 - 之前的数据:', JSON.stringify(prev, null, 2))
-
       // 使用深拷贝来避免状态更新问题
       const newData = JSON.parse(JSON.stringify(prev))
 
@@ -367,8 +356,6 @@ const InstanceManagerPage: React.FC = () => {
         current[lastPart] = value
       }
 
-      console.log('多层路径更新 - 更新后的配置数据:', JSON.stringify(newData, null, 2))
-      console.log('更新的具体路径:', path.join('.'), '=', value)
       return newData
     })
   }
