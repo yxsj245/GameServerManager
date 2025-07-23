@@ -278,9 +278,8 @@ const FileManagerPage: React.FC = () => {
     // 检查 URL 参数中的路径
     const pathFromUrl = searchParams.get('path')
     if (pathFromUrl) {
-      // 如果 URL 中有路径参数，设置为当前路径并加载
+      // 如果 URL 中有路径参数，直接加载文件（setCurrentPath 会在 fileStore 中自动调用 loadFiles）
       setCurrentPath(pathFromUrl)
-      loadFiles(pathFromUrl, true) // 重置分页
     } else {
       // 否则加载默认路径
       loadFiles(undefined, true) // 重置分页
