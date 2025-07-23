@@ -1,4 +1,5 @@
 import fs from 'fs/promises'
+import fsSync from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import YAML from 'yaml'
@@ -47,8 +48,29 @@ export class GameConfigManager {
 
   constructor() {
     // 确保路径指向正确的配置目录
-    const serverDir = path.dirname(path.dirname(path.dirname(__dirname)))
-    this.configSchemasDir = path.join(serverDir, 'data', 'gameconfig')
+    // 使用 process.cwd() 作为基础路径，这样在打包后也能正确工作
+    const baseDir = process.cwd()
+    
+    // 尝试多个可能的路径位置
+    const possiblePaths = [
+      path.join(baseDir, 'data', 'gameconfig'),           // 打包后的路径
+      path.join(baseDir, 'server', 'data', 'gameconfig'), // 开发环境路径
+      path.join(baseDir, '..', 'server', 'data', 'gameconfig'), // 其他可能的路径
+    ]
+    
+    this.configSchemasDir = possiblePaths[0] // 默认使用第一个路径
+    
+    // 检查哪个路径存在
+    for (const possiblePath of possiblePaths) {
+      try {
+        fsSync.accessSync(possiblePath)
+        this.configSchemasDir = possiblePath
+        break
+      } catch {
+        // 继续尝试下一个路径
+      }
+    }
+    
     logger.info(`GameConfigManager 配置目录: ${this.configSchemasDir}`)
     this.supportedParsers = new Map([
       ['properties', this.parseWithProperties.bind(this)],
