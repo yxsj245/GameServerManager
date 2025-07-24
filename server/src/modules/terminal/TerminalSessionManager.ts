@@ -181,7 +181,8 @@ export class TerminalSessionManager {
         await this.saveConfig()
         this.logger.info(`删除终端会话: ${sessionId}`)
       } else {
-        this.logger.warn(`尝试删除不存在的会话: ${sessionId}`)
+        // 改为debug级别，避免不必要的警告日志
+        this.logger.debug(`尝试删除不存在的会话: ${sessionId}`)
       }
     } catch (error) {
       this.logger.error('删除会话失败:', error)
