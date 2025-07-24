@@ -27,7 +27,7 @@
     "tar": "^6.2.0",
     "node-cron": "^3.0.3",
     "cron-parser": "^4.9.0",
-    "axios": "^1.6.2",
+    "axios": "^1.11.0",
     "fs-extra": "^11.2.0",
     "yauzl": "^2.10.0",
     "mime-types": "^2.1.35",
