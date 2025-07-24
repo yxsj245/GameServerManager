@@ -545,6 +545,60 @@ router.get('/ports', authenticateToken, async (req: Request, res: Response) => {
   }
 })
 
+// 设置选择的磁盘
+router.post('/disk/select', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    if (!systemManager) {
+      return res.status(500).json({ error: '系统管理器未初始化' })
+    }
+    
+    const { disk } = req.body
+    
+    if (typeof disk !== 'string') {
+      return res.status(400).json({
+        success: false,
+        error: '磁盘参数必须是字符串'
+      })
+    }
+    
+    systemManager.setSelectedDisk(disk)
+    
+    res.json({
+      success: true,
+      message: '磁盘选择已更新',
+      data: { selectedDisk: disk }
+    })
+  } catch (error) {
+    logger.error('设置选择磁盘失败:', error)
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : '设置选择磁盘失败'
+    })
+  }
+})
+
+// 获取当前选择的磁盘
+router.get('/disk/selected', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    if (!systemManager) {
+      return res.status(500).json({ error: '系统管理器未初始化' })
+    }
+    
+    const selectedDisk = systemManager.getSelectedDisk()
+    
+    res.json({
+      success: true,
+      data: { selectedDisk }
+    })
+  } catch (error) {
+    logger.error('获取选择磁盘失败:', error)
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : '获取选择磁盘失败'
+    })
+  }
+})
+
 // 工具函数：格式化字节数
 function formatBytes(bytes: number): string {
   if (bytes === 0) return '0 Bytes'

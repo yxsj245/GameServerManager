@@ -44,6 +44,10 @@ interface SystemStats {
     used: number
     free: number
     usage: number
+    readBytes: number
+    writeBytes: number
+    readOps: number
+    writeOps: number
   }
   network: {
     bytesIn: number
@@ -141,6 +145,8 @@ export class SystemManager extends EventEmitter {
   private portsMonitoringInterval?: NodeJS.Timeout
   private processesMonitoringInterval?: NodeJS.Timeout
   private lastNetworkStats: any = null
+  private lastDiskStats: any = null
+  private selectedDisk: string = '' // 当前选择的磁盘，空字符串表示总计
 
   constructor(io: SocketIOServer, logger: winston.Logger) {
     super()
@@ -206,15 +212,15 @@ export class SystemManager extends EventEmitter {
    * 开始系统监控
    */
   private startMonitoring(): void {
-    // 每5秒收集一次系统统计信息
+    // 每3秒收集一次系统统计信息
     this.monitoringInterval = setInterval(async () => {
       try {
         const stats = await this.collectSystemStats()
         this.statsHistory.push(stats)
         
-        // 保持最近1小时的数据 (720个数据点)
-        if (this.statsHistory.length > 720) {
-          this.statsHistory = this.statsHistory.slice(-720)
+        // 保持最近1小时的数据 (1200个数据点，3秒间隔)
+        if (this.statsHistory.length > 1200) {
+          this.statsHistory = this.statsHistory.slice(-1200)
         }
         
         // 检查告警
@@ -226,7 +232,7 @@ export class SystemManager extends EventEmitter {
       } catch (error) {
         this.logger.error('收集系统统计信息失败:', error)
       }
-    }, 5000)
+    }, 3000)
 
     // 每10秒收集一次端口信息
     this.portsMonitoringInterval = setInterval(async () => {
@@ -450,7 +456,11 @@ export class SystemManager extends EventEmitter {
         total: 0,
         used: 0,
         free: 0,
-        usage: 0
+        usage: 0,
+        readBytes: 0,
+        writeBytes: 0,
+        readOps: 0,
+        writeOps: 0
       }
     }
   }
@@ -460,11 +470,19 @@ export class SystemManager extends EventEmitter {
    */
   private async getWindowsDiskInfo(): Promise<SystemStats['disk']> {
     try {
-      // 首先尝试使用wmic命令
-      const command = 'wmic logicaldisk get size,freespace,caption'
-      const { stdout } = await execAsync(command, { timeout: 10000 })
+      // 获取磁盘空间信息
+      let spaceCommand: string
+      if (this.selectedDisk) {
+        // 监控指定磁盘
+        spaceCommand = `wmic logicaldisk where "caption='${this.selectedDisk}'" get size,freespace,caption`
+      } else {
+        // 监控所有磁盘总计
+        spaceCommand = 'wmic logicaldisk get size,freespace,caption'
+      }
       
-      const lines = stdout.trim().split('\n').slice(1)
+      const { stdout: spaceOutput } = await execAsync(spaceCommand, { timeout: 10000 })
+      
+      const lines = spaceOutput.trim().split('\n').slice(1)
       let totalSize = 0
       let totalFree = 0
       
@@ -481,11 +499,106 @@ export class SystemManager extends EventEmitter {
       const used = totalSize - totalFree
       const usage = totalSize > 0 ? (used / totalSize) * 100 : 0
       
+      // 获取磁盘读写信息
+      let readBytes = 0, writeBytes = 0, readOps = 0, writeOps = 0
+      
+      try {
+        // 使用PowerShell获取磁盘性能计数器
+        let diskIOCommand: string
+        if (this.selectedDisk) {
+          // 监控指定磁盘的IO
+          const diskIndex = this.selectedDisk.replace(':', '')
+          diskIOCommand = `powershell "Get-Counter '\\LogicalDisk(${diskIndex}:)\\Disk Read Bytes/sec','\\LogicalDisk(${diskIndex}:)\\Disk Write Bytes/sec','\\LogicalDisk(${diskIndex}:)\\Disk Reads/sec','\\LogicalDisk(${diskIndex}:)\\Disk Writes/sec' | Select-Object -ExpandProperty CounterSamples | Select-Object Path,CookedValue | ConvertTo-Json"`
+        } else {
+          // 监控所有磁盘总计
+          diskIOCommand = `powershell "Get-Counter '\\PhysicalDisk(_Total)\\Disk Read Bytes/sec','\\PhysicalDisk(_Total)\\Disk Write Bytes/sec','\\PhysicalDisk(_Total)\\Disk Reads/sec','\\PhysicalDisk(_Total)\\Disk Writes/sec' | Select-Object -ExpandProperty CounterSamples | Select-Object Path,CookedValue | ConvertTo-Json"`
+        }
+        
+        const { stdout: ioOutput } = await execAsync(diskIOCommand, { timeout: 10000 })
+        
+        if (ioOutput.trim()) {
+          const counters = JSON.parse(ioOutput)
+          const counterArray = Array.isArray(counters) ? counters : [counters]
+          
+          // 累计当前的总IO数据
+          let totalReadBytes = 0, totalWriteBytes = 0, totalReadOps = 0, totalWriteOps = 0
+          
+          for (const counter of counterArray) {
+            const path = counter.Path.toLowerCase()
+            const value = parseFloat(counter.CookedValue) || 0
+            
+            if (path.includes('disk read bytes/sec')) {
+              totalReadBytes += value
+            } else if (path.includes('disk write bytes/sec')) {
+              totalWriteBytes += value
+            } else if (path.includes('disk reads/sec')) {
+              totalReadOps += value
+            } else if (path.includes('disk writes/sec')) {
+              totalWriteOps += value
+            }
+          }
+          
+          // 计算当前速率（如果有上次的数据）
+          const currentStats = {
+            readBytes: totalReadBytes,
+            writeBytes: totalWriteBytes,
+            readOps: totalReadOps,
+            writeOps: totalWriteOps,
+            timestamp: Date.now()
+          }
+          
+          if (this.lastDiskStats) {
+            const timeDiff = (currentStats.timestamp - this.lastDiskStats.timestamp) / 1000 // 秒
+            if (timeDiff > 0) {
+              // Windows的性能计数器已经是每秒的值，直接使用
+              readBytes = currentStats.readBytes
+              writeBytes = currentStats.writeBytes
+              readOps = currentStats.readOps
+              writeOps = currentStats.writeOps
+            }
+          }
+          
+          this.lastDiskStats = currentStats
+        }
+      } catch (ioError) {
+        this.logger.warn('获取Windows磁盘IO信息失败，尝试备用方案:', ioError)
+        
+        try {
+          // 备用方案：使用typeperf
+          const typeperfCommand = 'typeperf "\\PhysicalDisk(_Total)\\Disk Read Bytes/sec" "\\PhysicalDisk(_Total)\\Disk Write Bytes/sec" "\\PhysicalDisk(_Total)\\Disk Reads/sec" "\\PhysicalDisk(_Total)\\Disk Writes/sec" -sc 1'
+          const { stdout: typeperfOutput } = await execAsync(typeperfCommand, { timeout: 10000 })
+          
+          const lines = typeperfOutput.trim().split('\n')
+          
+          // 查找数据行（通常是最后一行包含数字的行）
+          for (let i = lines.length - 1; i >= 0; i--) {
+            const line = lines[i]
+            if (line.includes(',') && line.match(/\d/)) {
+              const values = line.split(',')
+              if (values.length >= 5) {
+                // 跳过时间戳，获取性能计数器值
+                readBytes = parseFloat(values[1]?.replace(/"/g, '')) || 0
+                writeBytes = parseFloat(values[2]?.replace(/"/g, '')) || 0
+                readOps = parseFloat(values[3]?.replace(/"/g, '')) || 0
+                writeOps = parseFloat(values[4]?.replace(/"/g, '')) || 0
+                break
+              }
+            }
+          }
+        } catch (typeperfError) {
+          this.logger.warn('typeperf备用方案也失败:', typeperfError)
+        }
+      }
+      
       return {
         total: totalSize,
         used,
         free: totalFree,
-        usage: Math.round(usage * 100) / 100
+        usage: Math.round(usage * 100) / 100,
+        readBytes: Math.round(readBytes),
+        writeBytes: Math.round(writeBytes),
+        readOps: Math.round(readOps),
+        writeOps: Math.round(writeOps)
       }
     } catch (wmicError) {
       this.logger.warn('wmic命令执行失败，尝试使用备用方案:', wmicError)
@@ -515,7 +628,11 @@ export class SystemManager extends EventEmitter {
           total: totalSize,
           used,
           free: totalFree,
-          usage: Math.round(usage * 100) / 100
+          usage: Math.round(usage * 100) / 100,
+          readBytes: 0,
+          writeBytes: 0,
+          readOps: 0,
+          writeOps: 0
         }
       } catch (psError) {
         this.logger.warn('PowerShell命令执行失败，使用Node.js备用方案:', psError)
@@ -542,7 +659,11 @@ export class SystemManager extends EventEmitter {
             total: 0,
             used: 0,
             free: 0,
-            usage: 0
+            usage: 0,
+            readBytes: 0,
+            writeBytes: 0,
+            readOps: 0,
+            writeOps: 0
           }
         } catch (nodeError) {
           throw nodeError
@@ -555,10 +676,19 @@ export class SystemManager extends EventEmitter {
    * 获取Linux磁盘信息
    */
   private async getLinuxDiskInfo(): Promise<SystemStats['disk']> {
-    const command = 'df -h /'
-    const { stdout } = await execAsync(command, { timeout: 10000 })
+    // 获取磁盘空间信息
+    let spaceCommand: string
+    if (this.selectedDisk) {
+      // 监控指定分区
+      spaceCommand = `df -h ${this.selectedDisk}`
+    } else {
+      // 监控根分区
+      spaceCommand = 'df -h /'
+    }
     
-    const lines = stdout.trim().split('\n')
+    const { stdout: spaceOutput } = await execAsync(spaceCommand, { timeout: 10000 })
+    
+    const lines = spaceOutput.trim().split('\n')
     const dataLine = lines[1]
     const parts = dataLine.split(/\s+/)
     
@@ -567,11 +697,85 @@ export class SystemManager extends EventEmitter {
     const free = this.parseSize(parts[3])
     const usage = parseFloat(parts[4].replace('%', ''))
     
+    // 获取磁盘读写信息
+    let readBytes = 0, writeBytes = 0, readOps = 0, writeOps = 0
+    
+    try {
+      // 从/proc/diskstats获取磁盘IO信息
+      const ioCommand = 'cat /proc/diskstats'
+      const { stdout: ioOutput } = await execAsync(ioCommand, { timeout: 10000 })
+      
+      const ioLines = ioOutput.trim().split('\n')
+      let totalReadSectors = 0, totalWriteSectors = 0, totalReadOps = 0, totalWriteOps = 0
+      
+      if (this.selectedDisk) {
+        // 监控指定设备的IO
+        // 需要从挂载点获取设备名
+        const mountCommand = `df ${this.selectedDisk} | tail -1 | awk '{print $1}'`
+        const { stdout: deviceOutput } = await execAsync(mountCommand, { timeout: 5000 })
+        const devicePath = deviceOutput.trim()
+        const deviceName = devicePath.replace(/^\/dev\//, '').replace(/\d+$/, '') // 移除分区号
+        
+        for (const line of ioLines) {
+          const parts = line.trim().split(/\s+/)
+          if (parts.length >= 14 && parts[2] === deviceName) {
+            totalReadOps += parseInt(parts[3]) || 0      // 读操作次数
+            totalReadSectors += parseInt(parts[5]) || 0  // 读扇区数
+            totalWriteOps += parseInt(parts[7]) || 0     // 写操作次数
+            totalWriteSectors += parseInt(parts[9]) || 0 // 写扇区数
+          }
+        }
+      } else {
+        // 监控所有主设备的IO总计
+        for (const line of ioLines) {
+          const parts = line.trim().split(/\s+/)
+          if (parts.length >= 14) {
+            // 跳过分区，只统计主设备
+            const deviceName = parts[2]
+            if (deviceName.match(/^(sd[a-z]|nvme\d+n\d+|hd[a-z]|vd[a-z])$/)) {
+              totalReadOps += parseInt(parts[3]) || 0      // 读操作次数
+              totalReadSectors += parseInt(parts[5]) || 0  // 读扇区数
+              totalWriteOps += parseInt(parts[7]) || 0     // 写操作次数
+              totalWriteSectors += parseInt(parts[9]) || 0 // 写扇区数
+            }
+          }
+        }
+      }
+      
+      // 计算当前速率（如果有上次的数据）
+      const currentStats = {
+        readBytes: totalReadSectors * 512, // 扇区大小通常是512字节
+        writeBytes: totalWriteSectors * 512,
+        readOps: totalReadOps,
+        writeOps: totalWriteOps,
+        timestamp: Date.now()
+      }
+      
+      if (this.lastDiskStats) {
+        const timeDiff = (currentStats.timestamp - this.lastDiskStats.timestamp) / 1000 // 秒
+        if (timeDiff > 0) {
+          readBytes = Math.max(0, (currentStats.readBytes - this.lastDiskStats.readBytes) / timeDiff)
+          writeBytes = Math.max(0, (currentStats.writeBytes - this.lastDiskStats.writeBytes) / timeDiff)
+          readOps = Math.max(0, (currentStats.readOps - this.lastDiskStats.readOps) / timeDiff)
+          writeOps = Math.max(0, (currentStats.writeOps - this.lastDiskStats.writeOps) / timeDiff)
+        }
+      }
+      
+      this.lastDiskStats = currentStats
+      
+    } catch (ioError) {
+      this.logger.warn('获取Linux磁盘IO信息失败:', ioError)
+    }
+    
     return {
       total,
       used,
       free,
-      usage
+      usage,
+      readBytes: Math.round(readBytes),
+      writeBytes: Math.round(writeBytes),
+      readOps: Math.round(readOps),
+      writeOps: Math.round(writeOps)
     }
   }
 
@@ -1343,6 +1547,23 @@ export class SystemManager extends EventEmitter {
       this.logger.error('获取活跃端口失败:', error)
       return []
     }
+  }
+
+  /**
+   * 设置当前监控的磁盘
+   */
+  public setSelectedDisk(disk: string): void {
+    this.selectedDisk = disk
+    // 重置磁盘统计数据，避免切换磁盘时的数据混乱
+    this.lastDiskStats = null
+    this.logger.info(`切换磁盘监控目标: ${disk || '总计'}`)
+  }
+
+  /**
+   * 获取当前选择的磁盘
+   */
+  public getSelectedDisk(): string {
+    return this.selectedDisk
   }
 
   /**

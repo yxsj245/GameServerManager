@@ -338,6 +338,19 @@ class ApiClient {
     return this.get('/terminal/active-processes')
   }
 
+  // 磁盘选择相关API
+  async getDiskList() {
+    return this.get('/system/disks')
+  }
+
+  async setSelectedDisk(disk: string) {
+    return this.post('/system/disk/select', { disk })
+  }
+
+  async getSelectedDisk() {
+    return this.get('/system/disk/selected')
+  }
+
   // 终端相关API
   async getTerminalSessions() {
     return this.get('/terminal/sessions')

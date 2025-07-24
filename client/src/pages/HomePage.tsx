@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '@/stores/authStore'
 import { useNotificationStore } from '@/stores/notificationStore'
-import { SystemStats, SystemInfo, ProcessInfo, WeatherData, ActivePort, SystemAlert } from '@/types'
+import { SystemStats, SystemInfo, ProcessInfo, WeatherData, ActivePort, SystemAlert, DiskInfo } from '@/types'
 import socketClient from '@/utils/socket'
 import apiClient from '@/utils/api'
 import {
@@ -19,7 +19,10 @@ import {
   Search,
   Maximize2,
   X,
-  AlertTriangle
+  AlertTriangle,
+  Download,
+  Upload,
+  BarChart3
 } from 'lucide-react'
 import MusicPlayer from '@/components/MusicPlayer'
 
@@ -263,6 +266,11 @@ const HomePage: React.FC = () => {
   const [isKillConfirmVisible, setIsKillConfirmVisible] = useState(false)
   const [killProcessInfo, setKillProcessInfo] = useState<{ pid: number; name: string; force: boolean } | null>(null)
   
+  // 磁盘选择相关状态
+  const [diskList, setDiskList] = useState<DiskInfo[]>([])
+  const [selectedDisk, setSelectedDisk] = useState<string>('')
+  const [diskLoading, setDiskLoading] = useState(false)
+  
   // 将原先的 useEffect 拆分为两个
   
   // 第一个 useEffect：处理非 WebSocket 相关的数据获取和定时器
@@ -331,10 +339,36 @@ const HomePage: React.FC = () => {
         setWeatherLoading(false)
       }
     }
+
+    // 获取磁盘列表
+    const fetchDiskList = async () => {
+      try {
+        const response = await apiClient.getDiskList()
+        if (response.success) {
+          setDiskList(response.data)
+        }
+      } catch (error) {
+        console.error('获取磁盘列表失败:', error)
+      }
+    }
+
+    // 获取当前选择的磁盘
+    const fetchSelectedDisk = async () => {
+      try {
+        const response = await apiClient.getSelectedDisk()
+        if (response.success) {
+          setSelectedDisk(response.data.selectedDisk)
+        }
+      } catch (error) {
+        console.error('获取选择磁盘失败:', error)
+      }
+    }
     
     fetchSystemInfo()
     fetchTerminalProcesses()
     fetchWeatherData()
+    fetchDiskList()
+    fetchSelectedDisk()
     
     // 设置定时刷新
     const processInterval = setInterval(fetchTerminalProcesses, 5000)
@@ -463,6 +497,37 @@ const HomePage: React.FC = () => {
     }
   }, [activeProcesses, modalProcessSearchQuery])
   
+  // 处理磁盘选择变化
+  const handleDiskChange = async (disk: string) => {
+    try {
+      setDiskLoading(true)
+      const response = await apiClient.setSelectedDisk(disk)
+      if (response.success) {
+        setSelectedDisk(disk)
+        addNotification({
+          type: 'success',
+          title: '磁盘切换成功',
+          message: disk === '' ? '已切换到总计模式' : `已切换到 ${disk}`
+        })
+      } else {
+        addNotification({
+          type: 'error',
+          title: '磁盘切换失败',
+          message: response.message || '未知错误'
+        })
+      }
+    } catch (error) {
+      console.error('切换磁盘失败:', error)
+      addNotification({
+        type: 'error',
+        title: '磁盘切换失败',
+        message: '网络错误，请稍后重试'
+      })
+    } finally {
+      setDiskLoading(false)
+    }
+  }
+
   // 处理弹窗打开动画
   const handleOpenPortsModal = () => {
     setShowPortsModal(true)
@@ -584,6 +649,21 @@ const HomePage: React.FC = () => {
     const sizes = ['B', 'KB', 'MB', 'GB', 'TB']
     const i = Math.floor(Math.log(bytes) / Math.log(k))
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
+  }
+  
+  const formatBytesPerSecond = (bytesPerSec: number) => {
+    if (bytesPerSec === 0) return '0 B/s'
+    const k = 1024
+    const sizes = ['B/s', 'KB/s', 'MB/s', 'GB/s', 'TB/s']
+    const i = Math.floor(Math.log(bytesPerSec) / Math.log(k))
+    return parseFloat((bytesPerSec / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
+  }
+  
+  const formatOpsPerSecond = (ops: number) => {
+    if (ops === 0) return '0 ops/s'
+    if (ops < 1000) return `${ops.toFixed(1)} ops/s`
+    if (ops < 1000000) return `${(ops / 1000).toFixed(1)}K ops/s`
+    return `${(ops / 1000000).toFixed(1)}M ops/s`
   }
   
 
@@ -713,7 +793,7 @@ const HomePage: React.FC = () => {
       
       {/* 系统状态 */}
       {systemStats && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
           {/* CPU使用率 */}
           <div className="card-game p-6">
             <div className="flex items-center justify-between mb-4">
@@ -771,11 +851,36 @@ const HomePage: React.FC = () => {
                 <HardDrive className="w-6 h-6 text-purple-500" />
                 <h3 className="text-lg font-semibold text-black dark:text-white">磁盘使用率</h3>
               </div>
-              <span className={`text-2xl font-bold ${getUsageColor(systemStats.disk.usage)}`}>
-                {systemStats.disk.usage.toFixed(1)}%
-              </span>
+              <div className="flex items-center space-x-3">
+                {/* 磁盘选择下拉菜单 */}
+                <div className="relative">
+                  <select
+                    value={selectedDisk}
+                    onChange={(e) => handleDiskChange(e.target.value)}
+                    disabled={diskLoading}
+                    className="text-xs bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md px-2 py-1 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-1 focus:ring-purple-500 focus:border-purple-500 disabled:opacity-50 disabled:cursor-not-allowed hover:border-purple-400 dark:hover:border-purple-500 transition-colors min-w-[80px]"
+                  >
+                    <option value="" className="bg-white dark:bg-gray-800">总计</option>
+                    {diskList.map((disk, index) => (
+                      <option key={`${disk.filesystem}-${index}`} value={disk.filesystem} className="bg-white dark:bg-gray-800">
+                        {disk.filesystem}
+                      </option>
+                    ))}
+                  </select>
+                  {diskLoading && (
+                    <div className="absolute right-1 top-1/2 transform -translate-y-1/2">
+                      <div className="w-2 h-2 border border-purple-500 border-t-transparent rounded-full animate-spin"></div>
+                    </div>
+                  )}
+                </div>
+                <span className={`text-2xl font-bold ${getUsageColor(systemStats.disk.usage)}`}>
+                  {systemStats.disk.usage.toFixed(1)}%
+                </span>
+              </div>
             </div>
-            <div className="space-y-2">
+            
+            {/* 磁盘空间信息 */}
+            <div className="space-y-2 mb-6">
               <div className="flex justify-between text-sm text-gray-600 dark:text-gray-400">
                 <span>已用: {formatBytes(systemStats.disk.used)}</span>
                 <span>总计: {formatBytes(systemStats.disk.total)}</span>
@@ -785,6 +890,53 @@ const HomePage: React.FC = () => {
                   className={`h-2 rounded-full transition-all duration-300 ${getUsageBgColor(systemStats.disk.usage)}`}
                   style={{ width: `${systemStats.disk.usage}%` }}
                 ></div>
+              </div>
+            </div>
+            
+            {/* 实时磁盘读写 */}
+            <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center space-x-2">
+                  <BarChart3 className="w-4 h-4 text-purple-500" />
+                  <h4 className="text-sm font-medium text-black dark:text-white">实时读写</h4>
+                </div>
+                <div className="text-xs text-gray-500 dark:text-gray-400">
+                  {systemInfo?.platform?.includes('Windows') ? 'Windows' : 'Linux'}
+                </div>
+              </div>
+              
+              <div className="space-y-2">
+                {/* 读取信息 */}
+                <div className="flex items-center justify-between text-sm">
+                  <div className="flex items-center space-x-2">
+                    <Upload className="w-3 h-3 text-blue-500" />
+                    <span className="text-gray-600 dark:text-gray-400">读取:</span>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-blue-600 dark:text-blue-400 font-medium">
+                      {formatBytesPerSecond(systemStats.disk.readBytes)}
+                    </div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400">
+                      {formatOpsPerSecond(systemStats.disk.readOps)}
+                    </div>
+                  </div>
+                </div>
+                
+                {/* 写入信息 */}
+                <div className="flex items-center justify-between text-sm">
+                  <div className="flex items-center space-x-2">
+                    <Download className="w-3 h-3 text-orange-500" />
+                    <span className="text-gray-600 dark:text-gray-400">写入:</span>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-orange-600 dark:text-orange-400 font-medium">
+                      {formatBytesPerSecond(systemStats.disk.writeBytes)}
+                    </div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400">
+                      {formatOpsPerSecond(systemStats.disk.writeOps)}
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>

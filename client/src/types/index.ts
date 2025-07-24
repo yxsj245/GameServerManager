@@ -93,6 +93,7 @@ export interface SystemStats {
     usage: number
     cores: number
     model: string
+    speed: number
   }
   memory: {
     total: number
@@ -105,6 +106,10 @@ export interface SystemStats {
     used: number
     free: number
     usage: number
+    readBytes: number
+    writeBytes: number
+    readOps: number
+    writeOps: number
   }
   network: {
     rx: number
@@ -153,6 +158,15 @@ export interface ActivePort {
   process?: string
   pid?: number
   address: string
+}
+
+export interface DiskInfo {
+  filesystem: string
+  size: number
+  used: number
+  available: number
+  usage: number
+  mountpoint: string
 }
 
 // 游戏相关类型
