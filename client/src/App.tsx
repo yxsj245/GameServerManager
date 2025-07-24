@@ -21,6 +21,7 @@ import NotificationContainer from '@/components/NotificationContainer'
 import GlobalMusicPlayer from '@/components/GlobalMusicPlayer'
 import GlobalSystemAlert from '@/components/GlobalSystemAlert'
 import GlobalSystemAlertManager from '@/components/GlobalSystemAlertManager'
+import BrowserCompatibilityChecker from '@/components/BrowserCompatibilityChecker'
 
 // GlobalMusicPlayer包装器组件 - 只在已登录时显示
 const GlobalMusicPlayerWrapper: React.FC = () => {
@@ -98,69 +99,71 @@ function App() {
   }, [])
   
   return (
-    <ConfigProvider
-      theme={{
-        algorithm: currentTheme === 'dark' ? theme.darkAlgorithm : theme.defaultAlgorithm,
-        token: {
-          colorPrimary: '#1890ff',
-        },
-      }}
-    >
-      <AntdApp>
-        <div className="min-h-screen bg-game-gradient">
-          <Routes>
-            {/* 公共路由 */}
-            <Route
-              path="/login"
-              element={
-                <PublicRoute>
-                  <PageTransition>
-                    <LoginPage />
-                  </PageTransition>
-                </PublicRoute>
-              }
-            />
+    <BrowserCompatibilityChecker>
+      <ConfigProvider
+        theme={{
+          algorithm: currentTheme === 'dark' ? theme.darkAlgorithm : theme.defaultAlgorithm,
+          token: {
+            colorPrimary: '#1890ff',
+          },
+        }}
+      >
+        <AntdApp>
+          <div className="min-h-screen bg-game-gradient">
+            <Routes>
+              {/* 公共路由 */}
+              <Route
+                path="/login"
+                element={
+                  <PublicRoute>
+                    <PageTransition>
+                      <LoginPage />
+                    </PageTransition>
+                  </PublicRoute>
+                }
+              />
+              
+              {/* 受保护的路由 */}
+              <Route
+                path="/*"
+                element={
+                  <ProtectedRoute>
+                    <Layout>
+                      <Routes>
+                        <Route path="/" element={<PageTransition><HomePage /></PageTransition>} />
+                        <Route path="/terminal" element={<PageTransition><TerminalPage /></PageTransition>} />
+                        <Route path="/instances" element={<PageTransition><InstanceManagerPage /></PageTransition>} />
+                        <Route path="/game-deployment" element={<PageTransition><GameDeploymentPage /></PageTransition>} />
+                        <Route path="/scheduled-tasks" element={<PageTransition><ScheduledTasksPage /></PageTransition>} />
+                        <Route path="/files" element={<PageTransition><FileManagerPage /></PageTransition>} />
+                        <Route path="/plugins" element={<PageTransition><PluginsPage /></PageTransition>} />
+                        <Route path="/settings" element={<PageTransition><SettingsPage /></PageTransition>} />
+                        <Route path="/about" element={<PageTransition><AboutProjectPage /></PageTransition>} />
+                        <Route path="*" element={<Navigate to="/" replace />} />
+                      </Routes>
+                    </Layout>
+                  </ProtectedRoute>
+                }
+              />
+            </Routes>
             
-            {/* 受保护的路由 */}
-            <Route
-              path="/*"
-              element={
-                <ProtectedRoute>
-                  <Layout>
-                    <Routes>
-                      <Route path="/" element={<PageTransition><HomePage /></PageTransition>} />
-                      <Route path="/terminal" element={<PageTransition><TerminalPage /></PageTransition>} />
-                      <Route path="/instances" element={<PageTransition><InstanceManagerPage /></PageTransition>} />
-                      <Route path="/game-deployment" element={<PageTransition><GameDeploymentPage /></PageTransition>} />
-                      <Route path="/scheduled-tasks" element={<PageTransition><ScheduledTasksPage /></PageTransition>} />
-                      <Route path="/files" element={<PageTransition><FileManagerPage /></PageTransition>} />
-                      <Route path="/plugins" element={<PageTransition><PluginsPage /></PageTransition>} />
-                      <Route path="/settings" element={<PageTransition><SettingsPage /></PageTransition>} />
-                      <Route path="/about" element={<PageTransition><AboutProjectPage /></PageTransition>} />
-                      <Route path="*" element={<Navigate to="/" replace />} />
-                    </Routes>
-                  </Layout>
-                </ProtectedRoute>
-              }
-            />
-          </Routes>
-          
-          {/* 全局通知容器 */}
-          <NotificationContainer />
-          
-          {/* 全局系统告警管理器 - 只在已登录时启用 */}
-          <ProtectedRoute>
-            <GlobalSystemAlertManager />
-          </ProtectedRoute>
-          
-          {/* 全局系统告警弹窗 */}
-          <GlobalSystemAlert />
-          
-          {/* 全局音乐播放器 - 只在已登录时显示 */}
-          <GlobalMusicPlayerWrapper />
-        </div>
-      </AntdApp>
-    </ConfigProvider>
+            {/* 全局通知容器 */}
+            <NotificationContainer />
+            
+            {/* 全局系统告警管理器 - 只在已登录时启用 */}
+            <ProtectedRoute>
+              <GlobalSystemAlertManager />
+            </ProtectedRoute>
+            
+            {/* 全局系统告警弹窗 */}
+            <GlobalSystemAlert />
+            
+            {/* 全局音乐播放器 - 只在已登录时显示 */}
+            <GlobalMusicPlayerWrapper />
+          </div>
+        </AntdApp>
+      </ConfigProvider>
+    </BrowserCompatibilityChecker>
   )
 }
 
