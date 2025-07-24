@@ -121,12 +121,6 @@ async function createPackage() {
       path.join(packageDir, 'server', 'PTY')
     )
     
-    // 同时复制PTY文件到根目录（兼容打包后的路径查找）
-    await fs.copy(
-      path.join(__dirname, '..', 'server', 'PTY'),
-      path.join(packageDir, 'PTY')
-    )
-    
     console.log('🐍 复制Python文件...')
     // 复制Python文件和配置
     const pythonSourcePath = path.join(__dirname, '..', 'server', 'src', 'Python')
