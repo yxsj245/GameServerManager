@@ -172,20 +172,57 @@ router.post('/:instanceId/connect', authenticateToken, async (req: Request, res:
       rconConnections.delete(instanceId)
     })
     
-    await rconManager.connect(config)
-    rconConnections.set(instanceId, rconManager)
-    
-    res.json({
-      success: true,
-      message: 'RCON连接成功',
-      status: rconManager.getStatus()
-    })
+    try {
+      await rconManager.connect(config)
+      rconConnections.set(instanceId, rconManager)
+      
+      res.json({
+        success: true,
+        message: 'RCON连接成功',
+        status: rconManager.getStatus()
+      })
+    } catch (connectError: any) {
+      // 详细的连接错误处理
+      let errorMessage = 'RCON连接失败'
+      
+      if (connectError.code === 'ECONNREFUSED') {
+        errorMessage = `连接被拒绝：无法连接到 ${config.host}:${config.port}，请检查服务器是否运行且RCON已启用`
+      } else if (connectError.code === 'ETIMEDOUT') {
+        errorMessage = `连接超时：无法在指定时间内连接到 ${config.host}:${config.port}，请检查网络连接和防火墙设置`
+      } else if (connectError.code === 'ENOTFOUND') {
+        errorMessage = `主机未找到：无法解析主机名 ${config.host}，请检查主机地址是否正确`
+      } else if (connectError.code === 'ECONNRESET') {
+        errorMessage = `连接被重置：服务器主动断开了连接，可能是RCON配置错误`
+      } else if (connectError.message.includes('身份验证失败') || connectError.message.includes('密码错误')) {
+        errorMessage = `身份验证失败：RCON密码错误，请检查密码是否正确`
+      } else if (connectError.message.includes('身份验证超时')) {
+        errorMessage = `身份验证超时：服务器响应缓慢，请稍后重试`
+      } else if (connectError.message.includes('连接超时')) {
+        errorMessage = `连接超时：无法在 ${config.timeout || 5000}ms 内建立连接`
+      } else {
+        errorMessage = `连接失败：${connectError.message || '未知错误'}`
+      }
+      
+      logger.error(`实例 ${instanceId} RCON连接失败:`, connectError)
+      
+      res.status(500).json({
+        success: false,
+        error: 'RCON连接失败',
+        message: errorMessage,
+        details: {
+          host: config.host,
+          port: config.port,
+          errorCode: connectError.code,
+          originalError: connectError.message
+        }
+      })
+    }
   } catch (error: any) {
-    logger.error('RCON连接失败:', error)
+    logger.error('RCON连接处理失败:', error)
     res.status(500).json({
       success: false,
-      error: 'RCON连接失败',
-      message: error.message
+      error: 'RCON连接处理失败',
+      message: error.message || '服务器内部错误'
     })
   }
 })

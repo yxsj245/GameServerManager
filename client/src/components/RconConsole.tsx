@@ -145,16 +145,36 @@ const RconConsole: React.FC = () => {
         })
       }
     } catch (error: any) {
+      const errorMessage = error.message || 'RCON连接失败'
+      
       setRconState(prev => ({ 
         ...prev, 
         connecting: false,
-        error: error.response?.data?.message || 'RCON连接失败'
+        error: errorMessage
       }))
+      
+      // 显示详细的错误信息
       addNotification({
         type: 'error',
         title: '连接失败',
-        message: error.response?.data?.message || 'RCON连接失败'
+        message: errorMessage,
+        duration: 8000 // 延长显示时间以便用户阅读详细信息
       })
+      
+      // 如果有详细错误信息，也记录到命令历史中
+      if (error?.details) {
+        setRconState(prev => ({
+          ...prev,
+          commandHistory: [
+            ...prev.commandHistory,
+            {
+              command: '',
+              response: `连接失败: ${errorMessage}\n主机: ${error.details.host}:${error.details.port}\n错误代码: ${error.details.errorCode || '未知'}`,
+              timestamp: new Date().toLocaleTimeString()
+            }
+          ]
+        }))
+      }
     }
   }
 
@@ -230,7 +250,7 @@ const RconConsole: React.FC = () => {
         ...prev,
         commandHistory: prev.commandHistory.map((item, index) => 
           index === prev.commandHistory.length - 1 
-            ? { ...item, response: `错误: ${error.response?.data?.message || '命令执行失败'}` }
+            ? { ...item, response: `错误: ${error.message || '命令执行失败'}` }
             : item
         )
       }))
