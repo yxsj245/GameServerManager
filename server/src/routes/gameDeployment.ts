@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express'
 import { promises as fs } from 'fs'
+import fsSync from 'fs'
 import path from 'path'
 import os from 'os'
 import axios from 'axios'
@@ -94,8 +95,28 @@ export function setGameDeploymentManagers(
 // 获取可安装的游戏列表
 router.get('/games', authenticateToken, async (req: Request, res: Response) => {
   try {
-    // const gamesFilePath = path.join(__dirname, '../../data/games/installgame.json')
-    const gamesFilePath = path.join(__dirname, '../data/games/installgame.json')
+    // 尝试多个可能的路径来查找 installgame.json 文件
+    const baseDir = process.cwd()
+    const possiblePaths = [
+      path.join(baseDir, 'data', 'games', 'installgame.json'),           // 打包后的路径
+      path.join(baseDir, 'server', 'data', 'games', 'installgame.json'), // 开发环境路径
+    ]
+    
+    let gamesFilePath = ''
+    for (const possiblePath of possiblePaths) {
+      try {
+        fsSync.accessSync(possiblePath, fsSync.constants.F_OK)
+        gamesFilePath = possiblePath
+        break
+      } catch {
+        // 继续尝试下一个路径
+      }
+    }
+    
+    if (!gamesFilePath) {
+      throw new Error('无法找到 installgame.json 文件')
+    }
+    
     const gamesData = await fs.readFile(gamesFilePath, 'utf-8')
     const allGames: { [key: string]: SteamGameInfo } = JSON.parse(gamesData)
     

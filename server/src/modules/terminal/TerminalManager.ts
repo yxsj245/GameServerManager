@@ -3,6 +3,7 @@ import { Server as SocketIOServer, Socket } from 'socket.io'
 import { v4 as uuidv4 } from 'uuid'
 import winston from 'winston'
 import path from 'path'
+import fs from 'fs'
 import { fileURLToPath } from 'url'
 import os from 'os'
 import { promisify } from 'util'
@@ -72,19 +73,41 @@ export class TerminalManager {
     // 根据操作系统和架构选择PTY程序路径
     const platform = os.platform()
     const arch = os.arch()
+    const baseDir = process.cwd()
     
+    let ptyFileName: string
     if (platform === 'win32') {
-      // this.ptyPath = path.resolve(__dirname, '../../../PTY/pty_win32_x64.exe')
-      this.ptyPath = path.resolve(__dirname, '../../PTY/pty_win32_x64.exe')
+      ptyFileName = 'pty_win32_x64.exe'
     } else {
       // Linux平台根据架构选择对应的PTY文件
       if (arch === 'arm64' || arch === 'aarch64') {
-        // this.ptyPath = path.resolve(__dirname, '../../../PTY/pty_linux_arm64')
-        this.ptyPath = path.resolve(__dirname, '../../PTY/pty_linux_arm64')
+        ptyFileName = 'pty_linux_arm64'
       } else {
-        // this.ptyPath = path.resolve(__dirname, '../../../PTY/pty_linux_x64')
-        this.ptyPath = path.resolve(__dirname, '../../PTY/pty_linux_x64')
+        ptyFileName = 'pty_linux_x64'
       }
+    }
+    
+    // 尝试多个可能的路径来查找 PTY 文件
+    const possiblePaths = [
+      path.join(baseDir, 'PTY', ptyFileName),                    // 打包后的路径
+      path.join(baseDir, 'server', 'PTY', ptyFileName),          // 开发环境路径
+    ]
+    
+    this.ptyPath = ''
+    for (const possiblePath of possiblePaths) {
+      try {
+        fs.accessSync(possiblePath, fs.constants.F_OK)
+        this.ptyPath = possiblePath
+        break
+      } catch {
+        // 继续尝试下一个路径
+      }
+    }
+    
+    if (!this.ptyPath) {
+      this.logger.error(`无法找到 PTY 文件: ${ptyFileName}`)
+      // 使用默认路径作为最后的备用
+      this.ptyPath = path.resolve(__dirname, '../../PTY', ptyFileName)
     }
     
     this.logger.info(`终端管理器初始化完成，PTY路径: ${this.ptyPath}`)
