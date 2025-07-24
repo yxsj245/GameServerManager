@@ -229,6 +229,11 @@ export class SystemManager extends EventEmitter {
     // 每3秒收集一次系统统计信息
     this.monitoringInterval = setInterval(async () => {
       try {
+        // 检查是否有客户端订阅系统状态
+        if (!this.hasSubscribers('system-stats')) {
+          return
+        }
+        
         const stats = await this.collectSystemStats()
         this.statsHistory.push(stats)
         
@@ -251,6 +256,11 @@ export class SystemManager extends EventEmitter {
     // 每10秒收集一次端口信息
     this.portsMonitoringInterval = setInterval(async () => {
       try {
+        // 检查是否有客户端订阅端口信息
+        if (!this.hasSubscribers('system-ports')) {
+          return
+        }
+        
         const ports = await this.getActivePorts()
         this.io.to('system-ports').emit('system-ports', ports)
       } catch (error) {
@@ -261,12 +271,25 @@ export class SystemManager extends EventEmitter {
     // 每8秒收集一次进程信息
     this.processesMonitoringInterval = setInterval(async () => {
       try {
+        // 检查是否有客户端订阅进程信息
+        if (!this.hasSubscribers('system-processes')) {
+          return
+        }
+        
         const processes = await this.getProcessList()
         this.io.to('system-processes').emit('system-processes', processes)
       } catch (error) {
         this.logger.error('收集进程信息失败:', error)
       }
     }, 8000)
+  }
+
+  /**
+   * 检查是否有客户端订阅指定房间
+   */
+  private hasSubscribers(roomName: string): boolean {
+    const room = this.io.sockets.adapter.rooms.get(roomName)
+    return room ? room.size > 0 : false
   }
 
   /**
@@ -1985,6 +2008,25 @@ export class SystemManager extends EventEmitter {
       const order = { '以太网': 1, '无线网络': 2, '网络接口': 3, '虚拟网络': 4, '未知': 5 }
       return (order[a.type as keyof typeof order] || 5) - (order[b.type as keyof typeof order] || 5)
     })
+  }
+
+  /**
+   * 处理客户端断开连接
+   * 当客户端断开连接时，检查是否还有其他客户端在订阅，如果没有则可以优化资源使用
+   */
+  public handleClientDisconnect(): void {
+    // 延迟检查，给socket.leave()一些时间完成
+    setTimeout(() => {
+      const hasStatsSubscribers = this.hasSubscribers('system-stats')
+      const hasPortsSubscribers = this.hasSubscribers('system-ports')
+      const hasProcessesSubscribers = this.hasSubscribers('system-processes')
+      
+      if (!hasStatsSubscribers && !hasPortsSubscribers && !hasProcessesSubscribers) {
+        this.logger.info('所有客户端已断开连接，系统监控将在下次有订阅者时恢复资源收集')
+      } else {
+        this.logger.debug(`当前订阅状态 - 系统状态: ${hasStatsSubscribers}, 端口信息: ${hasPortsSubscribers}, 进程信息: ${hasProcessesSubscribers}`)
+      }
+    }, 100)
   }
 
   /**

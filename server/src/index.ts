@@ -741,6 +741,8 @@ async function startServer() {
       socket.on('unsubscribe-system-stats', () => {
         socket.leave('system-stats')
         logger.info(`客户端 ${socket.id} 取消订阅系统状态`)
+        // 检查是否还有其他订阅者
+        systemManager.handleClientDisconnect()
       })
 
       // 端口监控事件
@@ -752,6 +754,8 @@ async function startServer() {
       socket.on('unsubscribe-system-ports', () => {
         socket.leave('system-ports')
         logger.info(`客户端 ${socket.id} 取消订阅端口信息`)
+        // 检查是否还有其他订阅者
+        systemManager.handleClientDisconnect()
       })
 
       // 进程监控事件
@@ -763,6 +767,8 @@ async function startServer() {
       socket.on('unsubscribe-system-processes', () => {
         socket.leave('system-processes')
         logger.info(`客户端 ${socket.id} 取消订阅进程信息`)
+        // 检查是否还有其他订阅者
+        systemManager.handleClientDisconnect()
       })
 
       // 断开连接处理
@@ -772,6 +778,8 @@ async function startServer() {
         socket.leave('system-stats')
         socket.leave('system-ports')
         socket.leave('system-processes')
+        // 通知系统管理器客户端已断开连接
+        systemManager.handleClientDisconnect()
       })
       
       // 错误处理
