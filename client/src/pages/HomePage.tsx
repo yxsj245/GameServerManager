@@ -805,7 +805,9 @@ const HomePage: React.FC = () => {
                 {systemStats.cpu.usage.toFixed(1)}%
               </span>
             </div>
-            <div className="space-y-2">
+            
+            {/* CPU总体信息 */}
+            <div className="space-y-2 mb-4">
               <div className="flex justify-between text-sm text-gray-600 dark:text-gray-400">
                 <span>核心数: {systemStats.cpu.cores}</span>
                 <span>型号: {systemStats.cpu.model}</span>
@@ -815,6 +817,41 @@ const HomePage: React.FC = () => {
                   className={`h-2 rounded-full transition-all duration-300 ${getUsageBgColor(systemStats.cpu.usage)}`}
                   style={{ width: `${systemStats.cpu.usage}%` }}
                 ></div>
+              </div>
+            </div>
+            
+            {/* 详细核心信息 */}
+            <div className="border-t border-gray-200 dark:border-gray-700 pt-3">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center space-x-2">
+                  <BarChart3 className="w-4 h-4 text-blue-500" />
+                  <h4 className="text-sm font-medium text-black dark:text-white">核心负载</h4>
+                </div>
+                <div className="text-xs text-gray-500 dark:text-gray-400">
+                  {systemStats.cpu.cores} 个核心
+                </div>
+              </div>
+              
+              <div className="max-h-32 overflow-y-auto space-y-1.5">
+                {systemStats.cpu.coreUsages && systemStats.cpu.coreUsages.map((coreUsage, index) => (
+                  <div key={index} className="flex items-center justify-between text-sm">
+                    <div className="flex items-center space-x-2">
+                      <div className="w-2.5 h-2.5 bg-blue-500 rounded-full"></div>
+                      <span className="text-gray-600 dark:text-gray-400 text-xs">核心 {index + 1}:</span>
+                    </div>
+                    <div className="flex items-center space-x-2 flex-1 ml-3">
+                      <div className="flex-1 bg-gray-700 rounded-full h-1">
+                        <div
+                          className={`h-1 rounded-full transition-all duration-300 ${getUsageBgColor(coreUsage)}`}
+                          style={{ width: `${coreUsage}%` }}
+                        ></div>
+                      </div>
+                      <div className={`text-right font-medium min-w-[40px] text-xs ${getUsageColor(coreUsage)}`}>
+                        {coreUsage.toFixed(1)}%
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           </div>
