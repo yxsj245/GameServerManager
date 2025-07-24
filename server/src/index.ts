@@ -588,6 +588,9 @@ async function startServer() {
     setAuthManager(authManager)
     setPluginManager(pluginManager)
     
+    // 设置 TerminalManager 的 Socket.IO 实例
+    terminalManager.setSocketIO(io)
+    
     // 设置schedulerManager与gameManager、instanceManager和terminalManager的关联
     schedulerManager.setGameManager(gameManager)
     schedulerManager.setInstanceManager(instanceManager)
@@ -775,6 +778,21 @@ async function startServer() {
         systemManager.handleClientDisconnect()
       })
 
+      // 终端活跃进程监控事件
+      socket.on('subscribe-terminal-processes', () => {
+        socket.join('terminal-processes')
+        logger.info(`客户端 ${socket.id} 开始订阅终端活跃进程信息`)
+        // 立即发送一次当前数据
+        terminalManager.sendActiveProcessesToClient(socket)
+      })
+
+      socket.on('unsubscribe-terminal-processes', () => {
+        socket.leave('terminal-processes')
+        logger.info(`客户端 ${socket.id} 取消订阅终端活跃进程信息`)
+        // 检查是否还有其他订阅者
+        terminalManager.handleClientDisconnect()
+      })
+
       // 断开连接处理
       socket.on('disconnect', (reason) => {
         logger.info(`客户端断开连接: ${socket.id}, 原因: ${reason}`)
@@ -782,8 +800,11 @@ async function startServer() {
         socket.leave('system-stats')
         socket.leave('system-ports')
         socket.leave('system-processes')
+        socket.leave('terminal-processes')
         // 通知系统管理器客户端已断开连接
         systemManager.handleClientDisconnect()
+        // 通知终端管理器客户端已断开连接
+        terminalManager.handleClientDisconnect()
       })
       
       // 错误处理

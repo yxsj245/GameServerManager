@@ -1611,4 +1611,95 @@ export class TerminalManager {
     this.sessions.clear()
     this.logger.info('所有终端会话已清理完成')
   }
+
+  // WebSocket 相关方法
+  private activeProcessesInterval?: NodeJS.Timeout
+
+  /**
+   * 设置 Socket.IO 实例
+   */
+  public setSocketIO(io: SocketIOServer): void {
+    this.io = io
+    this.startActiveProcessesMonitoring()
+  }
+
+  /**
+   * 开始监控活跃进程
+   */
+  private startActiveProcessesMonitoring(): void {
+    if (this.activeProcessesInterval) {
+      clearInterval(this.activeProcessesInterval)
+    }
+
+    // 每5秒推送一次活跃进程数据
+    this.activeProcessesInterval = setInterval(async () => {
+      if (this.io) {
+        const room = this.io.sockets.adapter.rooms.get('terminal-processes')
+        if (room && room.size > 0) {
+          try {
+            const activeProcesses = await this.getActiveTerminalProcesses()
+            this.io.to('terminal-processes').emit('terminal-processes-update', {
+              success: true,
+              data: activeProcesses,
+              timestamp: new Date().toISOString()
+            })
+          } catch (error) {
+            this.logger.error('推送终端活跃进程数据失败:', error)
+            this.io.to('terminal-processes').emit('terminal-processes-update', {
+              success: false,
+              error: error instanceof Error ? error.message : '获取活跃进程失败',
+              timestamp: new Date().toISOString()
+            })
+          }
+        }
+      }
+    }, 5000)
+
+    this.logger.info('终端活跃进程监控已启动')
+  }
+
+  /**
+   * 停止监控活跃进程
+   */
+  private stopActiveProcessesMonitoring(): void {
+    if (this.activeProcessesInterval) {
+      clearInterval(this.activeProcessesInterval)
+      this.activeProcessesInterval = undefined
+      this.logger.info('终端活跃进程监控已停止')
+    }
+  }
+
+  /**
+   * 向单个客户端发送活跃进程数据
+   */
+  public async sendActiveProcessesToClient(socket: Socket): Promise<void> {
+    try {
+      const activeProcesses = await this.getActiveTerminalProcesses()
+      socket.emit('terminal-processes-update', {
+        success: true,
+        data: activeProcesses,
+        timestamp: new Date().toISOString()
+      })
+    } catch (error) {
+      this.logger.error('向客户端发送终端活跃进程数据失败:', error)
+      socket.emit('terminal-processes-update', {
+        success: false,
+        error: error instanceof Error ? error.message : '获取活跃进程失败',
+        timestamp: new Date().toISOString()
+      })
+    }
+  }
+
+  /**
+   * 处理客户端断开连接
+   */
+  public handleClientDisconnect(): void {
+    if (this.io) {
+      const room = this.io.sockets.adapter.rooms.get('terminal-processes')
+      if (!room || room.size === 0) {
+        // 没有客户端订阅了，停止监控
+        this.stopActiveProcessesMonitoring()
+      }
+    }
+  }
 }

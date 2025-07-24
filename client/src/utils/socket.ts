@@ -264,6 +264,15 @@ class SocketClient {
     this.emit('unsubscribe-system-processes')
   }
 
+  // 终端活跃进程监控相关方法
+  subscribeTerminalProcesses() {
+    this.emit('subscribe-terminal-processes')
+  }
+
+  unsubscribeTerminalProcesses() {
+    this.emit('unsubscribe-terminal-processes')
+  }
+
   // 游戏服务器相关方法
   startGame(gameId: string) {
     this.emit('game-start', { gameId })

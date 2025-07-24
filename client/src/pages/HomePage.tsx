@@ -292,17 +292,17 @@ const HomePage: React.FC = () => {
       }
     }
     
-    // 获取活跃终端进程列表
-    const fetchTerminalProcesses = async () => {
-      try {
-        const response = await apiClient.getActiveTerminalProcesses()
-        if (response.success) {
-          setProcessList(response.data)
-        }
-      } catch (error) {
-        console.error('获取终端进程列表失败:', error)
-      }
-    }
+    // 获取活跃终端进程列表 - 已改为 WebSocket 订阅
+    // const fetchTerminalProcesses = async () => {
+    //   try {
+    //     const response = await apiClient.getActiveTerminalProcesses()
+    //     if (response.success) {
+    //       setProcessList(response.data)
+    //     }
+    //   } catch (error) {
+    //     console.error('获取终端进程列表失败:', error)
+    //   }
+    // }
 
     // 获取天气信息
     const fetchWeatherData = async () => {
@@ -394,7 +394,7 @@ const HomePage: React.FC = () => {
     }
     
     fetchSystemInfo()
-    fetchTerminalProcesses()
+    // fetchTerminalProcesses() // 已改为 WebSocket 订阅
     fetchWeatherData()
     fetchDiskList()
     fetchSelectedDisk()
@@ -402,7 +402,7 @@ const HomePage: React.FC = () => {
     fetchSelectedNetworkInterface()
     
     // 设置定时刷新
-    const processInterval = setInterval(fetchTerminalProcesses, 5000)
+    // const processInterval = setInterval(fetchTerminalProcesses, 5000) // 已改为 WebSocket 订阅
     const dateTimeInterval = setInterval(() => setCurrentDateTime(new Date()), 1000)
     const weatherInterval = setInterval(fetchWeatherData, 30 * 60 * 1000)
 
@@ -416,7 +416,7 @@ const HomePage: React.FC = () => {
     setConnected(socketClient.isConnected())
     
     return () => {
-      clearInterval(processInterval)
+      // clearInterval(processInterval) // 已改为 WebSocket 订阅
       clearInterval(dateTimeInterval)
       clearInterval(weatherInterval)
       socketClient.off('connection-status', handleConnectionStatus)
@@ -449,10 +449,20 @@ const HomePage: React.FC = () => {
         }
       })
       
-      // 订阅系统状态、端口和进程信息
+      // 监听终端活跃进程更新
+      socketClient.on('terminal-processes-update', (response: any) => {
+        if (response.success) {
+          setProcessList(response.data)
+        } else {
+          console.error('获取终端活跃进程失败:', response.error)
+        }
+      })
+      
+      // 订阅系统状态、端口、进程信息和终端进程
       socketClient.subscribeSystemStats()
       socketClient.subscribeSystemPorts()
       socketClient.subscribeSystemProcesses()
+      socketClient.subscribeTerminalProcesses()
       
       // 初始加载状态
       if (isFirstPortsLoad) setPortsLoading(true)
@@ -463,11 +473,13 @@ const HomePage: React.FC = () => {
       socketClient.off('system-stats')
       socketClient.off('system-ports')
       socketClient.off('system-processes')
+      socketClient.off('terminal-processes-update')
       
       if (socketClient.isConnected()) {
         socketClient.emit('unsubscribe-system-stats')
         socketClient.emit('unsubscribe-system-ports')
         socketClient.emit('unsubscribe-system-processes')
+        socketClient.emit('unsubscribe-terminal-processes')
       }
     }
   }, [connected])
