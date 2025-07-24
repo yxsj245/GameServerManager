@@ -351,6 +351,19 @@ class ApiClient {
     return this.get('/system/disk/selected')
   }
 
+  // 网络接口相关API
+  async getNetworkInterfaces() {
+    return this.get('/system/network/interfaces')
+  }
+
+  async setSelectedNetworkInterface(interfaceName: string) {
+    return this.post('/system/network/select', { interfaceName })
+  }
+
+  async getSelectedNetworkInterface() {
+    return this.get('/system/network/selected')
+  }
+
   // 终端相关API
   async getTerminalSessions() {
     return this.get('/terminal/sessions')

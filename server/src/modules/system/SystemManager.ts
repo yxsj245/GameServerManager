@@ -65,10 +65,8 @@ interface SystemStats {
     writeOps: number
   }
   network: {
-    bytesIn: number
-    bytesOut: number
-    packetsIn: number
-    packetsOut: number
+    rx: number
+    tx: number
   }
   processes: {
     total: number
@@ -162,6 +160,7 @@ export class SystemManager extends EventEmitter {
   private lastNetworkStats: any = null
   private lastDiskStats: any = null
   private selectedDisk: string = '' // 当前选择的磁盘，空字符串表示总计
+  private selectedNetworkInterface: string = '' // 当前选择的网络接口，空字符串表示总计
 
   constructor(io: SocketIOServer, logger: winston.Logger) {
     super()
@@ -954,42 +953,193 @@ export class SystemManager extends EventEmitter {
    */
   private async getNetworkInfo(): Promise<SystemStats['network']> {
     try {
-      let command: string
-      
+      let bytesIn = 0
+      let bytesOut = 0
+      let packetsIn = 0
+      let packetsOut = 0
+
       if (os.platform() === 'win32') {
-        command = 'typeperf "\\Network Interface(*)\\Bytes Total/sec" -sc 1'
+        // Windows: 使用 typeperf 获取网络统计
+        const currentStats = await this.getWindowsNetworkStats()
+        
+        if (this.lastNetworkStats) {
+          const timeDiff = (currentStats.timestamp - this.lastNetworkStats.timestamp) / 1000
+          if (timeDiff > 0) {
+            bytesIn = Math.max(0, (currentStats.bytesIn - this.lastNetworkStats.bytesIn) / timeDiff)
+            bytesOut = Math.max(0, (currentStats.bytesOut - this.lastNetworkStats.bytesOut) / timeDiff)
+            packetsIn = Math.max(0, (currentStats.packetsIn - this.lastNetworkStats.packetsIn) / timeDiff)
+            packetsOut = Math.max(0, (currentStats.packetsOut - this.lastNetworkStats.packetsOut) / timeDiff)
+          }
+        }
+        
+        this.lastNetworkStats = currentStats
       } else {
-        command = 'cat /proc/net/dev'
+        // Linux: 使用 /proc/net/dev 获取网络统计
+        const currentStats = await this.getLinuxNetworkStats()
+        
+        if (this.lastNetworkStats) {
+          const timeDiff = (currentStats.timestamp - this.lastNetworkStats.timestamp) / 1000
+          if (timeDiff > 0) {
+            bytesIn = Math.max(0, (currentStats.bytesIn - this.lastNetworkStats.bytesIn) / timeDiff)
+            bytesOut = Math.max(0, (currentStats.bytesOut - this.lastNetworkStats.bytesOut) / timeDiff)
+            packetsIn = Math.max(0, (currentStats.packetsIn - this.lastNetworkStats.packetsIn) / timeDiff)
+            packetsOut = Math.max(0, (currentStats.packetsOut - this.lastNetworkStats.packetsOut) / timeDiff)
+          }
+        }
+        
+        this.lastNetworkStats = currentStats
       }
-      
-      const { stdout } = await execAsync(command)
-      
-      // 简化的网络统计，实际实现需要更复杂的解析
-      const currentStats = {
-        bytesIn: 0,
-        bytesOut: 0,
-        packetsIn: 0,
-        packetsOut: 0
+
+      return {
+        rx: Math.round(bytesIn),
+        tx: Math.round(bytesOut)
       }
-      
-      if (this.lastNetworkStats) {
-        return {
-          bytesIn: Math.max(0, currentStats.bytesIn - this.lastNetworkStats.bytesIn),
-          bytesOut: Math.max(0, currentStats.bytesOut - this.lastNetworkStats.bytesOut),
-          packetsIn: Math.max(0, currentStats.packetsIn - this.lastNetworkStats.packetsIn),
-          packetsOut: Math.max(0, currentStats.packetsOut - this.lastNetworkStats.packetsOut)
+    } catch (error) {
+      this.logger.warn('获取网络信息失败:', error)
+      return {
+        rx: 0,
+        tx: 0
+      }
+    }
+  }
+
+  /**
+   * 获取Windows网络统计
+   */
+  private async getWindowsNetworkStats(): Promise<any> {
+    try {
+      let bytesIn = 0
+      let bytesOut = 0
+      let packetsIn = 0
+      let packetsOut = 0
+
+      if (this.selectedNetworkInterface) {
+        // 获取指定网络接口的统计
+        const escapedInterface = this.selectedNetworkInterface.replace(/[()]/g, '\\$&')
+        const commands = [
+          `typeperf "\\Network Interface(${escapedInterface})\\Bytes Received/sec" -sc 1`,
+          `typeperf "\\Network Interface(${escapedInterface})\\Bytes Sent/sec" -sc 1`,
+          `typeperf "\\Network Interface(${escapedInterface})\\Packets Received/sec" -sc 1`,
+          `typeperf "\\Network Interface(${escapedInterface})\\Packets Sent/sec" -sc 1`
+        ]
+
+        for (let i = 0; i < commands.length; i++) {
+          try {
+            const { stdout } = await execAsync(commands[i], { timeout: 5000 })
+            const lines = stdout.trim().split('\n')
+            const dataLine = lines.find(line => line.includes(','))
+            if (dataLine) {
+              const parts = dataLine.split(',')
+              const value = parseFloat(parts[1]?.replace(/"/g, '')) || 0
+              switch (i) {
+                case 0: bytesIn = value; break
+                case 1: bytesOut = value; break
+                case 2: packetsIn = value; break
+                case 3: packetsOut = value; break
+              }
+            }
+          } catch (error) {
+            // 忽略单个命令的错误
+          }
+        }
+      } else {
+        // 获取所有网络接口的总计
+        try {
+          const { stdout } = await execAsync('typeperf "\\Network Interface(*)\\Bytes Total/sec" -sc 1', { timeout: 5000 })
+          const lines = stdout.trim().split('\n')
+          
+          for (const line of lines) {
+            if (line.includes(',') && !line.includes('_Total') && !line.includes('Loopback')) {
+              const parts = line.split(',')
+              const value = parseFloat(parts[1]?.replace(/"/g, '')) || 0
+              bytesIn += value / 2 // 假设总流量的一半是入站
+              bytesOut += value / 2 // 假设总流量的一半是出站
+            }
+          }
+        } catch (error) {
+          // 降级方案
         }
       }
-      
-      this.lastNetworkStats = currentStats
-      return currentStats
-      
+
+      return {
+        bytesIn,
+        bytesOut,
+        packetsIn,
+        packetsOut,
+        timestamp: Date.now()
+      }
     } catch (error) {
       return {
         bytesIn: 0,
         bytesOut: 0,
         packetsIn: 0,
-        packetsOut: 0
+        packetsOut: 0,
+        timestamp: Date.now()
+      }
+    }
+  }
+
+  /**
+   * 获取Linux网络统计
+   */
+  private async getLinuxNetworkStats(): Promise<any> {
+    try {
+      const { stdout } = await execAsync('cat /proc/net/dev')
+      const lines = stdout.trim().split('\n').slice(2) // 跳过头部
+      
+      let totalBytesIn = 0
+      let totalBytesOut = 0
+      let totalPacketsIn = 0
+      let totalPacketsOut = 0
+
+      for (const line of lines) {
+        const parts = line.trim().split(/\s+/)
+        if (parts.length >= 17) {
+          const interfaceName = parts[0].replace(':', '')
+          
+          // 跳过回环接口
+          if (interfaceName === 'lo') continue
+          
+          const rxBytes = parseInt(parts[1]) || 0
+          const rxPackets = parseInt(parts[2]) || 0
+          const txBytes = parseInt(parts[9]) || 0
+          const txPackets = parseInt(parts[10]) || 0
+
+          if (this.selectedNetworkInterface) {
+            // 如果选择了特定接口
+            if (interfaceName === this.selectedNetworkInterface) {
+              return {
+                bytesIn: rxBytes,
+                bytesOut: txBytes,
+                packetsIn: rxPackets,
+                packetsOut: txPackets,
+                timestamp: Date.now()
+              }
+            }
+          } else {
+            // 累计所有接口
+            totalBytesIn += rxBytes
+            totalBytesOut += txBytes
+            totalPacketsIn += rxPackets
+            totalPacketsOut += txPackets
+          }
+        }
+      }
+
+      return {
+        bytesIn: totalBytesIn,
+        bytesOut: totalBytesOut,
+        packetsIn: totalPacketsIn,
+        packetsOut: totalPacketsOut,
+        timestamp: Date.now()
+      }
+    } catch (error) {
+      return {
+        bytesIn: 0,
+        bytesOut: 0,
+        packetsIn: 0,
+        packetsOut: 0,
+        timestamp: Date.now()
       }
     }
   }
@@ -1734,6 +1884,78 @@ export class SystemManager extends EventEmitter {
    */
   public getSelectedDisk(): string {
     return this.selectedDisk
+  }
+
+  /**
+   * 设置当前监控的网络接口
+   */
+  public setSelectedNetworkInterface(interfaceName: string): void {
+    this.selectedNetworkInterface = interfaceName
+    // 重置网络统计数据，避免切换接口时的数据混乱
+    this.lastNetworkStats = null
+    this.logger.info(`切换网络接口监控目标: ${interfaceName || '总计'}`)
+  }
+
+  /**
+   * 获取当前选择的网络接口
+   */
+  public getSelectedNetworkInterface(): string {
+    return this.selectedNetworkInterface
+  }
+
+  /**
+   * 获取可用的网络接口列表（用于下拉选择）
+   */
+  public getAvailableNetworkInterfaces(): { name: string; displayName: string; type: string }[] {
+    const interfaces = os.networkInterfaces()
+    const result: { name: string; displayName: string; type: string }[] = []
+    const seenInterfaces = new Set<string>()
+    
+    for (const [name, addresses] of Object.entries(interfaces)) {
+      if (addresses && !seenInterfaces.has(name)) {
+        seenInterfaces.add(name)
+        
+        // 跳过回环接口
+        if (name.toLowerCase().includes('loopback') || name === 'lo') {
+          continue
+        }
+        
+        // 获取接口类型
+        let type = '未知'
+        let hasIPv4 = false
+        
+        for (const addr of addresses) {
+          if (addr.family === 'IPv4' && !addr.internal) {
+            hasIPv4 = true
+            break
+          }
+        }
+        
+        if (hasIPv4) {
+          if (name.toLowerCase().includes('ethernet') || name.toLowerCase().includes('eth')) {
+            type = '以太网'
+          } else if (name.toLowerCase().includes('wifi') || name.toLowerCase().includes('wlan') || name.toLowerCase().includes('wireless')) {
+            type = '无线网络'
+          } else if (name.toLowerCase().includes('vmware') || name.toLowerCase().includes('virtualbox') || name.toLowerCase().includes('hyper-v')) {
+            type = '虚拟网络'
+          } else {
+            type = '网络接口'
+          }
+          
+          result.push({
+            name,
+            displayName: `${name} (${type})`,
+            type
+          })
+        }
+      }
+    }
+    
+    return result.sort((a, b) => {
+      // 优先显示以太网，然后是无线网络，最后是其他
+      const order = { '以太网': 1, '无线网络': 2, '网络接口': 3, '虚拟网络': 4, '未知': 5 }
+      return (order[a.type as keyof typeof order] || 5) - (order[b.type as keyof typeof order] || 5)
+    })
   }
 
   /**

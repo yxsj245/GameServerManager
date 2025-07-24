@@ -271,6 +271,11 @@ const HomePage: React.FC = () => {
   const [selectedDisk, setSelectedDisk] = useState<string>('')
   const [diskLoading, setDiskLoading] = useState(false)
   
+  // 网络接口选择相关状态
+  const [networkInterfaceList, setNetworkInterfaceList] = useState<{ name: string; displayName: string; type: string }[]>([])
+  const [selectedNetworkInterface, setSelectedNetworkInterface] = useState<string>('')
+  const [networkLoading, setNetworkLoading] = useState(false)
+  
   // 将原先的 useEffect 拆分为两个
   
   // 第一个 useEffect：处理非 WebSocket 相关的数据获取和定时器
@@ -363,12 +368,38 @@ const HomePage: React.FC = () => {
         console.error('获取选择磁盘失败:', error)
       }
     }
+
+    // 获取网络接口列表
+    const fetchNetworkInterfaces = async () => {
+      try {
+        const response = await apiClient.getNetworkInterfaces()
+        if (response.success) {
+          setNetworkInterfaceList(response.data)
+        }
+      } catch (error) {
+        console.error('获取网络接口列表失败:', error)
+      }
+    }
+
+    // 获取当前选择的网络接口
+    const fetchSelectedNetworkInterface = async () => {
+      try {
+        const response = await apiClient.getSelectedNetworkInterface()
+        if (response.success) {
+          setSelectedNetworkInterface(response.data.selectedInterface)
+        }
+      } catch (error) {
+        console.error('获取选择网络接口失败:', error)
+      }
+    }
     
     fetchSystemInfo()
     fetchTerminalProcesses()
     fetchWeatherData()
     fetchDiskList()
     fetchSelectedDisk()
+    fetchNetworkInterfaces()
+    fetchSelectedNetworkInterface()
     
     // 设置定时刷新
     const processInterval = setInterval(fetchTerminalProcesses, 5000)
@@ -528,6 +559,37 @@ const HomePage: React.FC = () => {
     }
   }
 
+  // 处理网络接口选择变化
+  const handleNetworkInterfaceChange = async (interfaceName: string) => {
+    try {
+      setNetworkLoading(true)
+      const response = await apiClient.setSelectedNetworkInterface(interfaceName)
+      if (response.success) {
+        setSelectedNetworkInterface(interfaceName)
+        addNotification({
+          type: 'success',
+          title: '网络接口切换成功',
+          message: interfaceName === '' ? '已切换到总计模式' : `已切换到 ${interfaceName}`
+        })
+      } else {
+        addNotification({
+          type: 'error',
+          title: '网络接口切换失败',
+          message: response.message || '未知错误'
+        })
+      }
+    } catch (error) {
+      console.error('切换网络接口失败:', error)
+      addNotification({
+        type: 'error',
+        title: '网络接口切换失败',
+        message: '网络错误，请稍后重试'
+      })
+    } finally {
+      setNetworkLoading(false)
+    }
+  }
+
   // 处理弹窗打开动画
   const handleOpenPortsModal = () => {
     setShowPortsModal(true)
@@ -660,10 +722,10 @@ const HomePage: React.FC = () => {
   }
   
   const formatOpsPerSecond = (ops: number) => {
-    if (ops === 0) return '0 ops/s'
-    if (ops < 1000) return `${ops.toFixed(1)} ops/s`
-    if (ops < 1000000) return `${(ops / 1000).toFixed(1)}K ops/s`
-    return `${(ops / 1000000).toFixed(1)}M ops/s`
+    if (ops === 0) return '0 IOPS'
+    if (ops < 1000) return `${ops.toFixed(1)} IOPS`
+    if (ops < 1000000) return `${(ops / 1000).toFixed(1)}K IOPS`
+    return `${(ops / 1000000).toFixed(1)}M IOPS`
   }
   
 
@@ -1098,6 +1160,101 @@ const HomePage: React.FC = () => {
             </div>
           </div>
           
+          {/* 网络使用率 */}
+          <div className="card-game p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center space-x-3">
+                <Wifi className="w-6 h-6 text-cyan-500" />
+                <h3 className="text-lg font-semibold text-black dark:text-white">网络使用率</h3>
+              </div>
+              <div className="flex items-center space-x-3">
+                {/* 网络接口选择下拉菜单 */}
+                <div className="relative">
+                  <select
+                    value={selectedNetworkInterface}
+                    onChange={(e) => handleNetworkInterfaceChange(e.target.value)}
+                    disabled={networkLoading}
+                    className="text-xs bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md px-2 py-1 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-1 focus:ring-cyan-500 focus:border-cyan-500 disabled:opacity-50 disabled:cursor-not-allowed hover:border-cyan-400 dark:hover:border-cyan-500 transition-colors min-w-[120px]"
+                  >
+                    <option value="" className="bg-white dark:bg-gray-800">总计</option>
+                    {networkInterfaceList.map((iface, index) => (
+                      <option key={`${iface.name}-${index}`} value={iface.name} className="bg-white dark:bg-gray-800">
+                        {iface.displayName}
+                      </option>
+                    ))}
+                  </select>
+                  {networkLoading && (
+                    <div className="absolute right-1 top-1/2 transform -translate-y-1/2">
+                      <div className="w-2 h-2 border border-cyan-500 border-t-transparent rounded-full animate-spin"></div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+            
+            {/* 实时网络流量 */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center space-x-2">
+                  <BarChart3 className="w-4 h-4 text-cyan-500" />
+                  <h4 className="text-sm font-medium text-black dark:text-white">实时流量</h4>
+                </div>
+                <div className="text-xs text-gray-500 dark:text-gray-400">
+                  {systemInfo?.platform?.includes('Windows') ? 'Windows' : 'Linux'}
+                </div>
+              </div>
+              
+              <div className="space-y-3">
+                {/* 接收信息 */}
+                <div className="flex items-center justify-between text-sm">
+                  <div className="flex items-center space-x-2">
+                    <Download className="w-3 h-3 text-green-500" />
+                    <span className="text-gray-600 dark:text-gray-400">接收:</span>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-green-600 dark:text-green-400 font-medium">
+                      {formatBytesPerSecond(systemStats.network.rx)}
+                    </div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400">
+                      下行流量
+                    </div>
+                  </div>
+                </div>
+                
+                {/* 发送信息 */}
+                <div className="flex items-center justify-between text-sm">
+                  <div className="flex items-center space-x-2">
+                    <Upload className="w-3 h-3 text-red-500" />
+                    <span className="text-gray-600 dark:text-gray-400">发送:</span>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-red-600 dark:text-red-400 font-medium">
+                      {formatBytesPerSecond(systemStats.network.tx)}
+                    </div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400">
+                      上行流量
+                    </div>
+                  </div>
+                </div>
+                
+                {/* 总流量 */}
+                <div className="flex items-center justify-between text-sm pt-2 border-t border-gray-200 dark:border-gray-700">
+                  <div className="flex items-center space-x-2">
+                    <BarChart3 className="w-3 h-3 text-cyan-500" />
+                    <span className="text-gray-600 dark:text-gray-400">总计:</span>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-cyan-600 dark:text-cyan-400 font-medium">
+                      {formatBytesPerSecond(systemStats.network.rx + systemStats.network.tx)}
+                    </div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400">
+                      总流量
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
 
         </div>
       )}

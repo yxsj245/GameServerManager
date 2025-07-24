@@ -599,6 +599,82 @@ router.get('/disk/selected', authenticateToken, async (req: Request, res: Respon
   }
 })
 
+// 获取可用的网络接口列表
+router.get('/network/interfaces', async (req: Request, res: Response) => {
+  try {
+    if (!systemManager) {
+      return res.status(500).json({ error: '系统管理器未初始化' })
+    }
+    
+    const interfaces = systemManager.getAvailableNetworkInterfaces()
+    
+    res.json({
+      success: true,
+      data: interfaces
+    })
+  } catch (error) {
+    logger.error('获取网络接口列表失败:', error)
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : '获取网络接口列表失败'
+    })
+  }
+})
+
+// 设置选择的网络接口
+router.post('/network/select', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    if (!systemManager) {
+      return res.status(500).json({ error: '系统管理器未初始化' })
+    }
+    
+    const { interfaceName } = req.body
+    
+    if (typeof interfaceName !== 'string') {
+      return res.status(400).json({
+        success: false,
+        error: '网络接口参数必须是字符串'
+      })
+    }
+    
+    systemManager.setSelectedNetworkInterface(interfaceName)
+    
+    res.json({
+      success: true,
+      message: '网络接口选择已更新',
+      data: { selectedInterface: interfaceName }
+    })
+  } catch (error) {
+    logger.error('设置选择网络接口失败:', error)
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : '设置选择网络接口失败'
+    })
+  }
+})
+
+// 获取当前选择的网络接口
+router.get('/network/selected', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    if (!systemManager) {
+      return res.status(500).json({ error: '系统管理器未初始化' })
+    }
+    
+    const selectedInterface = systemManager.getSelectedNetworkInterface()
+    
+    res.json({
+      success: true,
+      data: { selectedInterface }
+    })
+  } catch (error) {
+    logger.error('获取选择网络接口失败:', error)
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : '获取选择网络接口失败'
+    })
+  }
+})
+
 // 工具函数：格式化字节数
 function formatBytes(bytes: number): string {
   if (bytes === 0) return '0 Bytes'
