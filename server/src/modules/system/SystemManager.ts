@@ -32,12 +32,27 @@ interface SystemStats {
     cores: number
     model: string
     speed: number
+    coreUsages: number[] // 每个核心的使用率
   }
   memory: {
     total: number
     used: number
     free: number
     usage: number
+    // Windows特有字段
+    committed?: number
+    commitLimit?: number
+    // Linux特有字段
+    swap?: {
+      total: number
+      used: number
+      free: number
+      usage: number
+    }
+    // 通用详细信息
+    available?: number
+    buffers?: number
+    cached?: number
   }
   disk: {
     total: number
@@ -367,7 +382,7 @@ export class SystemManager extends EventEmitter {
    */
   private async collectSystemStats(): Promise<SystemStats> {
     const cpuUsage = await this.getCpuUsage()
-    const memoryInfo = this.getMemoryInfo()
+    const memoryInfo = await this.getMemoryInfo()
     const diskInfo = await this.getDiskInfo()
     const networkInfo = await this.getNetworkInfo()
     const processInfo = await this.getProcessInfo()
@@ -404,10 +419,14 @@ export class SystemManager extends EventEmitter {
         })
         
         let totalUsage = 0
+        const coreUsages: number[] = []
+        
         for (let i = 0; i < startMeasure.length; i++) {
           const totalDiff = endMeasure[i].total - startMeasure[i].total
           const idleDiff = endMeasure[i].idle - startMeasure[i].idle
-          const usage = 100 - (100 * idleDiff / totalDiff)
+          const usage = totalDiff > 0 ? 100 - (100 * idleDiff / totalDiff) : 0
+          const roundedUsage = Math.round(usage * 100) / 100
+          coreUsages.push(roundedUsage)
           totalUsage += usage
         }
         
@@ -417,7 +436,8 @@ export class SystemManager extends EventEmitter {
           usage: Math.round(avgUsage * 100) / 100,
           cores: cpus.length,
           model: cpus[0]?.model || 'Unknown',
-          speed: cpus[0]?.speed || 0
+          speed: cpus[0]?.speed || 0,
+          coreUsages
         })
       }, 100)
     })
@@ -426,17 +446,167 @@ export class SystemManager extends EventEmitter {
   /**
    * 获取内存信息
    */
-  private getMemoryInfo(): SystemStats['memory'] {
+  private async getMemoryInfo(): Promise<SystemStats['memory']> {
+    const platform = os.platform()
+    
+    if (platform === 'win32') {
+      return await this.getWindowsMemoryInfo()
+    } else {
+      return await this.getLinuxMemoryInfo()
+    }
+  }
+
+  /**
+   * 获取Windows内存信息
+   */
+  private async getWindowsMemoryInfo(): Promise<SystemStats['memory']> {
     const total = os.totalmem()
     const free = os.freemem()
     const used = total - free
     const usage = (used / total) * 100
-    
+
+    let committed = 0
+    let commitLimit = 0
+
+    try {
+      // 使用PowerShell获取内存性能计数器，这样更准确
+      const psCommand = `powershell "Get-Counter '\\Memory\\Committed Bytes','\\Memory\\Commit Limit' | Select-Object -ExpandProperty CounterSamples | Select-Object Path,CookedValue | ConvertTo-Json"`
+      const { stdout } = await execAsync(psCommand, { timeout: 10000 })
+      
+      if (stdout.trim()) {
+        const counters = JSON.parse(stdout)
+        const counterArray = Array.isArray(counters) ? counters : [counters]
+        
+        for (const counter of counterArray) {
+          const path = counter.Path.toLowerCase()
+          const value = parseFloat(counter.CookedValue) || 0
+          
+          if (path.includes('committed bytes')) {
+            committed = value
+          } else if (path.includes('commit limit')) {
+            commitLimit = value
+          }
+        }
+      }
+    } catch (error) {
+      this.logger.warn('获取Windows性能计数器失败，尝试备用方案:', error)
+      
+      try {
+        // 备用方案1：使用wmic获取操作系统信息
+        const command = 'wmic OS get TotalVirtualMemorySize,TotalVisibleMemorySize,FreeVirtualMemory,FreePhysicalMemory /format:csv'
+        const { stdout } = await execAsync(command, { timeout: 10000 })
+        
+        const lines = stdout.trim().split('\n').filter(line => line.trim() && !line.startsWith('Node'))
+        if (lines.length > 0) {
+          const parts = lines[0].split(',')
+          if (parts.length >= 5) {
+            const freePhysical = parseInt(parts[1]) * 1024 || 0 // KB to bytes
+            const freeVirtual = parseInt(parts[2]) * 1024 || 0
+            const totalPhysical = parseInt(parts[3]) * 1024 || 0
+            const totalVirtual = parseInt(parts[4]) * 1024 || 0
+            
+            commitLimit = totalVirtual
+            committed = totalVirtual - freeVirtual
+          }
+        }
+      } catch (wmicError) {
+        this.logger.warn('WMIC备用方案也失败:', wmicError)
+        
+        try {
+          // 备用方案2：使用PowerShell WMI
+          const psWmiCommand = 'powershell "Get-WmiObject -Class Win32_OperatingSystem | Select-Object TotalVirtualMemorySize,TotalVisibleMemorySize,FreeVirtualMemory,FreePhysicalMemory | ConvertTo-Json"'
+          const { stdout } = await execAsync(psWmiCommand, { timeout: 10000 })
+          
+          const data = JSON.parse(stdout)
+          if (data) {
+            commitLimit = (parseInt(data.TotalVirtualMemorySize) || 0) * 1024
+            committed = commitLimit - ((parseInt(data.FreeVirtualMemory) || 0) * 1024)
+          }
+        } catch (psWmiError) {
+          this.logger.warn('PowerShell WMI备用方案也失败:', psWmiError)
+        }
+      }
+    }
+
     return {
       total,
       used,
       free,
-      usage: Math.round(usage * 100) / 100
+      usage: Math.round(usage * 100) / 100,
+      committed,
+      commitLimit
+    }
+  }
+
+  /**
+   * 获取Linux内存信息
+   */
+  private async getLinuxMemoryInfo(): Promise<SystemStats['memory']> {
+    const total = os.totalmem()
+    const free = os.freemem()
+    const used = total - free
+    const usage = (used / total) * 100
+
+    let available = 0
+    let buffers = 0
+    let cached = 0
+    let swapTotal = 0
+    let swapFree = 0
+    let swapUsed = 0
+    let swapUsage = 0
+
+    try {
+      // 读取 /proc/meminfo 获取详细内存信息
+      const { stdout } = await execAsync('cat /proc/meminfo', { timeout: 5000 })
+      
+      const lines = stdout.split('\n')
+      for (const line of lines) {
+        const parts = line.split(':')
+        if (parts.length >= 2) {
+          const key = parts[0].trim()
+          const value = parseInt(parts[1].trim().split(' ')[0]) * 1024 || 0 // KB to bytes
+          
+          switch (key) {
+            case 'MemAvailable':
+              available = value
+              break
+            case 'Buffers':
+              buffers = value
+              break
+            case 'Cached':
+              cached = value
+              break
+            case 'SwapTotal':
+              swapTotal = value
+              break
+            case 'SwapFree':
+              swapFree = value
+              break
+          }
+        }
+      }
+      
+      swapUsed = swapTotal - swapFree
+      swapUsage = swapTotal > 0 ? (swapUsed / swapTotal) * 100 : 0
+      
+    } catch (error) {
+      this.logger.warn('获取Linux详细内存信息失败:', error)
+    }
+
+    return {
+      total,
+      used,
+      free,
+      usage: Math.round(usage * 100) / 100,
+      available,
+      buffers,
+      cached,
+      swap: {
+        total: swapTotal,
+        used: swapUsed,
+        free: swapFree,
+        usage: Math.round(swapUsage * 100) / 100
+      }
     }
   }
 

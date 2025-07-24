@@ -830,7 +830,9 @@ const HomePage: React.FC = () => {
                 {systemStats.memory.usage.toFixed(1)}%
               </span>
             </div>
-            <div className="space-y-2">
+            
+            {/* 内存空间信息 */}
+            <div className="space-y-2 mb-6">
               <div className="flex justify-between text-sm text-gray-600 dark:text-gray-400">
                 <span>已用: {formatBytes(systemStats.memory.used)}</span>
                 <span>总计: {formatBytes(systemStats.memory.total)}</span>
@@ -840,6 +842,124 @@ const HomePage: React.FC = () => {
                   className={`h-2 rounded-full transition-all duration-300 ${getUsageBgColor(systemStats.memory.usage)}`}
                   style={{ width: `${systemStats.memory.usage}%` }}
                 ></div>
+              </div>
+            </div>
+            
+            {/* 详细内存信息 */}
+            <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center space-x-2">
+                  <BarChart3 className="w-4 h-4 text-green-500" />
+                  <h4 className="text-sm font-medium text-black dark:text-white">详细信息</h4>
+                </div>
+                <div className="text-xs text-gray-500 dark:text-gray-400">
+                  {systemInfo?.platform?.includes('Windows') ? 'Windows' : 'Linux'}
+                </div>
+              </div>
+              
+              <div className="space-y-2">
+                {/* Windows 特有信息 */}
+                {systemInfo?.platform?.includes('Windows') && systemStats.memory.committed !== undefined && (
+                  <>
+                    <div className="flex items-center justify-between text-sm">
+                      <div className="flex items-center space-x-2">
+                        <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
+                        <span className="text-gray-600 dark:text-gray-400">使用中:</span>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-blue-600 dark:text-blue-400 font-medium">
+                          {formatBytes(systemStats.memory.used)}
+                        </div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400">
+                          物理内存
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center justify-between text-sm">
+                      <div className="flex items-center space-x-2">
+                        <div className="w-3 h-3 bg-orange-500 rounded-full"></div>
+                        <span className="text-gray-600 dark:text-gray-400">已提交:</span>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-orange-600 dark:text-orange-400 font-medium">
+                          {formatBytes(systemStats.memory.committed)}
+                        </div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400">
+                          {systemStats.memory.commitLimit ? 
+                            `/ ${formatBytes(systemStats.memory.commitLimit)}` : 
+                            '虚拟内存'
+                          }
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                )}
+                
+                {/* Linux 特有信息 */}
+                {!systemInfo?.platform?.includes('Windows') && (
+                  <>
+                    {systemStats.memory.available !== undefined && (
+                      <div className="flex items-center justify-between text-sm">
+                        <div className="flex items-center space-x-2">
+                          <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
+                          <span className="text-gray-600 dark:text-gray-400">可用:</span>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-blue-600 dark:text-blue-400 font-medium">
+                            {formatBytes(systemStats.memory.available)}
+                          </div>
+                          <div className="text-xs text-gray-500 dark:text-gray-400">
+                            实际可用
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {systemStats.memory.buffers !== undefined && systemStats.memory.cached !== undefined && (
+                      <div className="flex items-center justify-between text-sm">
+                        <div className="flex items-center space-x-2">
+                          <div className="w-3 h-3 bg-purple-500 rounded-full"></div>
+                          <span className="text-gray-600 dark:text-gray-400">缓存:</span>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-purple-600 dark:text-purple-400 font-medium">
+                            {formatBytes(systemStats.memory.buffers + systemStats.memory.cached)}
+                          </div>
+                          <div className="text-xs text-gray-500 dark:text-gray-400">
+                            缓冲区+缓存
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Swap 信息 */}
+                    {systemStats.memory.swap && systemStats.memory.swap.total > 0 && (
+                      <div className="mt-3 pt-2 border-t border-gray-200 dark:border-gray-600">
+                        <div className="flex items-center justify-between text-sm mb-2">
+                          <div className="flex items-center space-x-2">
+                            <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
+                            <span className="text-gray-600 dark:text-gray-400">Swap:</span>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-yellow-600 dark:text-yellow-400 font-medium">
+                              {systemStats.memory.swap.usage.toFixed(1)}%
+                            </div>
+                            <div className="text-xs text-gray-500 dark:text-gray-400">
+                              {formatBytes(systemStats.memory.swap.used)} / {formatBytes(systemStats.memory.swap.total)}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="w-full bg-gray-700 rounded-full h-1">
+                          <div
+                            className="h-1 bg-yellow-500 rounded-full transition-all duration-300"
+                            style={{ width: `${systemStats.memory.swap.usage}%` }}
+                          ></div>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
               </div>
             </div>
           </div>

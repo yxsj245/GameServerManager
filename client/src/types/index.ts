@@ -94,12 +94,27 @@ export interface SystemStats {
     cores: number
     model: string
     speed: number
+    coreUsages: number[] // 每个核心的使用率
   }
   memory: {
     total: number
     used: number
     free: number
     usage: number
+    // Windows特有字段
+    committed?: number
+    commitLimit?: number
+    // Linux特有字段
+    swap?: {
+      total: number
+      used: number
+      free: number
+      usage: number
+    }
+    // 通用详细信息
+    available?: number
+    buffers?: number
+    cached?: number
   }
   disk: {
     total: number
