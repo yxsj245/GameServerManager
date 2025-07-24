@@ -1,0 +1,136 @@
+import React, { useState, useEffect } from 'react'
+import { X, FileText, AlertCircle } from 'lucide-react'
+
+interface CreateConfigDialogProps {
+  isOpen: boolean
+  instanceName: string
+  gameName: string
+  configPath: string
+  onConfirm: () => void
+  onCancel: () => void
+}
+
+export const CreateConfigDialog: React.FC<CreateConfigDialogProps> = ({
+  isOpen,
+  instanceName,
+  gameName,
+  configPath,
+  onConfirm,
+  onCancel
+}) => {
+  const [isVisible, setIsVisible] = useState(false)
+  const [isAnimating, setIsAnimating] = useState(false)
+  const [isClosing, setIsClosing] = useState(false)
+
+  useEffect(() => {
+    if (isOpen) {
+      setIsClosing(false)
+      setIsVisible(true)
+      setTimeout(() => setIsAnimating(true), 10)
+    } else {
+      setIsAnimating(false)
+      setIsClosing(true)
+      setTimeout(() => setIsVisible(false), 300)
+    }
+  }, [isOpen])
+
+  const handleCancel = () => {
+    setIsAnimating(false)
+    setIsClosing(true)
+    setTimeout(() => {
+      onCancel()
+    }, 300)
+  }
+
+  const handleConfirm = () => {
+    setIsAnimating(false)
+    setIsClosing(true)
+    setTimeout(() => {
+      onConfirm()
+    }, 300)
+  }
+
+  if (!isVisible) return null
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      {/* 背景遮罩 */}
+      <div 
+        className={`absolute inset-0 bg-black/50 ${
+          isClosing ? 'animate-fade-out' : isAnimating ? 'animate-fade-in' : 'opacity-0'
+        }`}
+        onClick={handleCancel}
+      />
+      
+      {/* 对话框内容 */}
+      <div className={`relative bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full mx-4 p-6 ${
+        isClosing ? 'animate-scale-out' : isAnimating ? 'animate-scale-in' : 'opacity-0 scale-95'
+      }`}>
+        {/* 关闭按钮 */}
+        <button
+          onClick={handleCancel}
+          className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+        >
+          <X className="w-5 h-5" />
+        </button>
+
+        {/* 标题和图标 */}
+        <div className="flex items-center space-x-3 mb-4">
+          <div className="flex-shrink-0">
+            <AlertCircle className="w-8 h-8 text-blue-500" />
+          </div>
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+              配置文件不存在
+            </h3>
+          </div>
+        </div>
+
+        {/* 内容信息 */}
+        <div className="mb-6">
+          <p className="text-gray-600 dark:text-gray-300 mb-3">
+            实例 <span className="font-semibold text-gray-900 dark:text-white">"{instanceName}"</span> 的 
+            <span className="font-semibold text-gray-900 dark:text-white"> {gameName} </span> 
+            配置文件不存在。
+          </p>
+          
+          {/* 配置文件路径信息 */}
+          <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3 mb-4">
+            <div className="flex items-center space-x-2 mb-2">
+              <FileText className="w-4 h-4 text-gray-500" />
+              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">配置文件路径：</span>
+            </div>
+            <p className="text-sm text-gray-600 dark:text-gray-400 font-mono break-all">
+              {configPath}
+            </p>
+          </div>
+
+          {/* 提示信息 */}
+          <div className="border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3">
+            <p className="text-sm text-blue-700 dark:text-blue-300">
+              💡 是否要创建一个包含默认配置的新配置文件？这将帮助您快速开始配置游戏服务器。
+            </p>
+          </div>
+        </div>
+
+        {/* 操作按钮 */}
+        <div className="flex justify-end space-x-3">
+          <button
+            onClick={handleCancel}
+            className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-colors"
+          >
+            取消
+          </button>
+          <button
+            onClick={handleConfirm}
+            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+          >
+            创建配置文件
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export default CreateConfigDialog

@@ -632,6 +632,10 @@ class ApiClient {
     return this.get(`/gameconfig/instances/${instanceId}/${encodeURIComponent(gameName)}`)
   }
 
+  async createGameConfig(instanceId: string, gameName: string) {
+    return this.post(`/gameconfig/instances/${instanceId}/${encodeURIComponent(gameName)}/create`)
+  }
+
   async saveGameConfig(instanceId: string, gameName: string, config: any) {
     return this.post(`/gameconfig/instances/${instanceId}/${encodeURIComponent(gameName)}`, { config })
   }

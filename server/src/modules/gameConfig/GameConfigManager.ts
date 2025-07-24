@@ -162,10 +162,7 @@ export class GameConfigManager {
       try {
         await fs.access(fullConfigPath)
       } catch {
-        logger.warn(`配置文件不存在: ${fullConfigPath}，正在创建默认配置文件`, { service: 'gsm3-server' })
-        const defaultConfig = this.getDefaultValues(configSchema)
-        await this.saveGameConfig(serverPath, configSchema, defaultConfig)
-        return defaultConfig
+        throw new Error(`配置文件不存在: ${fullConfigPath}`)
       }
 
       const parser = this.supportedParsers.get(parserType)
@@ -225,7 +222,7 @@ export class GameConfigManager {
   /**
    * 获取默认配置值
    */
-  private getDefaultValues(configSchema: GameConfigSchema): ParsedConfigData {
+  getDefaultValues(configSchema: GameConfigSchema): ParsedConfigData {
     const result: ParsedConfigData = {}
 
     for (const section of configSchema.sections) {

@@ -17,3 +17,4 @@ const possiblePaths = [
     path.join(baseDir, 'server', 'data', 'games', 'installgame.json'), // 开发环境路径
 ]
 ```
+14. 涉及交互弹窗的，不要使用浏览器的对话框 使用符合面板风格的弹窗组件

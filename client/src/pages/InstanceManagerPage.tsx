@@ -22,6 +22,8 @@ import { Instance, CreateInstanceRequest } from '@/types'
 import { useNotificationStore } from '@/stores/notificationStore'
 import apiClient from '@/utils/api'
 import { ConfirmDeleteDialog } from '@/components/ConfirmDeleteDialog'
+import { CreateConfigDialog } from '@/components/CreateConfigDialog'
+import SearchableSelect from '@/components/SearchableSelect'
 
 // 获取嵌套对象值的工具函数
 const getNestedValue = (obj: any, ...path: string[]): any => {
@@ -72,6 +74,13 @@ const InstanceManagerPage: React.FC = () => {
   const [editingInstance, setEditingInstance] = useState<Instance | null>(null)
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [instanceToDelete, setInstanceToDelete] = useState<Instance | null>(null)
+  const [showCreateConfigDialog, setShowCreateConfigDialog] = useState(false)
+  const [createConfigInfo, setCreateConfigInfo] = useState<{
+    instanceId: string
+    instanceName: string
+    configId: string
+    configPath: string
+  } | null>(null)
   const [installFormData, setInstallFormData] = useState({ workingDirectory: '' })
   const [formData, setFormData] = useState<CreateInstanceRequest>({
     name: '',
@@ -153,7 +162,30 @@ const InstanceManagerPage: React.FC = () => {
       setIsConfigLoading(true)
       const response = await apiClient.readGameConfig(instanceId, configId)
 
-      // 正确提取配置数据：response.data.config 而不是 response.data
+      // 检查配置文件是否存在
+      if (response.data?.configExists === false) {
+        // 配置文件不存在，显示创建提示对话框
+        const configFilePath = response.data?.configFilePath || '配置文件'
+        const instance = instances.find(inst => inst.id === instanceId)
+        const instanceName = instance?.name || instanceId
+        const configName = availableConfigs.find(config => config.id === configId)?.name || configId
+        
+        setCreateConfigInfo({
+          instanceId,
+          instanceName,
+          configId: configName,
+          configPath: configFilePath
+        })
+        setShowCreateConfigDialog(true)
+        
+        // 暂时使用默认值
+        const currentSchema = schema || configSchema
+        const defaultData = fillDefaultValues(currentSchema, response.data?.config || {})
+        setConfigData(defaultData)
+        return
+      }
+
+      // 配置文件存在，正常处理
       let configFromServer = response.data?.config || {}
 
       // 规范化数据：如果存在 server: { properties: ... }，则将其内容合并到 'server.properties'
@@ -812,6 +844,41 @@ const InstanceManagerPage: React.FC = () => {
     }, 300)
   }
 
+  // 处理创建配置文件确认
+  const handleCreateConfigConfirm = async () => {
+    if (!createConfigInfo) return
+    
+    try {
+      const createResponse = await apiClient.createGameConfig(createConfigInfo.instanceId, createConfigInfo.configId)
+      if (createResponse.data?.config) {
+        const currentSchema = configSchema
+        const filledData = fillDefaultValues(currentSchema, createResponse.data.config)
+        setConfigData(filledData)
+        addNotification({
+          type: 'success',
+          title: '创建成功',
+          message: '配置文件已创建'
+        })
+      }
+    } catch (createError) {
+      console.error('创建配置文件失败:', createError)
+      addNotification({
+        type: 'error',
+        title: '创建失败',
+        message: '创建配置文件失败'
+      })
+    } finally {
+      setShowCreateConfigDialog(false)
+      setCreateConfigInfo(null)
+    }
+  }
+
+  // 处理创建配置文件取消
+  const handleCreateConfigCancel = () => {
+    setShowCreateConfigDialog(false)
+    setCreateConfigInfo(null)
+  }
+
   // 编辑实例
   const handleEditInstance = (instance: Instance) => {
     setEditingInstance(instance)
@@ -1176,18 +1243,16 @@ const InstanceManagerPage: React.FC = () => {
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   选择实例
                 </label>
-                <select
+                <SearchableSelect
                   value={selectedInstance}
-                  onChange={(e) => handleConfigSelection(e.target.value, selectedConfigId)}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="">请选择实例</option>
-                  {instances.map((instance) => (
-                    <option key={instance.id} value={instance.id}>
-                      {instance.name}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(value) => handleConfigSelection(value, selectedConfigId)}
+                  options={instances.map(instance => ({
+                    id: instance.id,
+                    name: instance.name
+                  }))}
+                  placeholder="请选择或输入搜索实例"
+                  className="w-full"
+                />
               </div>
               
               {/* 选择配置文件 */}
@@ -1195,19 +1260,17 @@ const InstanceManagerPage: React.FC = () => {
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   选择配置文件
                 </label>
-                <select
+                <SearchableSelect
                   value={selectedConfigId}
-                  onChange={(e) => handleConfigSelection(selectedInstance, e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  onChange={(value) => handleConfigSelection(selectedInstance, value)}
+                  options={availableConfigs.map(config => ({
+                    id: config.id,
+                    name: config.name
+                  }))}
+                  placeholder="请选择或输入搜索配置文件"
                   disabled={!selectedInstance}
-                >
-                  <option value="">请选择配置文件</option>
-                  {availableConfigs.map((config) => (
-                    <option key={config.id} value={config.id}>
-                      {config.name}
-                    </option>
-                  ))}
-                </select>
+                  className="w-full"
+                />
               </div>
             </div>
           </div>
@@ -1795,6 +1858,16 @@ const InstanceManagerPage: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* 创建配置文件对话框 */}
+      <CreateConfigDialog
+        isOpen={showCreateConfigDialog}
+        instanceName={createConfigInfo?.instanceName || ''}
+        gameName={createConfigInfo?.configId || ''}
+        configPath={createConfigInfo?.configPath || ''}
+        onConfirm={handleCreateConfigConfirm}
+        onCancel={handleCreateConfigCancel}
+      />
 
       {/* 删除确认对话框 */}
       <ConfirmDeleteDialog

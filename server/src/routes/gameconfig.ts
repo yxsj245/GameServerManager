@@ -98,21 +98,103 @@ router.get('/instances/:instanceId/:gameName', authenticateToken, async (req: Re
     const instancePath = instance.workingDirectory
     logger.info(`读取实例 ${instanceId} 的配置，工作目录: ${instancePath}`, { service: 'gsm3-server' })
     
-    // 读取配置
-    const configData = await gameConfigManager.readGameConfig(instancePath, template)
-    
-    res.json({
-      success: true,
-      data: {
-        template,
-        config: configData
-      }
-    })
+    // 检查配置文件是否存在
+    const configFilePath = path.join(instancePath, template.meta.config_file)
+    try {
+      await import('fs/promises').then(fs => fs.access(configFilePath))
+      // 配置文件存在，正常读取
+      const configData = await gameConfigManager.readGameConfig(instancePath, template)
+      
+      res.json({
+        success: true,
+        data: {
+          template,
+          config: configData,
+          configExists: true
+        }
+      })
+    } catch {
+      // 配置文件不存在，返回默认配置和提示
+      const defaultConfig = gameConfigManager.getDefaultValues(template)
+      
+      res.json({
+        success: true,
+        data: {
+          template,
+          config: defaultConfig,
+          configExists: false,
+          configFilePath: template.meta.config_file
+        }
+      })
+    }
   } catch (error) {
     logger.error('读取实例游戏配置失败:', error)
     res.status(500).json({
       success: false,
       message: '读取实例游戏配置失败'
+    })
+  }
+})
+
+// 创建配置文件
+router.post('/instances/:instanceId/:gameName/create', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const { instanceId, gameName } = req.params
+
+    // 获取实例信息
+    if (!instanceManager) {
+      return res.status(500).json({
+        success: false,
+        message: 'InstanceManager 未初始化'
+      })
+    }
+    
+    const instance = instanceManager.getInstance(instanceId)
+    if (!instance) {
+      return res.status(404).json({
+        success: false,
+        message: '未找到指定的实例'
+      })
+    }
+
+    // 获取配置模板
+    const template = await gameConfigManager.getGameConfigSchema(gameName)
+    if (!template) {
+      return res.status(404).json({
+        success: false,
+        message: '未找到指定的游戏配置模板'
+      })
+    }
+
+    // 使用实例的真实工作目录
+    const instancePath = instance.workingDirectory
+    logger.info(`为实例 ${instanceId} 创建配置文件，工作目录: ${instancePath}`, { service: 'gsm3-server' })
+    
+    // 获取默认配置并保存
+    const defaultConfig = gameConfigManager.getDefaultValues(template)
+    const success = await gameConfigManager.saveGameConfig(instancePath, template, defaultConfig)
+    
+    if (success) {
+      res.json({
+        success: true,
+        message: '配置文件创建成功',
+        data: {
+          template,
+          config: defaultConfig,
+          configExists: true
+        }
+      })
+    } else {
+      res.status(500).json({
+        success: false,
+        message: '配置文件创建失败'
+      })
+    }
+  } catch (error) {
+    logger.error('创建配置文件失败:', error)
+    res.status(500).json({
+      success: false,
+      message: '创建配置文件失败'
     })
   }
 })
