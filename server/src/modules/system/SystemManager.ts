@@ -1320,8 +1320,37 @@ export class SystemManager extends EventEmitter {
     for (const line of lines) {
       const parts = line.split(/\s+/)
       if (parts.length >= 6) {
+        const filesystem = parts[0]
+        
+        // 过滤掉tmpfs、devtmpfs、proc、sysfs等虚拟文件系统
+        if (filesystem === 'tmpfs' || 
+            filesystem === 'devtmpfs' || 
+            filesystem === 'proc' || 
+            filesystem === 'sysfs' || 
+            filesystem === 'devpts' || 
+            filesystem === 'cgroup' || 
+            filesystem === 'pstore' || 
+            filesystem === 'bpf' || 
+            filesystem === 'cgroup2' || 
+            filesystem === 'configfs' || 
+            filesystem === 'debugfs' || 
+            filesystem === 'mqueue' || 
+            filesystem === 'hugetlbfs' || 
+            filesystem === 'tracefs' || 
+            filesystem === 'fusectl' || 
+            filesystem === 'securityfs' || 
+            filesystem.startsWith('overlay') ||
+            filesystem.startsWith('shm') ||
+            parts[5] === '/dev' ||
+            parts[5] === '/dev/shm' ||
+            parts[5] === '/run' ||
+            parts[5] === '/sys' ||
+            parts[5] === '/proc') {
+          continue
+        }
+        
         result.push({
-          filesystem: parts[0],
+          filesystem: filesystem,
           size: this.parseSize(parts[1]),
           used: this.parseSize(parts[2]),
           available: this.parseSize(parts[3]),
