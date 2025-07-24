@@ -6,6 +6,7 @@ import cors from 'cors'
 import helmet from 'helmet'
 import dotenv from 'dotenv'
 import path from 'path'
+import os from 'os'
 import { fileURLToPath } from 'url'
 import winston from 'winston'
 import { promises as fs } from 'fs'
@@ -314,18 +315,43 @@ function displayConnectionInfo(host: string, port: number) {
   
   console.log('')
   
-  // 显示连接地址
+  // 显示本地访问地址
   const localUrl = `http://localhost:${port}`
-  const networkUrl = host === '0.0.0.0' ? `http://127.0.0.1:${port}` : `http://${host}:${port}`
-  
   const localText = `📍 本地访问: ${localUrl}`
-  const networkText = `🌐 网络访问: ${networkUrl}`
-  
   const localPadding = Math.max(0, Math.floor((terminalWidth - localText.length) / 2))
-  const networkPadding = Math.max(0, Math.floor((terminalWidth - networkText.length) / 2))
-  
   console.log(' '.repeat(localPadding) + localText)
-  console.log(' '.repeat(networkPadding) + networkText)
+  
+  // 获取所有网络接口的IP地址
+  const networkInterfaces = os.networkInterfaces()
+  const networkIPs: string[] = []
+  
+  for (const [interfaceName, interfaces] of Object.entries(networkInterfaces)) {
+    if (interfaces) {
+      for (const iface of interfaces) {
+        // 只显示IPv4地址，排除内部地址(127.x.x.x)和链路本地地址
+        if (iface.family === 'IPv4' && !iface.internal && !iface.address.startsWith('169.254.')) {
+          networkIPs.push(iface.address)
+        }
+      }
+    }
+  }
+  
+  // 显示网络访问地址
+  if (networkIPs.length > 0) {
+    // 如果有多个网卡IP，显示所有的
+    networkIPs.forEach((ip, index) => {
+      const networkUrl = `http://${ip}:${port}`
+      const networkText = index === 0 ? `🌐 网络访问: ${networkUrl}` : `           ${networkUrl}`
+      const networkPadding = Math.max(0, Math.floor((terminalWidth - networkText.length) / 2))
+      console.log(' '.repeat(networkPadding) + networkText)
+    })
+  } else {
+    // 如果没有找到网卡IP，使用原来的逻辑
+    const networkUrl = host === '0.0.0.0' ? `http://127.0.0.1:${port}` : `http://${host}:${port}`
+    const networkText = `🌐 网络访问: ${networkUrl}`
+    const networkPadding = Math.max(0, Math.floor((terminalWidth - networkText.length) / 2))
+    console.log(' '.repeat(networkPadding) + networkText)
+  }
   
   console.log('')
   
