@@ -1,0 +1,6 @@
+{
+  "host": "localhost",
+  "port": 25575,
+  "password": "123123",
+  "timeout": 5000
+}

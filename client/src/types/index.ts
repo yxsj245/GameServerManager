@@ -450,3 +450,38 @@ export interface MinecraftDownloadInfo {
 
 // 文件管理相关类型
 export * from './file'
+
+// RCON相关类型
+export interface RconConfig {
+  host: string
+  port: number
+  password: string
+  timeout?: number
+}
+
+export interface RconConnectionStatus {
+  connected: boolean
+  error?: string
+}
+
+export interface RconCommandRequest {
+  command: string
+}
+
+export interface RconCommandResponse {
+  success: boolean
+  response: string
+  error?: string
+}
+
+export interface RconState {
+  config: RconConfig | null
+  connected: boolean
+  connecting: boolean
+  error: string | null
+  commandHistory: Array<{
+    command: string
+    response: string
+    timestamp: string
+  }>
+}

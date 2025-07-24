@@ -24,6 +24,7 @@ import apiClient from '@/utils/api'
 import { ConfirmDeleteDialog } from '@/components/ConfirmDeleteDialog'
 import { CreateConfigDialog } from '@/components/CreateConfigDialog'
 import SearchableSelect from '@/components/SearchableSelect'
+import RconConsole from '@/components/RconConsole'
 
 // 获取嵌套对象值的工具函数
 const getNestedValue = (obj: any, ...path: string[]): any => {
@@ -61,7 +62,7 @@ interface InstallInstanceRequest {
 const InstanceManagerPage: React.FC = () => {
   const navigate = useNavigate()
   const { addNotification } = useNotificationStore()
-  const [activeTab, setActiveTab] = useState<'instances' | 'market' | 'gameConfig'>('instances')
+  const [activeTab, setActiveTab] = useState<'instances' | 'market' | 'gameConfig' | 'rcon'>('instances')
   const [instances, setInstances] = useState<Instance[]>([])
   const [marketInstances, setMarketInstances] = useState<MarketInstance[]>([])
   const [loading, setLoading] = useState(true)
@@ -1002,6 +1003,19 @@ const InstanceManagerPage: React.FC = () => {
               <span>游戏配置文件</span>
             </div>
           </button>
+          <button
+            onClick={() => setActiveTab('rcon')}
+            className={`py-2 px-1 border-b-2 font-medium text-sm transition-colors ${
+              activeTab === 'rcon'
+                ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
+            }`}
+          >
+            <div className="flex items-center space-x-2">
+              <Terminal className="w-4 h-4" />
+              <span>RCON控制台</span>
+            </div>
+          </button>
         </nav>
       </div>
 
@@ -1228,7 +1242,7 @@ const InstanceManagerPage: React.FC = () => {
             </div>
           )}
         </div>
-      ) : (
+      ) : activeTab === 'gameConfig' ? (
         /* 游戏配置文件 */
         <div className="space-y-6">
           {/* 选择区域 */}
@@ -1631,7 +1645,9 @@ const InstanceManagerPage: React.FC = () => {
             </div>
           )}
         </div>
-      )}
+      ) : activeTab === 'rcon' ? (
+        <RconConsole />
+      ) : null}
 
       {/* 创建/编辑实例模态框 */}
       {showCreateModal && (

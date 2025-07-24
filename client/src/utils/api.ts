@@ -709,6 +709,36 @@ class ApiClient {
   async updateSteamGameList() {
     return this.post('/game-deployment/update-game-list')
   }
+
+  // RCON API
+  async getRconConfig(instanceId: string) {
+    return this.get(`/rcon/${instanceId}/config`)
+  }
+
+  async saveRconConfig(instanceId: string, config: {
+    host: string
+    port: number
+    password: string
+    timeout?: number
+  }) {
+    return this.post(`/rcon/${instanceId}/config`, config)
+  }
+
+  async connectRcon(instanceId: string) {
+    return this.post(`/rcon/${instanceId}/connect`)
+  }
+
+  async disconnectRcon(instanceId: string) {
+    return this.post(`/rcon/${instanceId}/disconnect`)
+  }
+
+  async getRconStatus(instanceId: string) {
+    return this.get(`/rcon/${instanceId}/status`)
+  }
+
+  async executeRconCommand(instanceId: string, command: string) {
+    return this.post(`/rcon/${instanceId}/command`, { command })
+  }
 }
 
 // 创建单例实例
