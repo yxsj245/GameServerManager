@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express'
 import { authenticateToken } from '../middleware/auth.js'
-import { GameConfigManager } from '../modules/gameconfig/GameConfigManager.js'
+import { GameConfigManager } from '../modules/gameConfig/GameConfigManager.js'
 import { InstanceManager } from '../modules/instance/InstanceManager.js'
 import logger from '../utils/logger.js'
 import path from 'path'
