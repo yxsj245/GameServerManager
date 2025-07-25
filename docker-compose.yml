@@ -1,11 +1,9 @@
 volumes:
   gsm3_data:
     driver: local
-  game_config_data:
+  game_data:
     driver: local
-  game_local_data:
-    driver: local
-  game_steam_data:
+  game_file:
     driver: local
 
 services:
@@ -21,13 +19,13 @@ services:
       - "27015:27015"
     volumes:
     #steam用户数据目录 不建议修改
-      - game_config_data:/home/.config 
-      - game_local_data:/home/.local
-      - game_steam_data:/home/steam/games
+      - game_data:/home/.config 
+      - game_data:/home/.local
+      - game_file:/home/steam/games
     #root用户数据目录 不建议修改
-      - game_config_data:/root/.config 
-      - game_local_data:/root/.local   
-      - game_steam_data:/root/steam/games 
+      - game_data:/root/.config 
+      - game_data:/root/.local   
+      - game_file:/root/steam/games 
     #面板数据，请勿改动
       - gsm3_data:/root/server/data 
     environment:
