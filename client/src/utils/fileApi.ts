@@ -10,7 +10,7 @@ export class FileApiClient {
   constructor() {
     this.client = axios.create({
       baseURL: '',
-      timeout: 30000,
+      timeout: 0, // 取消超时限制
       headers: {
         'Content-Type': 'application/json',
       },

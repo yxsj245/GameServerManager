@@ -20,7 +20,7 @@ export const config = {
   apiBaseUrl: getApiBaseUrl(),
   
   // 其他配置
-  requestTimeout: 30000,
+  requestTimeout: 0, // 取消超时限制
   socketTimeout: 20000,
 }
 
