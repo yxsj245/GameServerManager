@@ -59,7 +59,7 @@ const AboutProjectPage: React.FC = () => {
               {/* 文档站嵌入页面 */}
               <div className="w-full h-[600px] border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden">
                 <iframe
-                  src="http://docsgsm.xiaozhuhouses.asia/"
+                  src="https://docs.gsm.xiaozhuhouses.asia/"
                   className="w-full h-full"
                   title="GSM3 文档站"
                   frameBorder="0"
@@ -71,12 +71,12 @@ const AboutProjectPage: React.FC = () => {
                 <p className="text-sm text-blue-800 dark:text-blue-200">
                   <strong>文档说明：</strong> 这里包含了 GSM3 的完整使用文档。
                   <a 
-                    href="http://docsgsm.xiaozhuhouses.asia/" 
+                    href="https://docs.gsm.xiaozhuhouses.asia/" 
                     target="_blank" 
                     rel="noopener noreferrer"
                     className="ml-2 text-blue-600 dark:text-blue-400 hover:underline"
                   >
-                    http://docsgsm.xiaozhuhouses.asia/
+                    https://docs.gsm.xiaozhuhouses.asia/
                   </a>
                 </p>
               </div>
