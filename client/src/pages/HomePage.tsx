@@ -1089,11 +1089,12 @@ const HomePage: React.FC = () => {
                     value={selectedDisk}
                     onChange={(e) => handleDiskChange(e.target.value)}
                     disabled={diskLoading}
-                    className="text-xs bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md px-2 py-1 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-1 focus:ring-purple-500 focus:border-purple-500 disabled:opacity-50 disabled:cursor-not-allowed hover:border-purple-400 dark:hover:border-purple-500 transition-colors min-w-[80px]"
+                    className="text-xs bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md px-2 py-1 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-1 focus:ring-purple-500 focus:border-purple-500 disabled:opacity-50 disabled:cursor-not-allowed hover:border-purple-400 dark:hover:border-purple-500 transition-colors w-[140px] truncate"
+                    title={selectedDisk || '总计'}
                   >
                     <option value="" className="bg-white dark:bg-gray-800">总计</option>
                     {diskList.map((disk, index) => (
-                      <option key={`${disk.filesystem}-${index}`} value={disk.filesystem} className="bg-white dark:bg-gray-800">
+                      <option key={`${disk.filesystem}-${index}`} value={disk.filesystem} className="bg-white dark:bg-gray-800" title={disk.filesystem}>
                         {disk.filesystem}
                       </option>
                     ))}
@@ -1186,11 +1187,12 @@ const HomePage: React.FC = () => {
                     value={selectedNetworkInterface}
                     onChange={(e) => handleNetworkInterfaceChange(e.target.value)}
                     disabled={networkLoading}
-                    className="text-xs bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md px-2 py-1 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-1 focus:ring-cyan-500 focus:border-cyan-500 disabled:opacity-50 disabled:cursor-not-allowed hover:border-cyan-400 dark:hover:border-cyan-500 transition-colors min-w-[120px]"
+                    className="text-xs bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md px-2 py-1 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-1 focus:ring-cyan-500 focus:border-cyan-500 disabled:opacity-50 disabled:cursor-not-allowed hover:border-cyan-400 dark:hover:border-cyan-500 transition-colors w-[140px] truncate"
+                    title={selectedNetworkInterface || '总计'}
                   >
                     <option value="" className="bg-white dark:bg-gray-800">总计</option>
                     {networkInterfaceList.map((iface, index) => (
-                      <option key={`${iface.name}-${index}`} value={iface.name} className="bg-white dark:bg-gray-800">
+                      <option key={`${iface.name}-${index}`} value={iface.name} className="bg-white dark:bg-gray-800" title={iface.displayName}>
                         {iface.displayName}
                       </option>
                     ))}
