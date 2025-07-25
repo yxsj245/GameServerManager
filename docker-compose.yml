@@ -1,21 +1,35 @@
 volumes:
   gsm3_data:
     driver: local
+  game_config_data:
+    driver: local
+  game_local_data:
+    driver: local
+  game_steam_data:
+    driver: local
 
 services:
   management_panel:
     build: .
     container_name: GSManager3
-    image: xiaozhu674/gameservermanager:3.1.0
+    image: xiaozhu674/gameservermanager:latest
     user: root                       
     ports:
       # GSM3管理面板端口
-      - "3001:3001"                   # GSM3 Web管理界面
+      - "3001:3001" 
+      # 游戏端口，按需映射
+      - "27015:27015"
     volumes:
-      - ./game_file:/home/.config # 通用游戏存档路径1。请务必将此宿主目录权限设置为777
-      - ./game_file:/home/.local  # 通用游戏存档路径2。请务必将此宿主目录权限设置为777
-      - ./game_data:/home/steam/games  # 通用游戏存档路径2。请务必将此宿主目录权限设置为777
-      - gsm3_data:/root/server/data     # GSM3数据目录（使用命名卷）
+    #steam用户数据目录 不建议修改
+      - game_config_data:/home/.config 
+      - game_local_data:/home/.local
+      - game_steam_data:/home/steam/games
+    #root用户数据目录 不建议修改
+      - game_config_data:/root/.config 
+      - game_local_data:/root/.local   
+      - game_steam_data:/root/steam/games 
+    #面板数据，请勿改动
+      - gsm3_data:/root/server/data 
     environment:
       - TZ=Asia/Shanghai              # 设置时区
       - SERVER_PORT=3001              # GSM3服务端口

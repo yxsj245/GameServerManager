@@ -11,7 +11,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
 # RUN sed -i 's/deb.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list \
 #     && sed -i 's/security.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list
 
-# 安装Node.js、Python、SteamCMD和常见依赖（包括32位库）
+# 安装所有依赖、Node.js、Java和Python，并清理缓存
 RUN apt-get update && apt-get upgrade -y \
     && dpkg --add-architecture i386 \
     && apt-get update \
@@ -22,6 +22,7 @@ RUN apt-get update && apt-get upgrade -y \
         curl \
         jq \
         xdg-user-dirs \
+        sudo \
         # Node.js相关依赖
         gnupg \
         # Python相关依赖
@@ -29,6 +30,8 @@ RUN apt-get update && apt-get upgrade -y \
         python3-pip \
         python3-dev \
         python3-venv \
+        # Java相关依赖
+        apt-transport-https \
         # 游戏服务器依赖
         libncurses5:i386 \
         libbz2-1.0:i386 \
@@ -112,44 +115,46 @@ RUN apt-get update && apt-get upgrade -y \
         fonts-wqy-microhei \
         libc6 \
         libc6:i386 \
-    && rm -rf /var/lib/apt/lists/*
-
-# 安装Node.js
-RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+    # 安装Node.js
+    && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
     && apt-get install -y nodejs \
-    && npm config set registry https://registry.npmmirror.com \
-    && npm install -g npm@latest
-
-# 安装Java 21（通过Adoptium仓库）
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
-        wget \
-        apt-transport-https \
-        gnupg \
+    # 安装Java 21
     && wget -qO - https://packages.adoptium.net/artifactory/api/gpg/key/public | apt-key add - \
     && echo "deb https://packages.adoptium.net/artifactory/deb $(awk -F= '/^VERSION_CODENAME/{print$2}' /etc/os-release) main" | tee /etc/apt/sources.list.d/adoptium.list \
     && apt-get update \
-    && apt-get install -y --no-install-recommends \
-        temurin-21-jdk \
-    && rm -rf /var/lib/apt/lists/*
-
-# 设置Java环境变量
-ENV JAVA_HOME=/usr/lib/jvm/temurin-21-jdk-amd64 \
-    PATH="$JAVA_HOME/bin:$PATH"
-
-# 设置 locales
-RUN sed -i -e 's/# en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen \
+    && apt-get install -y --no-install-recommends temurin-21-jdk \
+    # 配置npm和pip镜像源
+    && npm config set registry https://registry.npmmirror.com \
+    && npm install -g npm@latest \
+    && pip3 config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple \
+    # 设置locales
+    && sed -i -e 's/# en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen \
     && sed -i -e 's/# zh_CN.UTF-8 UTF-8/zh_CN.UTF-8 UTF-8/' /etc/locale.gen \
-    && locale-gen
-ENV LANG=zh_CN.UTF-8 \
+    && locale-gen \
+    # 创建steam用户和应用目录，并给予root权限
+    && useradd -m -s /bin/bash ${STEAM_USER} \
+    && usermod -aG root ${STEAM_USER} \
+    && usermod -aG sudo ${STEAM_USER} \
+    && echo "${STEAM_USER} ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers \
+    && mkdir -p ${STEAMCMD_DIR} ${GAMES_DIR} /app \
+    && chown -R ${STEAM_USER}:root /home/steam \
+    && chown -R ${STEAM_USER}:root /app \
+    && chmod -R 755 /home/steam \
+    && chmod -R 755 /app \
+    # 清理apt缓存和临时文件
+    && apt-get autoremove -y \
+    && apt-get autoclean \
+    && rm -rf /var/lib/apt/lists/* \
+    && rm -rf /tmp/* \
+    && rm -rf /var/tmp/* \
+    && rm -rf /var/cache/apt/archives/*
+
+# 设置环境变量
+ENV JAVA_HOME=/usr/lib/jvm/temurin-21-jdk-amd64 \
+    PATH="$JAVA_HOME/bin:$PATH" \
+    LANG=zh_CN.UTF-8 \
     LANGUAGE=zh_CN:zh \
     LC_ALL=zh_CN.UTF-8
-
-# 创建steam用户和应用目录
-RUN useradd -m -s /bin/bash ${STEAM_USER} \
-    && mkdir -p ${STEAMCMD_DIR} ${GAMES_DIR} /app \
-    && chown -R ${STEAM_USER}:${STEAM_USER} /home/steam \
-    && chown -R ${STEAM_USER}:${STEAM_USER} /app
 
 # 复制项目文件
 COPY --chown=steam:steam . /app/
@@ -158,12 +163,13 @@ COPY --chown=steam:steam . /app/
 USER ${STEAM_USER}
 WORKDIR /app
 
-# 切换回root用户继续安装SteamCMD
+# 切换回root用户继续安装SteamCMD和构建项目
 USER root
 
-# 下载并安装SteamCMD
+# 下载安装SteamCMD、构建项目、安装Python依赖，并清理所有缓存
 RUN mkdir -p ${STEAMCMD_DIR} \
     && cd ${STEAMCMD_DIR} \
+    # 下载并安装SteamCMD
     && (if curl -s --connect-timeout 3 http://192.168.10.23:7890 >/dev/null 2>&1 || wget -q --timeout=3 --tries=1 http://192.168.10.23:7890 -O /dev/null >/dev/null 2>&1; then \
           echo "代理服务器可用，使用代理下载和初始化"; \
           export http_proxy=http://192.168.10.23:7890; \
@@ -193,27 +199,45 @@ RUN mkdir -p ${STEAMCMD_DIR} \
     && mkdir -p ${STEAM_HOME}/.steam/steam \
     && ln -sf ${STEAMCMD_DIR}/linux32 ${STEAM_HOME}/.steam/steam/linux32 \
     && ln -sf ${STEAMCMD_DIR}/linux64 ${STEAM_HOME}/.steam/steam/linux64 \
-    && ln -sf ${STEAMCMD_DIR}/steamcmd ${STEAM_HOME}/.steam/steam/steamcmd
-
-# 安装依赖并构建项目
-RUN npm run install:all \
-    && npm run package:linux:no-zip
-
-# 安装Python依赖
-RUN pip3 install --no-cache-dir -r /app/server/src/Python/requirements.txt
-
-# 复制构建好的应用到root目录
-RUN cp -r /app/dist/package/* /root/ \
-    && chmod +x /root/start.sh
+    && ln -sf ${STEAMCMD_DIR}/steamcmd ${STEAM_HOME}/.steam/steam/steamcmd \
+    # 构建项目
+    && cd /app \
+    && npm run install:all \
+    && npm run package:linux:no-zip \
+    # 安装Python依赖
+    && pip3 install --no-cache-dir -r /app/server/src/Python/requirements.txt \
+    # 复制构建好的应用到root目录
+    && cp -r /app/dist/package/* /root/ \
+    && chmod +x /root/start.sh \
+    # 创建数据目录并复制默认数据
+    && mkdir -p /root/server/data \
+    && cp -r /app/server/data/* /root/server/data/ \
+    && chown -R root:root /root/server/data \
+    && chmod -R 775 /root \
+    && chmod -R 775 /root/server \
+    && chmod -R 775 /root/server/data \
+    # 清理所有缓存和临时文件
+    && npm cache clean --force \
+    && rm -rf /app/node_modules \
+    && rm -rf /app/client/node_modules \
+    && rm -rf /app/server/node_modules \
+    && rm -rf /app/dist \
+    && rm -rf /app/.npm \
+    && rm -rf /root/.npm \
+    && rm -rf /home/steam/.npm \
+    && pip3 cache purge \
+    && rm -rf /root/.cache/pip \
+    && rm -rf /home/steam/.cache \
+    && rm -rf /tmp/* \
+    && rm -rf /var/tmp/* \
+    && find /app -name "*.log" -delete \
+    && find /app -name "*.tmp" -delete \
+    && find /root -name "*.log" -delete 2>/dev/null || true \
+    && find /root -name "*.tmp" -delete 2>/dev/null || true
 
 # 复制启动脚本到root目录
 COPY start.sh /root/start.sh
 RUN chmod +x /root/start.sh
-
-# 创建数据目录并复制默认数据
-RUN mkdir -p /root/server/data \
-    && cp -r /app/server/data/* /root/server/data/ \
-    && chown -R root:root /root/server/data
 
 # 创建目录用于挂载游戏数据
 VOLUME ["${GAMES_DIR}"]
