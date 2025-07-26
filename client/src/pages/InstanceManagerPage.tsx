@@ -547,13 +547,15 @@ const InstanceManagerPage: React.FC = () => {
     
     try {
       // 转换停止命令格式
-      let stopCommand: 'ctrl+c' | 'stop' | 'exit' = 'ctrl+c'
+      let stopCommand: 'ctrl+c' | 'stop' | 'exit' | 'quit' = 'ctrl+c'
       if (selectedMarketInstance.stopcommand === '^C') {
         stopCommand = 'ctrl+c'
       } else if (selectedMarketInstance.stopcommand === 'stop') {
         stopCommand = 'stop'
       } else if (selectedMarketInstance.stopcommand === 'exit') {
         stopCommand = 'exit'
+      } else if (selectedMarketInstance.stopcommand === 'quit') {
+        stopCommand = 'quit'
       }
       
       const installData: CreateInstanceRequest = {
@@ -1720,12 +1722,13 @@ const InstanceManagerPage: React.FC = () => {
                 </label>
                 <select
                   value={formData.stopCommand}
-                  onChange={(e) => setFormData({ ...formData, stopCommand: e.target.value as 'ctrl+c' | 'stop' | 'exit' })}
+                  onChange={(e) => setFormData({ ...formData, stopCommand: e.target.value as 'ctrl+c' | 'stop' | 'exit' | 'quit' })}
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 >
                   <option value="ctrl+c">Ctrl+C</option>
                   <option value="stop">stop</option>
                   <option value="exit">exit</option>
+                  <option value="quit">quit</option>
                 </select>
               </div>
               

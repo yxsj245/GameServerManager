@@ -176,11 +176,11 @@ router.post('/', authenticateToken, async (req: Request, res: Response) => {
     }
     
     // 验证停止命令
-    if (stopCommand && !['ctrl+c', 'stop', 'exit'].includes(stopCommand)) {
+    if (stopCommand && !['ctrl+c', 'stop', 'exit', 'quit'].includes(stopCommand)) {
       return res.status(400).json({
         success: false,
         error: '无效的停止命令',
-        message: '停止命令必须是 ctrl+c、stop 或 exit 之一'
+        message: '停止命令必须是 ctrl+c、stop、exit 或 quit 之一'
       })
     }
     
@@ -237,11 +237,11 @@ router.put('/:id', authenticateToken, async (req: Request, res: Response) => {
     }
     
     // 验证停止命令
-    if (stopCommand && !['ctrl+c', 'stop', 'exit'].includes(stopCommand)) {
+    if (stopCommand && !['ctrl+c', 'stop', 'exit', 'quit'].includes(stopCommand)) {
       return res.status(400).json({
         success: false,
         error: '无效的停止命令',
-        message: '停止命令必须是 ctrl+c、stop 或 exit 之一'
+        message: '停止命令必须是 ctrl+c、stop、exit 或 quit 之一'
       })
     }
     

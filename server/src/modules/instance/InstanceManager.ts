@@ -11,7 +11,7 @@ export interface Instance {
   workingDirectory: string
   startCommand: string
   autoStart: boolean
-  stopCommand: 'ctrl+c' | 'stop' | 'exit'
+  stopCommand: 'ctrl+c' | 'stop' | 'exit' | 'quit'
   status: 'running' | 'stopped' | 'starting' | 'stopping' | 'error'
   pid?: number
   createdAt: string
@@ -28,7 +28,7 @@ export interface CreateInstanceRequest {
   workingDirectory: string
   startCommand: string
   autoStart: boolean
-  stopCommand: 'ctrl+c' | 'stop' | 'exit'
+  stopCommand: 'ctrl+c' | 'stop' | 'exit' | 'quit'
   enableStreamForward?: boolean
   programPath?: string
 }
@@ -546,6 +546,13 @@ export class InstanceManager extends EventEmitter {
           this.terminalManager.handleInput(virtualSocket, {
             sessionId: instance.terminalSessionId,
             data: 'exit\r'
+          })
+          break
+        case 'quit':
+          // 向终端输入 'quit' 命令
+          this.terminalManager.handleInput(virtualSocket, {
+            sessionId: instance.terminalSessionId,
+            data: 'quit\r'
           })
           break
       }

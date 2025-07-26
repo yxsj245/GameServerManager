@@ -349,7 +349,7 @@ export interface Instance {
   workingDirectory: string
   startCommand: string
   autoStart: boolean
-  stopCommand: 'ctrl+c' | 'stop' | 'exit'
+  stopCommand: 'ctrl+c' | 'stop' | 'exit' | 'quit'
   status: 'running' | 'stopped' | 'starting' | 'stopping' | 'error'
   pid?: number
   createdAt: string
@@ -366,7 +366,7 @@ export interface CreateInstanceRequest {
   workingDirectory: string
   startCommand: string
   autoStart: boolean
-  stopCommand: 'ctrl+c' | 'stop' | 'exit'
+  stopCommand: 'ctrl+c' | 'stop' | 'exit' | 'quit'
   enableStreamForward?: boolean
   programPath?: string
 }

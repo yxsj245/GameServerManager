@@ -359,7 +359,7 @@ router.post('/install', authenticateToken, async (req: Request, res: Response) =
         workingDirectory: installPath,
         startCommand,
         autoStart: false,
-        stopCommand: 'ctrl+c' as 'ctrl+c' | 'stop' | 'exit'
+        stopCommand: 'ctrl+c' as 'ctrl+c' | 'stop' | 'exit' | 'quit'
       }
       
       const instance = await instanceManager.createInstance(instanceData)
