@@ -42,12 +42,15 @@ import {
   BellOutlined,
   AppstoreOutlined,
   UnorderedListOutlined,
-  HddOutlined
+  HddOutlined,
+  EyeOutlined,
+  EyeInvisibleOutlined
 } from '@ant-design/icons'
 import { useFileStore } from '@/stores/fileStore'
 import { useNotificationStore } from '@/stores/notificationStore'
 import { useSystemStore } from '@/stores/systemStore'
 import { useMusicStore } from '@/stores/musicStore'
+import { useThemeStore } from '@/stores/themeStore'
 import { FileGridItem } from '@/components/FileGridItem'
 import { FileListItem } from '@/components/FileListItem'
 import { FileContextMenu } from '@/components/FileContextMenu'
@@ -59,7 +62,7 @@ import {
 } from '@/components/FileDialogs'
 import { CompressDialog } from '@/components/CompressDialog'
 import { PermissionsDialog } from '@/components/PermissionsDialog'
-import { MonacoEditor } from '@/components/MonacoEditor'
+import { MonacoEditor, type LineEndingType } from '@/components/MonacoEditor'
 import { ImagePreview } from '@/components/ImagePreview'
 import { FileItem } from '@/types/file'
 import { fileApiClient } from '@/utils/fileApi'
@@ -118,6 +121,7 @@ const FileManagerPage: React.FC = () => {
   const { addNotification } = useNotificationStore()
   const { fetchSystemInfo } = useSystemStore()
   const { addToPlaylist } = useMusicStore()
+  const { theme } = useThemeStore()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   
@@ -160,6 +164,12 @@ const FileManagerPage: React.FC = () => {
   
   // 编辑器模态框
   const [editorModalVisible, setEditorModalVisible] = useState(false)
+  
+  // 编辑器换行符类型选项
+  const [lineEnding, setLineEnding] = useState<LineEndingType>(() => {
+    const saved = localStorage.getItem('fileManager_lineEnding') as LineEndingType
+    return saved || 'LF'
+  })
   
   // 图片预览模态框
   const [imagePreviewVisible, setImagePreviewVisible] = useState(false)
@@ -670,6 +680,12 @@ const FileManagerPage: React.FC = () => {
       title: '添加成功',
       message: `已添加 ${files.length} 个文件到播放列表`
     })
+  }
+  
+  // 处理换行符类型变化
+  const handleLineEndingChange = (newLineEnding: LineEndingType) => {
+    setLineEnding(newLineEnding)
+    localStorage.setItem('fileManager_lineEnding', newLineEnding)
   }
   
   // 创建具体类型文件的处理函数
@@ -1448,50 +1464,79 @@ const FileManagerPage: React.FC = () => {
         ]}
       >
         {openFiles.size > 0 && (
-          <Tabs
-            type="editable-card"
-            activeKey={activeFile || undefined}
-            onChange={setActiveFile}
-            onEdit={(targetKey, action) => {
-              if (action === 'remove' && typeof targetKey === 'string') {
-                closeFile(targetKey)
-                if (openFiles.size === 1) {
+          <div className="h-full flex flex-col">
+            <Tabs
+              type="editable-card"
+              activeKey={activeFile || undefined}
+              onChange={setActiveFile}
+              onEdit={(targetKey, action) => {
+                if (action === 'remove' && typeof targetKey === 'string') {
+                  closeFile(targetKey)
+                  if (openFiles.size === 1) {
+                    setEditorModalVisible(false)
+                  }
+                } else if (action === 'add') {
+                  // 点击+号创建新文件
+                  setCreateDialog({ visible: true, type: 'file' })
                   setEditorModalVisible(false)
                 }
-              } else if (action === 'add') {
-                // 点击+号创建新文件
-                setCreateDialog({ visible: true, type: 'file' })
-                setEditorModalVisible(false)
-              }
-            }}
-            className="h-full"
-            items={Array.from(openFiles.entries()).map(([filePath, content]) => ({
-              key: filePath,
-              label: (
-                <span className="flex items-center">
-                  <FileTextOutlined className="mr-1" />
-                  {getBasename(filePath)}
-                  {isFileModified(filePath) && (
-                    <span 
-                      className="ml-1 w-2 h-2 bg-orange-500 rounded-full" 
-                      title="文件已修改"
+              }}
+              className="flex-1"
+              items={Array.from(openFiles.entries()).map(([filePath, content]) => ({
+                key: filePath,
+                label: (
+                  <span className="flex items-center">
+                    <FileTextOutlined className="mr-1" />
+                    {getBasename(filePath)}
+                    {isFileModified(filePath) && (
+                      <span 
+                        className="ml-1 w-2 h-2 bg-orange-500 rounded-full" 
+                        title="文件已修改"
+                      />
+                    )}
+                  </span>
+                ),
+                closable: true,
+                children: (
+                  <div style={{ height: 'calc(80vh - 140px)' }}>
+                    <MonacoEditor
+                      value={content || ''}
+                      onChange={(value) => handleEditorChange(filePath, value)}
+                      fileName={getBasename(filePath)}
+                      onSave={(value) => handleSaveFile(value)}
+                      lineEnding={lineEnding}
+                      onLineEndingChange={handleLineEndingChange}
                     />
-                  )}
-                </span>
-              ),
-              closable: true,
-              children: (
-                <div style={{ height: 'calc(80vh - 100px)' }}>
-                  <MonacoEditor
-                    value={content || ''}
-                    onChange={(value) => handleEditorChange(filePath, value)}
-                    fileName={getBasename(filePath)}
-                    onSave={(value) => handleSaveFile(value)}
-                  />
-                </div>
-              )
-            }))}
-          />
+                  </div>
+                )
+              }))}
+            />
+            
+            {/* 换行符选择器 */}
+            <div 
+              className="flex items-center justify-start px-4 py-2"
+              style={{ 
+                backgroundColor: theme === 'dark' ? '#1F1F1F' : '#FAFAFA'
+              }}
+            >
+              <span className={`text-sm mr-3 ${
+                theme === 'dark' ? 'text-gray-300' : 'text-gray-600'
+              }`}>
+                换行符类型:
+              </span>
+              <Select
+                value={lineEnding}
+                onChange={handleLineEndingChange}
+                size="small"
+                style={{ width: 80 }}
+                options={[
+                  { value: 'LF', label: 'LF' },
+                  { value: 'CRLF', label: 'CRLF' },
+                  { value: 'CR', label: 'CR' }
+                ]}
+              />
+            </div>
+          </div>
         )}
       </Modal>
       
