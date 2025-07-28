@@ -67,7 +67,8 @@
 
         "tip": "请注意此服务端需要从客户端上传存档以及配置文件，需要自行编写启动脚本，详见文章https://www.bilibili.com/opus/798802812813180931",
         "image":"https://shared.cdn.queniuqe.com/store_item_assets/steam/apps/322330/22aa99418c3e4337aa023bd43ea3d9fe1cdc34e4/header_schinese.jpg",
-        "url":"https://store.steampowered.com/app/322330/_/"
+        "url":"https://store.steampowered.com/app/322330/_/",
+        "docs":"https://docs.gsm.xiaozhuhouses.asia/%E6%B8%B8%E6%88%8F%E7%99%BE%E7%A7%91/Steam/%E9%A5%A5%E8%8D%92%E9%A3%9F%E7%94%A8%E8%AF%B4%E6%98%8E.html"
     },
     "Project_Zomboid": {
         "game_nameCN": "僵尸毁灭工程",
