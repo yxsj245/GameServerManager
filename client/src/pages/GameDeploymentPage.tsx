@@ -13,7 +13,8 @@ import {
   AlertCircle,
   Plus,
   Package,
-  BookOpen
+  BookOpen,
+  RefreshCw
 } from 'lucide-react'
 import { useNotificationStore } from '@/stores/notificationStore'
 import apiClient from '@/utils/api'
@@ -46,6 +47,8 @@ const GameDeploymentPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState('steamcmd')
   const [games, setGames] = useState<Games>({})
   const [loading, setLoading] = useState(true)
+  const [gameListError, setGameListError] = useState<string | null>(null)
+  const [updatingGameList, setUpdatingGameList] = useState(false)
   const [showInstallModal, setShowInstallModal] = useState(false)
   const [installModalAnimating, setInstallModalAnimating] = useState(false)
   const [selectedGame, setSelectedGame] = useState<{ key: string; info: GameInfo } | null>(null)
@@ -157,6 +160,7 @@ const GameDeploymentPage: React.FC = () => {
   const fetchGames = async () => {
     try {
       setLoading(true)
+      setGameListError(null)
       const response = await apiClient.getInstallableGames()
       
       if (response.success) {
@@ -166,11 +170,52 @@ const GameDeploymentPage: React.FC = () => {
       }
     } catch (error: any) {
       console.error('获取游戏列表失败:', error)
-      addNotification({
-        type: 'error',
-        title: '获取失败',
-        message: error.message || '无法获取游戏列表'
-      })
+      setGameListError(error.message || '无法获取游戏列表')
+      
+      // 如果错误信息包含"无法找到 installgame.json 文件"，自动尝试更新游戏清单
+      if (error.message && error.message.includes('无法找到 installgame.json 文件')) {
+        addNotification({
+          type: 'info',
+          title: '正在更新',
+          message: '检测到游戏清单文件缺失，正在自动更新...'
+        })
+        
+        try {
+          setUpdatingGameList(true)
+          const updateResponse = await apiClient.updateSteamGameList()
+          
+          if (updateResponse.success) {
+            addNotification({
+              type: 'success',
+              title: '更新成功',
+              message: `游戏部署清单已更新，共${updateResponse.data?.gameCount || 0}个游戏`
+            })
+            
+            // 重新获取游戏列表
+            setTimeout(() => {
+              fetchGames()
+            }, 1000)
+            return
+          } else {
+            throw new Error(updateResponse.message || '更新游戏部署清单失败')
+          }
+        } catch (updateError: any) {
+          console.error('自动更新游戏清单失败:', updateError)
+          addNotification({
+            type: 'error',
+            title: '自动更新失败',
+            message: updateError.message || '无法自动更新游戏清单，请手动更新'
+          })
+        } finally {
+          setUpdatingGameList(false)
+        }
+      } else {
+        addNotification({
+          type: 'error',
+          title: '获取失败',
+          message: error.message || '无法获取游戏列表'
+        })
+      }
     } finally {
       setLoading(false)
     }
@@ -222,6 +267,46 @@ const GameDeploymentPage: React.FC = () => {
       setSponsorKeyValid(false)
     } finally {
       setSponsorKeyChecking(false)
+    }
+  }
+
+  // 手动更新游戏清单
+  const handleUpdateGameList = async () => {
+    try {
+      setUpdatingGameList(true)
+      setGameListError(null)
+      
+      addNotification({
+        type: 'info',
+        title: '正在更新',
+        message: '正在更新Steam游戏部署清单...'
+      })
+      
+      const response = await apiClient.updateSteamGameList()
+      
+      if (response.success) {
+        addNotification({
+          type: 'success',
+          title: '更新成功',
+          message: `游戏部署清单已更新，共${response.data?.gameCount || 0}个游戏`
+        })
+        
+        // 重新获取游戏列表
+        setTimeout(() => {
+          fetchGames()
+        }, 1000)
+      } else {
+        throw new Error(response.message || '更新游戏部署清单失败')
+      }
+    } catch (error: any) {
+      console.error('更新游戏清单失败:', error)
+      addNotification({
+        type: 'error',
+        title: '更新失败',
+        message: error.message || '无法更新游戏清单'
+      })
+    } finally {
+      setUpdatingGameList(false)
     }
   }
 
@@ -1604,6 +1689,42 @@ const GameDeploymentPage: React.FC = () => {
       {/* SteamCMD 标签页内容 */}
       {activeTab === 'steamcmd' && (
         <div className="space-y-6">
+          {/* 游戏列表错误状态 */}
+          {gameListError && (
+            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
+              <div className="flex items-start space-x-3">
+                <AlertCircle className="w-5 h-5 text-red-500 mt-0.5 flex-shrink-0" />
+                <div className="flex-1">
+                  <h3 className="text-sm font-medium text-red-800 dark:text-red-200">
+                    游戏列表加载失败
+                  </h3>
+                  <p className="mt-1 text-sm text-red-700 dark:text-red-300">
+                    {gameListError}
+                  </p>
+                  <div className="mt-3">
+                    <button
+                      onClick={handleUpdateGameList}
+                      disabled={updatingGameList}
+                      className="inline-flex items-center space-x-2 px-3 py-2 text-sm bg-red-600 hover:bg-red-700 disabled:bg-red-400 text-white rounded-lg transition-colors"
+                    >
+                      {updatingGameList ? (
+                        <>
+                          <Loader className="w-4 h-4 animate-spin" />
+                          <span>正在更新游戏清单...</span>
+                        </>
+                      ) : (
+                        <>
+                          <RefreshCw className="w-4 h-4" />
+                          <span>更新游戏清单</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* 筛选器 */}
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
             <div className="flex flex-col sm:flex-row gap-4">

@@ -114,7 +114,62 @@ router.get('/games', authenticateToken, async (req: Request, res: Response) => {
     }
     
     if (!gamesFilePath) {
-      throw new Error('无法找到 installgame.json 文件')
+      logger.info('未找到 installgame.json 文件，开始自动更新游戏清单')
+      
+      try {
+        // 自动执行更新游戏清单
+        const remoteUrl = 'http://gsm.server.xiaozhuhouses.asia:8082/disk1/GSM3/installgame.json'
+        const targetPath = possiblePaths[0] // 使用第一个路径作为目标路径
+        
+        // 确保目录存在
+        const gamesDir = path.dirname(targetPath)
+        try {
+          await fs.access(gamesDir)
+        } catch {
+          await fs.mkdir(gamesDir, { recursive: true })
+          logger.info('创建games目录:', gamesDir)
+        }
+        
+        // 从远程URL下载最新的游戏清单
+        const response = await axios.get(remoteUrl, {
+          timeout: 30000, // 30秒超时
+          headers: {
+            'User-Agent': 'GSManager3/1.0'
+          }
+        })
+        
+        // 验证响应数据格式
+        if (typeof response.data !== 'object' || response.data === null) {
+          throw new Error('远程数据格式无效：不是有效的JSON对象')
+        }
+        
+        // 简单验证数据结构
+        const gameKeys = Object.keys(response.data)
+        if (gameKeys.length === 0) {
+          throw new Error('远程数据为空')
+        }
+        
+        // 检查第一个游戏是否有必要的字段
+        const firstGame = response.data[gameKeys[0]]
+        if (!firstGame || typeof firstGame !== 'object' || !firstGame.game_nameCN || !firstGame.appid) {
+          throw new Error('远程数据格式无效：缺少必要的游戏信息字段')
+        }
+        
+        // 将数据写入本地文件
+        await fs.writeFile(targetPath, JSON.stringify(response.data, null, 2), 'utf-8')
+        
+        logger.info('自动更新Steam游戏部署清单成功', {
+          gameCount: gameKeys.length,
+          filePath: targetPath
+        })
+        
+        // 设置文件路径为新创建的文件
+        gamesFilePath = targetPath
+        
+      } catch (updateError: any) {
+        logger.error('自动更新游戏清单失败:', updateError)
+        throw new Error(`无法找到 installgame.json 文件，且自动更新失败: ${updateError.message}`)
+      }
     }
     
     const gamesData = await fs.readFile(gamesFilePath, 'utf-8')
