@@ -49,7 +49,8 @@
         "image":"https://shared.cdn.queniuqe.com/store_item_assets/steam/apps/251570/header.jpg",
         "url":"https://store.steampowered.com/app/251570/7_Days_to_Die/",
         "system":["Windows","Linux"],
-		"system_info":["Linux"]
+		"system_info":["Linux"],
+        "docs":"https://docs.gsm.xiaozhuhouses.asia/%E6%B8%B8%E6%88%8F%E7%99%BE%E7%A7%91/Steam/%E4%B8%83%E6%97%A5%E6%9D%80%E9%A3%9F%E7%94%A8%E8%AF%B4%E6%98%8E.html"
     
     },
     "Unturned": {
