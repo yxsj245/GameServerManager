@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { useThemeStore } from '@/stores/themeStore'
 import { useAuthStore } from '@/stores/authStore'
 import { useNotificationStore } from '@/stores/notificationStore'
+import AutoRedirectControl from '@/components/AutoRedirectControl'
 import apiClient from '@/utils/api'
 import {
   Settings,
@@ -1353,6 +1354,11 @@ const SettingsPage: React.FC = () => {
                 </div>
               </div>
             </div>
+          </div>
+          
+          {/* 自动跳转控制 */}
+          <div className="mb-6">
+            <AutoRedirectControl />
           </div>
           
           {/* 修改密码表单 */}

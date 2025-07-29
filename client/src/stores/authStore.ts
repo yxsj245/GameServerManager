@@ -5,6 +5,8 @@ import apiClient from '@/utils/api'
 import socketClient from '@/utils/socket'
 
 interface AuthStore extends AuthState {
+  // 控制是否在登录过期时自动跳转到登录页面
+  autoRedirectOnExpire: boolean
   login: (credentials: LoginRequest) => Promise<{ success: boolean; message: string }>
   logout: () => Promise<void>
   verifyToken: () => Promise<boolean>
@@ -12,6 +14,8 @@ interface AuthStore extends AuthState {
   changeUsername: (newUsername: string) => Promise<{ success: boolean; message: string }>
   clearError: () => void
   setLoading: (loading: boolean) => void
+  setAutoRedirectOnExpire: (enabled: boolean) => void
+  handleTokenExpired: () => void
 }
 
 export const useAuthStore = create<AuthStore>()(
@@ -22,6 +26,7 @@ export const useAuthStore = create<AuthStore>()(
       token: null,
       loading: false,
       error: null,
+      autoRedirectOnExpire: true, // 默认启用自动跳转
 
       login: async (credentials: LoginRequest) => {
         set({ loading: true, error: null })
@@ -203,6 +208,32 @@ export const useAuthStore = create<AuthStore>()(
       setLoading: (loading: boolean) => {
         set({ loading })
       },
+
+      setAutoRedirectOnExpire: (enabled: boolean) => {
+        set({ autoRedirectOnExpire: enabled })
+      },
+
+      handleTokenExpired: () => {
+        const { autoRedirectOnExpire } = get()
+        
+        // 清除认证状态
+        set({
+          isAuthenticated: false,
+          user: null,
+          token: null,
+          loading: false,
+          error: '登录已过期，请重新登录',
+        })
+        
+        // 断开Socket连接
+        socketClient.disconnect()
+        
+        // 如果启用了自动跳转，则跳转到登录页面
+        if (autoRedirectOnExpire) {
+          // 使用window.location.href确保能够跳转
+          window.location.href = '/login'
+        }
+      },
     }),
     {
       name: 'gsm3-auth',
@@ -210,6 +241,7 @@ export const useAuthStore = create<AuthStore>()(
         isAuthenticated: state.isAuthenticated,
         user: state.user,
         token: state.token,
+        autoRedirectOnExpire: state.autoRedirectOnExpire,
       }),
     }
   )

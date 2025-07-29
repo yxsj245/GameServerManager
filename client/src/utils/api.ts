@@ -52,7 +52,16 @@ class ApiClient {
             console.error('添加通知失败:', notificationError)
           }
           
-          // 不再自动清除token和跳转，让用户手动处理
+          // 调用authStore的handleTokenExpired方法处理token过期
+          try {
+            // 动态导入避免循环依赖
+            import('@/stores/authStore').then(({ useAuthStore }) => {
+              const { handleTokenExpired } = useAuthStore.getState()
+              handleTokenExpired()
+            })
+          } catch (authError) {
+            console.error('处理token过期失败:', authError)
+          }
         }
         return Promise.reject(error)
       }
