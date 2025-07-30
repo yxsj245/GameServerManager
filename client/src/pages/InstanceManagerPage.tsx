@@ -16,7 +16,9 @@ import {
   Loader,
   Server,
   ShoppingCart,
-  Download
+  Download,
+  HelpCircle,
+  X
 } from 'lucide-react'
 import { Instance, CreateInstanceRequest } from '@/types'
 import { useNotificationStore } from '@/stores/notificationStore'
@@ -83,6 +85,8 @@ const InstanceManagerPage: React.FC = () => {
     configPath: string
   } | null>(null)
   const [installFormData, setInstallFormData] = useState({ workingDirectory: '' })
+  const [showStartCommandHelpModal, setShowStartCommandHelpModal] = useState(false)
+  const [startCommandHelpModalAnimating, setStartCommandHelpModalAnimating] = useState(false)
   const [formData, setFormData] = useState<CreateInstanceRequest>({
     name: '',
     description: '',
@@ -880,6 +884,20 @@ const InstanceManagerPage: React.FC = () => {
   const handleCreateConfigCancel = () => {
     setShowCreateConfigDialog(false)
     setCreateConfigInfo(null)
+  }
+
+  // 打开启动命令帮助模态框
+  const handleOpenStartCommandHelpModal = () => {
+    setShowStartCommandHelpModal(true)
+    setTimeout(() => setStartCommandHelpModalAnimating(true), 10)
+  }
+
+  // 关闭启动命令帮助模态框
+  const handleCloseStartCommandHelpModal = () => {
+    setStartCommandHelpModalAnimating(false)
+    setTimeout(() => {
+      setShowStartCommandHelpModal(false)
+    }, 300)
   }
 
   // 编辑实例
@@ -1704,9 +1722,19 @@ const InstanceManagerPage: React.FC = () => {
               </div>
               
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  启动命令 *
-                </label>
+                <div className="flex items-center space-x-2 mb-1">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    启动命令 *
+                  </label>
+                  <button
+                    type="button"
+                    onClick={handleOpenStartCommandHelpModal}
+                    className="p-1 text-gray-400 hover:text-blue-500 dark:text-gray-500 dark:hover:text-blue-400 transition-colors rounded-full hover:bg-gray-100 dark:hover:bg-gray-700"
+                    title="查看启动命令帮助"
+                  >
+                    <HelpCircle className="w-4 h-4" />
+                  </button>
+                </div>
                 <input
                   type="text"
                   value={formData.startCommand}
@@ -1822,9 +1850,19 @@ const InstanceManagerPage: React.FC = () => {
               </div>
               
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  启动命令
-                </label>
+                <div className="flex items-center space-x-2 mb-1">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    启动命令
+                  </label>
+                  <button
+                    type="button"
+                    onClick={handleOpenStartCommandHelpModal}
+                    className="p-1 text-gray-400 hover:text-blue-500 dark:text-gray-500 dark:hover:text-blue-400 transition-colors rounded-full hover:bg-gray-100 dark:hover:bg-gray-700"
+                    title="查看启动命令帮助"
+                  >
+                    <HelpCircle className="w-4 h-4" />
+                  </button>
+                </div>
                 <input
                   type="text"
                   value={selectedMarketInstance.command}
@@ -1896,6 +1934,68 @@ const InstanceManagerPage: React.FC = () => {
         onConfirm={handleConfirmDelete}
         onCancel={handleCancelDelete}
       />
+
+      {/* 启动命令帮助模态框 */}
+      {showStartCommandHelpModal && (
+        <div className={`fixed inset-0 bg-black/50 flex items-center justify-center z-50 transition-opacity duration-300 ${
+          startCommandHelpModalAnimating ? 'opacity-100' : 'opacity-0'
+        }`}>
+          <div className={`bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-2xl mx-4 transform transition-all duration-300 ${
+            startCommandHelpModalAnimating ? 'scale-100 opacity-100' : 'scale-95 opacity-0'
+          }`}>
+            <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center space-x-2">
+                <HelpCircle className="w-5 h-5 text-blue-500" />
+                <span>启动命令帮助</span>
+              </h3>
+              <button
+                onClick={handleCloseStartCommandHelpModal}
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6">
+              <div className="space-y-4">
+                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                  <h4 className="text-md font-semibold text-blue-800 dark:text-blue-200 mb-2">💡 基本说明</h4>
+                  <p className="text-blue-700 dark:text-blue-300 text-sm leading-relaxed">
+                    执行脚本或二进制文件：Windows使用反斜杠<code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">.\</code> Linux使用正斜杠<code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">./</code>
+                  </p>
+                </div>
+
+                <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
+                  <h4 className="text-md font-semibold text-green-800 dark:text-green-200 mb-2">🚀 启动流程</h4>
+                  <p className="text-green-700 dark:text-green-300 text-sm leading-relaxed">
+                    启动后面板将会在您填写的工作目录下创建终端并执行您预先设置好的启动命令进行启动，若有问题您可以看到原生报错输出。
+                  </p>
+                </div>
+
+                <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
+                  <h4 className="text-md font-semibold text-yellow-800 dark:text-yellow-200 mb-2">⚠️ 特别提醒</h4>
+                  <p className="text-yellow-700 dark:text-yellow-300 text-sm leading-relaxed">
+                    若您是在游戏部署中的steamcmd部署的游戏，在安装时面板已经默认填写了实例市场的启动命令，这些命令是经过人工验证可以开服的，您一般不需要修改，保持默认即可。
+                  </p>
+                  <p className="text-yellow-700 dark:text-yellow-300 text-sm leading-relaxed mt-2">
+                    若您发现是none则代表无启动命令，可能是此游戏目前人工没有测试出来的启动命令，您需要自行花费时间摸索和搜寻。
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end p-6 border-t border-gray-200 dark:border-gray-700">
+              <button
+                onClick={handleCloseStartCommandHelpModal}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors flex items-center space-x-2"
+              >
+                <CheckCircle className="w-4 h-4" />
+                <span>我知道了</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
