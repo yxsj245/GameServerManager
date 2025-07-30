@@ -5,6 +5,7 @@ import archiver from 'archiver'
 import unzipper from 'unzipper'
 import * as tar from 'tar'
 import * as zlib from 'zlib'
+import yauzl from 'yauzl'
 import { taskManager, Task } from './taskManager.js'
 
 export class CompressionWorker {
@@ -270,6 +271,25 @@ export class CompressionWorker {
   }
 
   private async extractZip(taskId: string, archivePath: string, targetPath: string) {
+    // 首先尝试使用unzipper
+    try {
+      await this.extractZipWithUnzipper(taskId, archivePath, targetPath)
+    } catch (unzipperError: any) {
+      taskManager.updateTask(taskId, {
+        message: `unzipper解压失败，尝试备用方案: ${unzipperError.message}`,
+        progress: 10
+      })
+      
+      // 如果unzipper失败，尝试使用yauzl
+      try {
+        await this.extractZipWithYauzl(taskId, archivePath, targetPath)
+      } catch (yauzlError: any) {
+        throw new Error(`所有解压方案都失败了。unzipper错误: ${unzipperError.message}; yauzl错误: ${yauzlError.message}`)
+      }
+    }
+  }
+
+  private async extractZipWithUnzipper(taskId: string, archivePath: string, targetPath: string) {
     await new Promise<void>((resolve, reject) => {
       let extractedFiles = 0
       let totalFiles = 0
@@ -321,6 +341,96 @@ export class CompressionWorker {
 
       stream.on('error', (err) => {
         reject(err)
+      })
+    })
+  }
+
+  private async extractZipWithYauzl(taskId: string, archivePath: string, targetPath: string) {
+    await new Promise<void>((resolve, reject) => {
+      yauzl.open(archivePath, { lazyEntries: true }, (err, zipfile) => {
+        if (err) {
+          reject(err)
+          return
+        }
+
+        if (!zipfile) {
+          reject(new Error('无法打开ZIP文件'))
+          return
+        }
+
+        let extractedFiles = 0
+        const totalFiles = zipfile.entryCount
+
+        taskManager.updateTask(taskId, {
+          message: `使用备用方案解压，共 ${totalFiles} 个条目`,
+          progress: 20
+        })
+
+        zipfile.readEntry()
+
+        zipfile.on('entry', (entry) => {
+          const fileName = entry.fileName
+          const filePath = path.join(targetPath, fileName)
+
+          // 跳过目录条目或以/结尾的条目
+          if (/\/$/.test(fileName)) {
+            // 创建目录
+            fs.mkdir(filePath, { recursive: true }).then(() => {
+              zipfile.readEntry()
+            }).catch((error) => {
+              console.error(`创建目录失败: ${filePath}`, error)
+              zipfile.readEntry()
+            })
+            return
+          }
+
+          // 确保文件所在的目录存在
+          const fileDir = path.dirname(filePath)
+          fs.mkdir(fileDir, { recursive: true }).then(() => {
+            zipfile.openReadStream(entry, (err, readStream) => {
+              if (err) {
+                console.error(`打开文件流失败: ${fileName}`, err)
+                zipfile.readEntry()
+                return
+              }
+
+              if (!readStream) {
+                console.error(`无法获取文件流: ${fileName}`)
+                zipfile.readEntry()
+                return
+              }
+
+              const writeStream = createWriteStream(filePath)
+              readStream.pipe(writeStream)
+
+              writeStream.on('close', () => {
+                extractedFiles++
+                const progress = Math.floor((extractedFiles / totalFiles) * 70) + 20
+                taskManager.updateTask(taskId, {
+                  message: `正在解压... (${extractedFiles}/${totalFiles})`,
+                  progress: Math.min(95, progress)
+                })
+                zipfile.readEntry()
+              })
+
+              writeStream.on('error', (error) => {
+                console.error(`写入文件失败: ${filePath}`, error)
+                zipfile.readEntry()
+              })
+            })
+          }).catch((error) => {
+            console.error(`创建目录失败: ${fileDir}`, error)
+            zipfile.readEntry()
+          })
+        })
+
+        zipfile.on('end', () => {
+          resolve()
+        })
+
+        zipfile.on('error', (error) => {
+          reject(error)
+        })
       })
     })
   }
