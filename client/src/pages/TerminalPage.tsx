@@ -20,7 +20,8 @@ import {
   Check,
   Folder,
   FileText,
-  FolderOpen
+  FolderOpen,
+  HelpCircle
 } from 'lucide-react'
 import '@xterm/xterm/css/xterm.css'
 
@@ -46,6 +47,8 @@ const TerminalPage: React.FC = () => {
   const [sessionsLoaded, setSessionsLoaded] = useState(false)
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [createModalAnimating, setCreateModalAnimating] = useState(false)
+  const [showHelpModal, setShowHelpModal] = useState(false)
+  const [helpModalAnimating, setHelpModalAnimating] = useState(false)
   const [createModalData, setCreateModalData] = useState({
     name: '',
     workingDirectory: '',
@@ -132,6 +135,22 @@ const TerminalPage: React.FC = () => {
         enableStreamForward: false,
         programPath: ''
       })
+    }, 300) // 300ms 动画时长
+  }, [])
+
+  // 打开帮助模态框
+  const openHelpModal = useCallback(() => {
+    setShowHelpModal(true)
+    // 延迟设置动画状态，确保DOM已渲染
+    setTimeout(() => setHelpModalAnimating(true), 10)
+  }, [])
+
+  // 关闭帮助模态框
+  const closeHelpModal = useCallback(() => {
+    setHelpModalAnimating(false)
+    // 等待淡出动画完成后再隐藏模态框
+    setTimeout(() => {
+      setShowHelpModal(false)
     }, 300) // 300ms 动画时长
   }, [])
 
@@ -1577,6 +1596,13 @@ const TerminalPage: React.FC = () => {
                 </div>
                 
                 <div className="flex items-center space-x-2">
+                  <button
+                    onClick={openHelpModal}
+                    className="p-2 text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+                    title="命令帮助"
+                  >
+                    <HelpCircle className="w-4 h-4" />
+                  </button>
                   {!isMobile && (
                     <div className="text-xs text-gray-400 font-mono">
                       {activeSessionId}
@@ -1719,6 +1745,224 @@ const TerminalPage: React.FC = () => {
                   className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
                 >
                   创建终端
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* 帮助模态框 */}
+      {showHelpModal && (
+        <div 
+          className={`fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 transition-opacity duration-300 ${
+            helpModalAnimating ? 'opacity-100' : 'opacity-0'
+          }`}
+        >
+          <div 
+            className={`bg-gray-800 rounded-lg shadow-xl w-full max-w-4xl max-h-[80vh] overflow-hidden transform transition-all duration-300 ${
+              helpModalAnimating 
+                ? 'opacity-100 scale-100 translate-y-0' 
+                : 'opacity-0 scale-95 translate-y-4'
+            }`}
+          >
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-lg font-semibold text-white">终端命令帮助</h3>
+                <button
+                  onClick={closeHelpModal}
+                  className="text-gray-400 hover:text-white transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              
+              <div className="overflow-y-auto max-h-[60vh] space-y-6">
+                {/* 基础命令 */}
+                <div>
+                  <h4 className="text-md font-semibold text-blue-400 mb-3">基础命令</h4>
+                  <div className="space-y-2">
+                    <div className="bg-gray-700/50 rounded-lg p-3">
+                      <div className="flex items-start space-x-3">
+                        <code className="text-green-400 font-mono text-sm min-w-0 flex-shrink-0">ls / dir</code>
+                        <span className="text-gray-300 text-sm">列出当前目录下的文件和文件夹</span>
+                      </div>
+                    </div>
+                    <div className="bg-gray-700/50 rounded-lg p-3">
+                      <div className="flex items-start space-x-3">
+                        <code className="text-green-400 font-mono text-sm min-w-0 flex-shrink-0">cd [目录]</code>
+                        <span className="text-gray-300 text-sm">切换到指定目录</span>
+                      </div>
+                    </div>
+                    <div className="bg-gray-700/50 rounded-lg p-3">
+                      <div className="flex items-start space-x-3">
+                        <code className="text-green-400 font-mono text-sm min-w-0 flex-shrink-0">pwd</code>
+                        <span className="text-gray-300 text-sm">显示当前工作目录的完整路径</span>
+                      </div>
+                    </div>
+                    <div className="bg-gray-700/50 rounded-lg p-3">
+                      <div className="flex items-start space-x-3">
+                        <code className="text-green-400 font-mono text-sm min-w-0 flex-shrink-0">clear / cls</code>
+                        <span className="text-gray-300 text-sm">清空终端屏幕</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 文件操作 */}
+                <div>
+                  <h4 className="text-md font-semibold text-blue-400 mb-3">文件操作</h4>
+                  <div className="space-y-2">
+                    <div className="bg-gray-700/50 rounded-lg p-3">
+                      <div className="flex items-start space-x-3">
+                        <code className="text-green-400 font-mono text-sm min-w-0 flex-shrink-0">cat [文件]</code>
+                        <span className="text-gray-300 text-sm">显示文件内容</span>
+                      </div>
+                    </div>
+                    <div className="bg-gray-700/50 rounded-lg p-3">
+                      <div className="flex items-start space-x-3">
+                        <code className="text-green-400 font-mono text-sm min-w-0 flex-shrink-0">cp / copy [源] [目标]</code>
+                        <span className="text-gray-300 text-sm">复制文件或目录</span>
+                      </div>
+                    </div>
+                    <div className="bg-gray-700/50 rounded-lg p-3">
+                      <div className="flex items-start space-x-3">
+                        <code className="text-green-400 font-mono text-sm min-w-0 flex-shrink-0">mv / move [源] [目标]</code>
+                        <span className="text-gray-300 text-sm">移动或重命名文件</span>
+                      </div>
+                    </div>
+                    <div className="bg-gray-700/50 rounded-lg p-3">
+                      <div className="flex items-start space-x-3">
+                        <code className="text-green-400 font-mono text-sm min-w-0 flex-shrink-0">rm / del [文件]</code>
+                        <span className="text-gray-300 text-sm">删除文件</span>
+                      </div>
+                    </div>
+                    <div className="bg-gray-700/50 rounded-lg p-3">
+                      <div className="flex items-start space-x-3">
+                        <code className="text-green-400 font-mono text-sm min-w-0 flex-shrink-0">mkdir [目录名]</code>
+                        <span className="text-gray-300 text-sm">创建新目录</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 系统信息 */}
+                <div>
+                  <h4 className="text-md font-semibold text-blue-400 mb-3">系统信息</h4>
+                  <div className="space-y-2">
+                    <div className="bg-gray-700/50 rounded-lg p-3">
+                      <div className="flex items-start space-x-3">
+                        <code className="text-green-400 font-mono text-sm min-w-0 flex-shrink-0">ps / tasklist</code>
+                        <span className="text-gray-300 text-sm">显示正在运行的进程</span>
+                      </div>
+                    </div>
+                    <div className="bg-gray-700/50 rounded-lg p-3">
+                      <div className="flex items-start space-x-3">
+                        <code className="text-green-400 font-mono text-sm min-w-0 flex-shrink-0">top / htop</code>
+                        <span className="text-gray-300 text-sm">实时显示系统进程和资源使用情况</span>
+                      </div>
+                    </div>
+                    <div className="bg-gray-700/50 rounded-lg p-3">
+                      <div className="flex items-start space-x-3">
+                        <code className="text-green-400 font-mono text-sm min-w-0 flex-shrink-0">df / fsutil</code>
+                        <span className="text-gray-300 text-sm">显示磁盘空间使用情况</span>
+                      </div>
+                    </div>
+                    <div className="bg-gray-700/50 rounded-lg p-3">
+                      <div className="flex items-start space-x-3">
+                        <code className="text-green-400 font-mono text-sm min-w-0 flex-shrink-0">whoami</code>
+                        <span className="text-gray-300 text-sm">显示当前用户名</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 网络命令 */}
+                <div>
+                  <h4 className="text-md font-semibold text-blue-400 mb-3">网络命令</h4>
+                  <div className="space-y-2">
+                    <div className="bg-gray-700/50 rounded-lg p-3">
+                      <div className="flex items-start space-x-3">
+                        <code className="text-green-400 font-mono text-sm min-w-0 flex-shrink-0">ping [主机]</code>
+                        <span className="text-gray-300 text-sm">测试网络连接</span>
+                      </div>
+                    </div>
+                    <div className="bg-gray-700/50 rounded-lg p-3">
+                      <div className="flex items-start space-x-3">
+                        <code className="text-green-400 font-mono text-sm min-w-0 flex-shrink-0">curl [URL]</code>
+                        <span className="text-gray-300 text-sm">发送HTTP请求</span>
+                      </div>
+                    </div>
+                    <div className="bg-gray-700/50 rounded-lg p-3">
+                      <div className="flex items-start space-x-3">
+                        <code className="text-green-400 font-mono text-sm min-w-0 flex-shrink-0">wget [URL]</code>
+                        <span className="text-gray-300 text-sm">下载文件</span>
+                      </div>
+                    </div>
+                    <div className="bg-gray-700/50 rounded-lg p-3">
+                      <div className="flex items-start space-x-3">
+                        <code className="text-green-400 font-mono text-sm min-w-0 flex-shrink-0">netstat</code>
+                        <span className="text-gray-300 text-sm">显示网络连接状态</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 快捷键 */}
+                <div>
+                  <h4 className="text-md font-semibold text-blue-400 mb-3">常用快捷键</h4>
+                  <div className="space-y-2">
+                    <div className="bg-gray-700/50 rounded-lg p-3">
+                      <div className="flex items-start space-x-3">
+                        <code className="text-yellow-400 font-mono text-sm min-w-0 flex-shrink-0">Ctrl + C</code>
+                        <span className="text-gray-300 text-sm">中断当前运行的命令</span>
+                      </div>
+                    </div>
+                    <div className="bg-gray-700/50 rounded-lg p-3">
+                      <div className="flex items-start space-x-3">
+                        <code className="text-yellow-400 font-mono text-sm min-w-0 flex-shrink-0">Ctrl + Z</code>
+                        <span className="text-gray-300 text-sm">暂停当前进程</span>
+                      </div>
+                    </div>
+                    <div className="bg-gray-700/50 rounded-lg p-3">
+                      <div className="flex items-start space-x-3">
+                        <code className="text-yellow-400 font-mono text-sm min-w-0 flex-shrink-0">Ctrl + L</code>
+                        <span className="text-gray-300 text-sm">清空屏幕（等同于clear命令）</span>
+                      </div>
+                    </div>
+                    <div className="bg-gray-700/50 rounded-lg p-3">
+                      <div className="flex items-start space-x-3">
+                        <code className="text-yellow-400 font-mono text-sm min-w-0 flex-shrink-0">↑ / ↓</code>
+                        <span className="text-gray-300 text-sm">浏览命令历史</span>
+                      </div>
+                    </div>
+                    <div className="bg-gray-700/50 rounded-lg p-3">
+                      <div className="flex items-start space-x-3">
+                        <code className="text-yellow-400 font-mono text-sm min-w-0 flex-shrink-0">Tab</code>
+                        <span className="text-gray-300 text-sm">自动补全命令或文件名</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 提示 */}
+                <div className="bg-blue-900/30 border border-blue-500/30 rounded-lg p-4">
+                  <h4 className="text-md font-semibold text-blue-400 mb-2">💡 提示</h4>
+                  <ul className="text-gray-300 text-sm space-y-1">
+                    <li>• 使用 <code className="text-green-400 bg-gray-700 px-1 rounded">命令 --help</code> 或 <code className="text-green-400 bg-gray-700 px-1 rounded">man 命令</code> 查看命令的详细帮助</li>
+                    <li>• 在Windows系统中，列出文件使用 <code className="text-green-400 bg-gray-700 px-1 rounded">dir</code> 执行文件使用反斜杠 <code className="text-green-400 bg-gray-700 px-1 rounded">.\ </code>Linux中使用 <code className="text-green-400 bg-gray-700 px-1 rounded">./</code></li>
+                    <li>• 可以使用 <code className="text-green-400 bg-gray-700 px-1 rounded">history</code> 命令查看命令历史</li>
+                    <li>• 使用 <code className="text-green-400 bg-gray-700 px-1 rounded">alias</code> 命令创建命令别名</li>
+                  </ul>
+                </div>
+              </div>
+              
+              <div className="flex justify-end mt-6">
+                <button
+                  onClick={closeHelpModal}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+                >
+                  关闭
                 </button>
               </div>
             </div>
