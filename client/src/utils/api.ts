@@ -491,6 +491,10 @@ class ApiClient {
     return this.get('/game-deployment/games')
   }
 
+  async checkGameMemory(gameKey: string) {
+    return this.post('/game-deployment/check-memory', { gameKey })
+  }
+
   async installGame(data: {
     gameKey: string
     gameName: string

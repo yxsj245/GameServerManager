@@ -213,6 +213,81 @@ router.get('/games', authenticateToken, async (req: Request, res: Response) => {
   }
 })
 
+// 检查游戏内存需求
+router.post('/check-memory', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const { gameKey } = req.body
+
+    if (!gameKey) {
+      return res.status(400).json({
+        success: false,
+        error: '缺少游戏标识',
+        message: '游戏标识为必填项'
+      })
+    }
+
+    let memoryWarning = null
+
+    try {
+      // 读取游戏配置文件
+      const baseDir = process.cwd()
+      const possiblePaths = [
+        path.join(baseDir, 'data', 'games', 'installgame.json'),
+        path.join(baseDir, 'server', 'data', 'games', 'installgame.json'),
+      ]
+
+      let gamesFilePath = ''
+      for (const possiblePath of possiblePaths) {
+        try {
+          fsSync.accessSync(possiblePath, fsSync.constants.F_OK)
+          gamesFilePath = possiblePath
+          break
+        } catch {
+          // 继续尝试下一个路径
+        }
+      }
+
+      if (gamesFilePath) {
+        const gamesData = await fs.readFile(gamesFilePath, 'utf-8')
+        const games = JSON.parse(gamesData)
+        const gameInfo = games[gameKey]
+
+        if (gameInfo && gameInfo.memory) {
+          const requiredMemoryGB = gameInfo.memory
+          const systemMemoryGB = Math.round(os.totalmem() / (1024 * 1024 * 1024))
+
+          logger.info(`内存检测: 游戏 ${gameKey} 需要 ${requiredMemoryGB}GB，系统总内存 ${systemMemoryGB}GB`)
+
+          if (systemMemoryGB < requiredMemoryGB) {
+            memoryWarning = {
+              required: requiredMemoryGB,
+              available: systemMemoryGB,
+              message: `警告：${gameInfo.game_nameCN || gameKey} 推荐至少 ${requiredMemoryGB}GB 内存，但系统只有 ${systemMemoryGB}GB。继续安装可能会导致性能问题或无法正常运行。`
+            }
+            logger.warn(`内存不足警告: ${memoryWarning.message}`)
+          }
+        }
+      }
+    } catch (error) {
+      logger.warn('检查游戏内存需求时出错:', error)
+      // 内存检查失败不应阻止安装，继续执行
+    }
+
+    res.json({
+      success: true,
+      memoryWarning
+    })
+
+  } catch (error: any) {
+    logger.error('检查游戏内存需求失败:', error)
+    res.status(500).json({
+      success: false,
+      error: '检查内存需求失败',
+      message: error.message
+    })
+  }
+})
+
 // 安装游戏
 router.post('/install', authenticateToken, async (req: Request, res: Response) => {
   try {
@@ -243,7 +318,7 @@ router.post('/install', authenticateToken, async (req: Request, res: Response) =
         message: '非匿名模式下需要提供Steam用户名和密码'
       })
     }
-    
+
     // 检查安装路径是否存在
     try {
       await fs.access(installPath)

@@ -5,7 +5,8 @@
         "tip": "游戏端口：8211 UDP，配置文件位置：游戏根目录，存档位置：Pal/Saved/SaveGames，",
         "image":"https://shared.cdn.queniuqe.com/store_item_assets/steam/apps/1623730/44e7cf48b38e3ace008e9f49c316f8cd949f7918/header_schinese.jpg",
         "url":"https://store.steampowered.com/app/1623730/Palworld/",
-        "system":["Windows","Linux"]
+        "system":["Windows","Linux"],
+        "memory": 4
     },
     "SCUM": {
 		"game_nameCN": "人渣",
@@ -13,15 +14,17 @@
 		"tip": "Windows需要开启输出流转发\\SCUM\\Binaries\\Win64\\SCUMServer.exe -Port=7777 -QueryPort=27015 -MaxPlayers=32 -log",
 		"image":"https://shared.cdn.queniuqe.com/store_item_assets/steam/apps/513710/dc41d8c9bad51f61f618419b8e510f0b4617ad42/header_schinese.jpg",
         "url":"https://store.steampowered.com/app/513710",
-        "system":["Windows"]
+        "system":["Windows"],
+        "memory": 6
 	},
     "Rust": {
         "game_nameCN": "腐蚀",
         "appid": "258550",
-        "tip": "游戏端口：28015 UDP, 28016 TCP，配置文件位置：Serveridentity，存档位置：Serveridentity，温馨提示：服务器第一次启动时会生成地图，配置较低非固态盘可能需要很长一段时间，请确保服务器有足够的内存（推荐至少8GB）",
+        "tip": "游戏端口：28015 UDP, 28016 TCP，配置文件位置：Serveridentity，存档位置：Serveridentity，温馨提示：服务器第一次启动时会生成地图，配置较低非固态盘可能需要很长一段时间，请确保服务器有足够的内存（推荐至少12GB）",
         "image":"https://shared.cdn.queniuqe.com/store_item_assets/steam/apps/252490/header.jpg",
         "url":"https://store.steampowered.com/app/252490/Rust/",
-        "system":["Windows","Linux"]
+        "system":["Windows","Linux"],
+        "memory": 12
     },
     "Satisfactory": {
         "game_nameCN": "幸福工厂",
@@ -454,7 +457,8 @@
 		"tip": "",
 		"image":"https://shared.cdn.queniuqe.com/store_item_assets/steam/apps/1307550/92ed05d6cc21460e00cd5671520b8969a66a3c6f/header_alt_assets_10_schinese.jpg",
         "url":"https://store.steampowered.com/app/1307550/Craftopia/",
-        "system":["Windows","Linux"]
+        "system":["Windows","Linux"],
+        "memory": 8
 	},
 	"Night of the Dead": {
 		"game_nameCN": "死亡之夜",

@@ -145,6 +145,17 @@ const GameDeploymentPage: React.FC = () => {
   const [showCompatibilityModal, setShowCompatibilityModal] = useState(false)
   const [compatibilityModalAnimating, setCompatibilityModalAnimating] = useState(false)
   const [pendingGameInstall, setPendingGameInstall] = useState<{ key: string; info: GameInfo } | null>(null)
+
+  // 内存警告对话框状态
+  const [showMemoryWarningModal, setShowMemoryWarningModal] = useState(false)
+  const [memoryWarningModalAnimating, setMemoryWarningModalAnimating] = useState(false)
+  const [memoryWarningInfo, setMemoryWarningInfo] = useState<{
+    required: number
+    available: number
+    message: string
+    gameKey: string
+    gameInfo: GameInfo
+  } | null>(null)
   
   // 开服文档相关状态
   const [showDocsModal, setShowDocsModal] = useState(false)
@@ -1128,7 +1139,7 @@ const GameDeploymentPage: React.FC = () => {
   }, [])
 
   // 打开安装对话框
-  const handleInstallGame = (gameKey: string, gameInfo: GameInfo) => {
+  const handleInstallGame = async (gameKey: string, gameInfo: GameInfo) => {
     // 检查游戏是否支持当前平台
     if (gameInfo.supportedOnCurrentPlatform === false) {
       addNotification({
@@ -1138,16 +1149,48 @@ const GameDeploymentPage: React.FC = () => {
       })
       return
     }
-    
+
     // 检查面板是否兼容当前平台
     if (gameInfo.panelCompatibleOnCurrentPlatform === false) {
       // 显示兼容性确认对话框
       setPendingGameInstall({ key: gameKey, info: gameInfo })
       setShowCompatibilityModal(true)
-      setTimeout(() => setCompatibilityModalAnimating(true), 10)
+      // 使用requestAnimationFrame确保DOM渲染完成后再触发动画
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          setCompatibilityModalAnimating(true)
+        })
+      })
       return
     }
-    
+
+    // 检查内存需求
+    try {
+      const memoryCheckResponse = await apiClient.checkGameMemory(gameKey)
+      const memoryWarning = (memoryCheckResponse as any).memoryWarning
+      if (memoryCheckResponse.success && memoryWarning) {
+        // 显示内存警告对话框
+        setMemoryWarningInfo({
+          required: memoryWarning.required,
+          available: memoryWarning.available,
+          message: memoryWarning.message,
+          gameKey,
+          gameInfo
+        })
+        setShowMemoryWarningModal(true)
+        // 使用requestAnimationFrame确保DOM渲染完成后再触发动画
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            setMemoryWarningModalAnimating(true)
+          })
+        })
+        return
+      }
+    } catch (error) {
+      console.warn('检查内存需求失败，继续安装流程:', error)
+      // 内存检查失败不应阻止安装流程
+    }
+
     // 直接打开安装对话框
     openInstallModal(gameKey, gameInfo)
   }
@@ -1158,7 +1201,12 @@ const GameDeploymentPage: React.FC = () => {
     setInstanceName(gameInfo.game_nameCN)
     setInstallPath('')
     setShowInstallModal(true)
-    setTimeout(() => setInstallModalAnimating(true), 10)
+    // 使用requestAnimationFrame确保DOM渲染完成后再触发动画
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        setInstallModalAnimating(true)
+      })
+    })
   }
 
   // 关闭安装对话框
@@ -1176,6 +1224,24 @@ const GameDeploymentPage: React.FC = () => {
       setShowCompatibilityModal(false)
       setPendingGameInstall(null)
     }, 300)
+  }
+
+  // 关闭内存警告对话框
+  const handleCloseMemoryWarningModal = () => {
+    setMemoryWarningModalAnimating(false)
+    setTimeout(() => {
+      setShowMemoryWarningModal(false)
+      setMemoryWarningInfo(null)
+    }, 300)
+  }
+
+  // 确认继续安装（忽略内存警告）
+  const handleContinueInstallation = () => {
+    if (memoryWarningInfo) {
+      handleCloseMemoryWarningModal()
+      // 打开安装对话框
+      openInstallModal(memoryWarningInfo.gameKey, memoryWarningInfo.gameInfo)
+    }
   }
 
   // 确认继续安装不兼容的游戏
@@ -1343,17 +1409,10 @@ const GameDeploymentPage: React.FC = () => {
           steamPassword: useAnonymous ? undefined : steamPassword.trim(),
           steamcmdCommand: fullCommand
         })
-      
+
       if (response.success && response.data?.terminalSessionId) {
-        addNotification({
-          type: 'success',
-          title: '安装已启动',
-          message: `${selectedGame.info.game_nameCN} 安装已开始，即将跳转到终端页面...`
-        })
-        // 跳转到终端页面，并将会话ID作为参数传递
-        setTimeout(() => {
-          navigate(`/terminal?sessionId=${response.data.terminalSessionId}`)
-        }, 1500) // 延迟以便用户看到通知
+        // 直接跳转到终端页面
+        proceedWithInstallation(response.data)
       } else {
         throw new Error(response.message || '安装失败，未返回终端会话ID')
       }
@@ -1365,6 +1424,19 @@ const GameDeploymentPage: React.FC = () => {
         message: error.message || '无法开始游戏安装'
       })
     }
+  }
+
+  // 继续安装流程（显示成功通知并跳转）
+  const proceedWithInstallation = (installData: any) => {
+    addNotification({
+      type: 'success',
+      title: '安装已启动',
+      message: `${selectedGame?.info.game_nameCN} 安装已开始，即将跳转到终端页面...`
+    })
+    // 跳转到终端页面，并将会话ID作为参数传递
+    setTimeout(() => {
+      navigate(`/terminal?sessionId=${installData.terminalSessionId}`)
+    }, 1500) // 延迟以便用户看到通知
   }
 
   // 选择安装路径
@@ -3884,6 +3956,85 @@ const GameDeploymentPage: React.FC = () => {
               >
                 <CheckCircle className="w-4 h-4" />
                 <span>我知道了</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 内存警告对话框 */}
+      {showMemoryWarningModal && (
+        <div className={`fixed inset-0 bg-black flex items-center justify-center z-50 p-4 transition-opacity duration-300 ${
+          memoryWarningModalAnimating ? 'bg-opacity-50' : 'bg-opacity-0'
+        }`}>
+          <div className={`bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full transform transition-all duration-300 ${
+            memoryWarningModalAnimating ? 'scale-100 opacity-100' : 'scale-95 opacity-0'
+          }`}>
+            <div className="p-6">
+              <div className="flex items-center space-x-3 mb-4">
+                <div className="flex-shrink-0">
+                  <AlertCircle className="w-8 h-8 text-orange-500" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                    内存不足警告
+                  </h3>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    系统内存可能不足以运行此游戏
+                  </p>
+                </div>
+              </div>
+
+              {memoryWarningInfo && (
+                <div className="space-y-4">
+                  <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg p-4">
+                    <p className="text-sm text-orange-800 dark:text-orange-200 leading-relaxed">
+                      {memoryWarningInfo.message}
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
+                      <div className="text-gray-600 dark:text-gray-400">推荐内存</div>
+                      <div className="text-lg font-semibold text-gray-900 dark:text-white">
+                        {memoryWarningInfo.required} GB
+                      </div>
+                    </div>
+                    <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
+                      <div className="text-gray-600 dark:text-gray-400">系统内存</div>
+                      <div className="text-lg font-semibold text-gray-900 dark:text-white">
+                        {memoryWarningInfo.available} GB
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                    <p className="text-sm text-blue-800 dark:text-blue-200">
+                      <strong>提示：</strong>您仍然可以继续安装，但可能会遇到以下问题：
+                    </p>
+                    <ul className="text-sm text-blue-700 dark:text-blue-300 mt-2 space-y-1 ml-4">
+                      <li>• 游戏服务器启动缓慢或失败</li>
+                      <li>• 运行过程中出现卡顿或崩溃</li>
+                      <li>• 系统整体性能下降</li>
+                    </ul>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end space-x-3 p-6 border-t border-gray-200 dark:border-gray-700">
+              <button
+                onClick={handleCloseMemoryWarningModal}
+                className="px-4 py-2 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-600 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-500 transition-colors"
+              >
+                取消安装
+              </button>
+              <button
+                onClick={handleContinueInstallation}
+                className="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg transition-colors flex items-center space-x-2"
+              >
+                <AlertCircle className="w-4 h-4" />
+                <span>继续安装</span>
               </button>
             </div>
           </div>
