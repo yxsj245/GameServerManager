@@ -9,6 +9,8 @@ panel/public/
 *.code-workspace
 .vscode
 .claude/*
+.augment/
+.trae/
 
 config.json
 instances.json
