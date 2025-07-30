@@ -14,7 +14,8 @@ import {
   Plus,
   Package,
   BookOpen,
-  RefreshCw
+  RefreshCw,
+  HelpCircle
 } from 'lucide-react'
 import { useNotificationStore } from '@/stores/notificationStore'
 import apiClient from '@/utils/api'
@@ -149,6 +150,10 @@ const GameDeploymentPage: React.FC = () => {
   const [showDocsModal, setShowDocsModal] = useState(false)
   const [docsModalAnimating, setDocsModalAnimating] = useState(false)
   const [selectedGameDocs, setSelectedGameDocs] = useState<GameInfo | null>(null)
+  
+  // 帮助模态框相关状态
+  const [showHelpModal, setShowHelpModal] = useState(false)
+  const [helpModalAnimating, setHelpModalAnimating] = useState(false)
   
   const socketRef = useRef<Socket | null>(null)
   const currentDownloadId = useRef<string | null>(null)
@@ -1228,6 +1233,20 @@ const GameDeploymentPage: React.FC = () => {
     }, 300)
   }
 
+  // 打开帮助模态框
+  const handleOpenHelpModal = () => {
+    setShowHelpModal(true)
+    setTimeout(() => setHelpModalAnimating(true), 10)
+  }
+
+  // 关闭帮助模态框
+  const handleCloseHelpModal = () => {
+    setHelpModalAnimating(false)
+    setTimeout(() => {
+      setShowHelpModal(false)
+    }, 300)
+  }
+
   // 创建整合包实例
   const createMrpackInstance = async () => {
     if (!mrpackInstanceName.trim() || !mrpackDeployResult) {
@@ -1653,11 +1672,20 @@ const GameDeploymentPage: React.FC = () => {
     <div className="space-y-6">
       {/* 页面标题 */}
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">游戏部署</h1>
-          <p className="text-gray-600 dark:text-gray-400 mt-1">
-            快速部署各种游戏服务器
-          </p>
+        <div className="flex items-center space-x-3">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">游戏部署</h1>
+            <p className="text-gray-600 dark:text-gray-400 mt-1">
+              快速部署各种游戏服务器
+            </p>
+          </div>
+          <button
+            onClick={handleOpenHelpModal}
+            className="p-2 text-gray-500 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400 transition-colors rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
+            title="查看帮助信息"
+          >
+            <HelpCircle className="w-5 h-5" />
+          </button>
         </div>
       </div>
 
@@ -3671,7 +3699,7 @@ const GameDeploymentPage: React.FC = () => {
                       面板兼容性警告
                     </h4>
                     <p className="text-sm text-orange-700 dark:text-orange-300">
-                      此游戏在您当前平台上，面板尚未适配，您将无法进行管理。但是您可以继续安装。
+                      此游戏在您当前平台上，面板尚未适配，您也许只能使用RCON进行管理，但无法使用终端管理进程。但是您可以继续安装。
                     </p>
                   </div>
                 </div>
@@ -3736,6 +3764,127 @@ const GameDeploymentPage: React.FC = () => {
                   sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
                 />
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 帮助模态框 */}
+      {showHelpModal && (
+        <div className={`fixed inset-0 bg-black/50 flex items-center justify-center z-50 transition-opacity duration-300 ${
+          helpModalAnimating ? 'opacity-100' : 'opacity-0'
+        }`}>
+          <div className={`bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-2xl mx-4 transform transition-all duration-300 ${
+            helpModalAnimating ? 'scale-100 opacity-100' : 'scale-95 opacity-0'
+          }`}>
+            <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center space-x-2">
+                <HelpCircle className="w-5 h-5 text-blue-500" />
+                <span>游戏部署帮助</span>
+              </h3>
+              <button
+                onClick={handleCloseHelpModal}
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="p-6 max-h-[70vh] overflow-y-auto">
+              <div className="space-y-6">
+                {/* 安装的游戏 */}
+                <div>
+                  <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-3 flex items-center space-x-2">
+                    <Server className="w-5 h-5 text-blue-500" />
+                    <span>安装的游戏</span>
+                  </h4>
+                  <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                    <p className="text-sm text-blue-800 dark:text-blue-200 leading-relaxed">
+                      受限于Steam游戏兼容平台，面板会自动根据您运行平台检测您当前兼容安装的游戏提供一键调用SteamCMD进行安装游戏的过程。
+                    </p>
+                  </div>
+                </div>
+
+                {/* 路径选择 */}
+                <div>
+                  <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-3 flex items-center space-x-2">
+                    <FolderOpen className="w-5 h-5 text-green-500" />
+                    <span>路径选择</span>
+                  </h4>
+                  <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4 space-y-3">
+                    <div>
+                      <p className="text-sm text-green-800 dark:text-green-200 leading-relaxed mb-2">
+                        <strong>容器环境：</strong>
+                      </p>
+                      <p className="text-sm text-green-700 dark:text-green-300 leading-relaxed ml-4">
+                        若您是将面板安装在容器当中，您应当确保正确设置了路径映射并将您的安装游戏安装在您已经映射的路径中（若使用路径映射您需要将映射的文件夹设置为777权限），若您没有调整容器映射路径，默认请将游戏安装在 <code className="bg-green-100 dark:bg-green-800 px-1 py-0.5 rounded text-xs">/home/steam/games</code> 路径下。
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-green-700 dark:text-green-300 leading-relaxed ml-4">
+                        末尾可以写文件夹，例如帕鲁 <code className="bg-green-100 dark:bg-green-800 px-1 py-0.5 rounded text-xs">/home/steam/games/pal</code> 游戏服务端文件将会在 <code className="bg-green-100 dark:bg-green-800 px-1 py-0.5 rounded text-xs">/home/steam/games/pal</code> 此文件夹下。
+                      </p>
+                    </div>
+                    <div className="pt-2 border-t border-green-200 dark:border-green-700">
+                      <p className="text-sm text-green-700 dark:text-green-300 leading-relaxed">
+                        <strong>非容器环境：</strong>
+                      </p>
+                      <p className="text-sm text-green-700 dark:text-green-300 leading-relaxed ml-4">
+                        若您面板安装在非容器环境下的Linux系统中，我们并不推荐这么做，一是因为您需要手动安装或编译游戏运行库，二是您需要手动创建非root用户才能符合一些游戏的运行规则。
+                      </p>
+                    </div>
+                    <div className="pt-2 border-t border-green-200 dark:border-green-700">
+                      <a
+                        href="https://docs.gsm.xiaozhuhouses.asia/%E9%83%A8%E7%BD%B2/Docker.html#%E5%B8%B8%E8%A7%81%E9%97%AE%E9%A2%98"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center space-x-1 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors"
+                      >
+                        <span>了解更多</span>
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 注意事项 */}
+                <div>
+                  <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-3 flex items-center space-x-2">
+                    <AlertCircle className="w-5 h-5 text-orange-500" />
+                    <span>注意事项</span>
+                  </h4>
+                  <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg p-4">
+                    <ul className="text-sm text-orange-800 dark:text-orange-200 space-y-2">
+                      <li className="flex items-start space-x-2">
+                        <span className="text-orange-500 mt-1">•</span>
+                        <span>安装前请确保有足够的磁盘空间</span>
+                      </li>
+                      <li className="flex items-start space-x-2">
+                        <span className="text-orange-500 mt-1">•</span>
+                        <span>某些游戏可能需要额外的运行时库支持</span>
+                      </li>
+                      <li className="flex items-start space-x-2">
+                        <span className="text-orange-500 mt-1">•</span>
+                        <span>安装过程中请保持网络连接稳定</span>
+                      </li>
+                      <li className="flex items-start space-x-2">
+                        <span className="text-orange-500 mt-1">•</span>
+                        <span>如遇到问题，请查看终端输出日志</span>
+                      </li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <div className="flex justify-end p-6 border-t border-gray-200 dark:border-gray-700">
+              <button
+                onClick={handleCloseHelpModal}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors flex items-center space-x-2"
+              >
+                <CheckCircle className="w-4 h-4" />
+                <span>我知道了</span>
+              </button>
             </div>
           </div>
         </div>
