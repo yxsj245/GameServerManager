@@ -21,7 +21,9 @@ const BrowserCompatibilityChecker: React.FC<BrowserCompatibilityCheckerProps> = 
       // 尝试创建WebSocket连接来进一步验证
       try {
         // 创建一个测试WebSocket连接（使用无效地址，只是为了测试构造函数）
-        const testWs = new WebSocket('ws://test-compatibility-check')
+        // 根据当前页面协议选择ws或wss
+        const protocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
+        const testWs = new WebSocket(`${protocol}test-compatibility-check`)
         testWs.close()
         return true
       } catch (error) {
