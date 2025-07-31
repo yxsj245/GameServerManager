@@ -11,6 +11,7 @@ panel/public/
 .claude/*
 .augment/
 .trae/
+.windsurf/
 
 config.json
 instances.json
