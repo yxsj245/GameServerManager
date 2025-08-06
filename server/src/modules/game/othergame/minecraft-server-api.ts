@@ -276,7 +276,7 @@ export class FileManager {
    * 运行forge/neoforge安装器
    */
   static async runForgeInstaller(jarPath: string, onLog?: LogCallback): Promise<void> {
-    return new Promise((resolve, reject) => {
+    return new Promise(async (resolve, reject) => {
       if (onLog) {
         onLog('检测到Forge/NeoForge安装器，正在执行静默安装...', 'info');
       }
@@ -286,11 +286,21 @@ export class FileManager {
         stdio: ['pipe', 'pipe', 'pipe']
       });
 
+      let installerCompleted = false;
+
       // 监听标准输出
       installerProcess.stdout?.on('data', (data: Buffer) => {
         const output = data.toString();
         if (onLog) {
           onLog(output, 'info');
+        }
+        
+        // 检测安装完成标志
+        if (output.includes('You can delete this installer file now if you wish')) {
+          installerCompleted = true;
+          if (onLog) {
+            onLog('Forge/NeoForge安装器安装完成，准备运行服务端...', 'success');
+          }
         }
       });
 
@@ -303,8 +313,20 @@ export class FileManager {
       });
 
       // 监听进程退出
-      installerProcess.on('close', (code: number | null) => {
-        if (code === 0) {
+      installerProcess.on('close', async (code: number | null) => {
+        if (code === 0 && installerCompleted) {
+          if (onLog) {
+            onLog('Forge/NeoForge安装器执行完成，开始运行服务端...', 'success');
+          }
+          
+          try {
+            // 根据操作系统运行相应的启动脚本
+            await this.runForgeServer(path.dirname(jarPath), onLog);
+            resolve();
+          } catch (error) {
+            reject(error);
+          }
+        } else if (code === 0) {
           if (onLog) {
             onLog('Forge/NeoForge安装器执行完成。', 'success');
           }
@@ -326,6 +348,116 @@ export class FileManager {
             onLog('Forge/NeoForge安装器运行超时，正在强制关闭...', 'warn');
           }
           installerProcess.kill('SIGKILL');
+          resolve();
+        }
+      }, 10 * 60 * 1000);
+    });
+  }
+
+  /**
+   * 运行forge/neoforge服务端直到EULA协议出现
+   */
+  static async runForgeServer(serverDir: string, onLog?: LogCallback): Promise<void> {
+    return new Promise((resolve, reject) => {
+      // 根据操作系统选择启动脚本
+      const isWindows = process.platform === 'win32';
+      const scriptName = isWindows ? 'run.bat' : 'run.sh';
+      const scriptPath = path.join(serverDir, scriptName);
+      
+      if (onLog) {
+        onLog(`正在运行${scriptName}启动脚本...`, 'info');
+      }
+      
+      // 检查启动脚本是否存在
+      if (!fs.existsSync(scriptPath)) {
+        if (onLog) {
+          onLog(`启动脚本${scriptName}不存在，跳过服务端运行`, 'warn');
+        }
+        resolve();
+        return;
+      }
+      
+      const serverProcess: ChildProcess = isWindows 
+        ? spawn('cmd', ['/c', scriptName], {
+            cwd: serverDir,
+            stdio: ['pipe', 'pipe', 'pipe']
+          })
+        : spawn('bash', [scriptName], {
+            cwd: serverDir,
+            stdio: ['pipe', 'pipe', 'pipe']
+          });
+
+      let hasEulaMessage = false;
+
+      // 监听标准输出
+      serverProcess.stdout?.on('data', (data: Buffer) => {
+        const output = data.toString();
+        if (onLog) {
+          onLog(output, 'info');
+        }
+        
+        // 检查是否出现EULA相关信息
+        if (output.toLowerCase().includes('eula') || 
+            output.toLowerCase().includes('you need to agree to the eula')) {
+          hasEulaMessage = true;
+          if (onLog) {
+            onLog('检测到EULA协议提示，正在关闭服务端...', 'info');
+          }
+          serverProcess.kill('SIGTERM');
+        }
+      });
+
+      // 监听标准错误
+      serverProcess.stderr?.on('data', (data: Buffer) => {
+        const output = data.toString();
+        if (onLog) {
+          onLog(output, 'error');
+        }
+        
+        if (output.toLowerCase().includes('eula')) {
+          hasEulaMessage = true;
+          if (onLog) {
+            onLog('检测到EULA协议提示，正在关闭服务端...', 'info');
+          }
+          serverProcess.kill('SIGTERM');
+        }
+      });
+
+      // 监听进程退出
+      serverProcess.on('close', (code: number | null) => {
+        if (hasEulaMessage) {
+          if (onLog) {
+            onLog('服务端已关闭，EULA协议检测完成。', 'success');
+          }
+          resolve();
+        } else if (code === 0) {
+          if (onLog) {
+            onLog('服务端正常退出。', 'success');
+          }
+          resolve();
+        } else {
+          if (onLog) {
+            onLog(`服务端退出，退出码: ${code}`, 'info');
+          }
+          resolve();
+        }
+      });
+
+      // 监听进程错误
+      serverProcess.on('error', (error: Error) => {
+        if (onLog) {
+          onLog(`启动服务端失败: ${error.message}`, 'error');
+        }
+        resolve(); // 不抛出错误，继续执行
+      });
+
+      // 设置超时（10分钟）
+      setTimeout(() => {
+        if (!serverProcess.killed) {
+          if (onLog) {
+            onLog('服务端运行超时，正在强制关闭...', 'warn');
+          }
+          serverProcess.kill('SIGKILL');
           resolve();
         }
       }, 10 * 60 * 1000);
