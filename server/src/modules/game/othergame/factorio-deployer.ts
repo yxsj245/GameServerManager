@@ -1,7 +1,7 @@
 import axios from 'axios';
 import express, { Request, Response } from 'express';
 import * as fs from 'fs-extra';
-import { promises as fsPromises } from 'fs';
+import { promises as fsPromises, existsSync } from 'fs';
 import { createWriteStream, createReadStream } from 'fs';
 import * as path from 'path';
 import * as os from 'os';
@@ -518,14 +518,14 @@ export class FactorioDeployer {
       // 检测Linux发行版并提供相应的安装命令
       try {
         const fs = require('fs');
-        if (fs.existsSync('/etc/debian_version')) {
+        if (existsSync('/etc/debian_version')) {
           console.log('  Ubuntu/Debian: sudo apt-get update && sudo apt-get install tar xz-utils p7zip-full');
-        } else if (fs.existsSync('/etc/redhat-release')) {
+        } else if (existsSync('/etc/redhat-release')) {
           console.log('  CentOS/RHEL: sudo yum install tar xz p7zip');
           console.log('  或 (较新版本): sudo dnf install tar xz p7zip');
-        } else if (fs.existsSync('/etc/arch-release')) {
+        } else if (existsSync('/etc/arch-release')) {
           console.log('  Arch Linux: sudo pacman -S tar xz p7zip');
-        } else if (fs.existsSync('/etc/alpine-release')) {
+        } else if (existsSync('/etc/alpine-release')) {
           console.log('  Alpine Linux: apk add tar xz p7zip');
         } else {
           console.log('  通用: 请使用系统包管理器安装 tar, xz-utils, p7zip');
@@ -734,11 +734,11 @@ export class FactorioDeployer {
         if (!isWindows) {
           try {
             const fs = require('fs');
-            if (fs.existsSync('/etc/debian_version')) {
+            if (existsSync('/etc/debian_version')) {
               installCmd = 'sudo apt-get update && sudo apt-get install tar xz-utils p7zip-full unzip';
-            } else if (fs.existsSync('/etc/redhat-release')) {
+            } else if (existsSync('/etc/redhat-release')) {
               installCmd = 'sudo yum install tar xz p7zip unzip (或使用 dnf)';
-            } else if (fs.existsSync('/etc/arch-release')) {
+            } else if (existsSync('/etc/arch-release')) {
               installCmd = 'sudo pacman -S tar xz p7zip unzip';
             } else {
               installCmd = '请使用系统包管理器安装 tar xz-utils p7zip unzip';

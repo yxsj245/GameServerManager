@@ -1,6 +1,6 @@
 import axios from 'axios';
 import * as fs from 'fs-extra';
-import { promises as fsPromises } from 'fs';
+import { promises as fsPromises, existsSync, readdirSync } from 'fs';
 import { createWriteStream } from 'fs';
 import * as path from 'path';
 import { spawn, ChildProcess } from 'child_process';
@@ -289,7 +289,7 @@ export class FileManager {
       let installerCompleted = false;
 
       // 监听标准输出
-      installerProcess.stdout?.on('data', (data: Buffer) => {
+      installerProcess.stdout?.on('data', async (data: Buffer) => {
         const output = data.toString();
         if (onLog) {
           onLog(output, 'info');
@@ -300,6 +300,30 @@ export class FileManager {
           installerCompleted = true;
           if (onLog) {
             onLog('Forge/NeoForge安装器安装完成，准备运行服务端...', 'success');
+          }
+          
+          // 立即运行服务端脚本，不等待安装器进程退出
+          try {
+            if (onLog) {
+              onLog(`开始调用runForgeServer，目录: ${path.dirname(jarPath)}`, 'info');
+            }
+            await this.runForgeServer(path.dirname(jarPath), onLog);
+            if (onLog) {
+              onLog('runForgeServer执行完成', 'success');
+            }
+            // 强制关闭安装器进程
+            if (!installerProcess.killed) {
+              installerProcess.kill('SIGTERM');
+            }
+            resolve();
+          } catch (error) {
+            if (onLog) {
+              onLog(`runForgeServer执行失败: ${error}`, 'error');
+            }
+            if (!installerProcess.killed) {
+              installerProcess.kill('SIGTERM');
+            }
+            reject(error);
           }
         }
       });
@@ -314,21 +338,17 @@ export class FileManager {
 
       // 监听进程退出
       installerProcess.on('close', async (code: number | null) => {
-        if (code === 0 && installerCompleted) {
+        // 如果已经在输出监听中处理了完成逻辑，则直接返回
+        if (installerCompleted) {
           if (onLog) {
-            onLog('Forge/NeoForge安装器执行完成，开始运行服务端...', 'success');
+            onLog('Forge/NeoForge安装器进程已退出。', 'info');
           }
-          
-          try {
-            // 根据操作系统运行相应的启动脚本
-            await this.runForgeServer(path.dirname(jarPath), onLog);
-            resolve();
-          } catch (error) {
-            reject(error);
-          }
-        } else if (code === 0) {
+          return;
+        }
+        
+        if (code === 0) {
           if (onLog) {
-            onLog('Forge/NeoForge安装器执行完成。', 'success');
+            onLog('Forge/NeoForge安装器执行完成，但未检测到完成标志。', 'warn');
           }
           resolve();
         } else {
@@ -365,16 +385,27 @@ export class FileManager {
       const scriptPath = path.join(serverDir, scriptName);
       
       if (onLog) {
-        onLog(`正在运行${scriptName}启动脚本...`, 'info');
+        onLog(`正在检查启动脚本: ${scriptPath}`, 'info');
       }
       
       // 检查启动脚本是否存在
-      if (!fs.existsSync(scriptPath)) {
+      if (!existsSync(scriptPath)) {
         if (onLog) {
-          onLog(`启动脚本${scriptName}不存在，跳过服务端运行`, 'warn');
+          onLog(`启动脚本${scriptName}不存在于目录${serverDir}，跳过服务端运行`, 'warn');
+          // 列出目录中的文件以便调试
+          try {
+            const files = readdirSync(serverDir);
+            onLog(`目录${serverDir}中的文件: ${files.join(', ')}`, 'info');
+          } catch (err) {
+            onLog(`无法读取目录${serverDir}: ${err}`, 'error');
+          }
         }
         resolve();
         return;
+      }
+      
+      if (onLog) {
+        onLog(`找到启动脚本${scriptName}，正在运行...`, 'info');
       }
       
       const serverProcess: ChildProcess = isWindows 

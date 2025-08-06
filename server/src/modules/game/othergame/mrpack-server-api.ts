@@ -1,6 +1,6 @@
 import axios from 'axios';
 import * as fs from 'fs-extra';
-import { promises as fsPromises } from 'fs';
+import { promises as fsPromises, existsSync, readdirSync } from 'fs';
 import { createWriteStream } from 'fs';
 import * as path from 'path';
 import * as yauzl from 'yauzl';
@@ -696,7 +696,7 @@ export class MrpackServerAPI {
    * 运行forge/neoforge安装器（支持取消）
    */
   private async runForgeInstallerWithCancel(jarPath: string, workingDir: string, onProgress?: LogCallback): Promise<ChildProcess | undefined> {
-    return new Promise((resolve, reject) => {
+    return new Promise(async (resolve, reject) => {
       if (this.cancelled) {
         reject(new Error('操作已取消'));
         return;
@@ -712,9 +712,10 @@ export class MrpackServerAPI {
       });
 
       this.currentProcess = installerProcess;
+      let installerCompleted = false;
 
       // 监听标准输出
-      installerProcess.stdout?.on('data', (data: Buffer) => {
+      installerProcess.stdout?.on('data', async (data: Buffer) => {
         if (this.cancelled) {
           installerProcess.kill('SIGTERM');
           return;
@@ -723,6 +724,38 @@ export class MrpackServerAPI {
         const output = data.toString();
         if (onProgress) {
           onProgress(output, 'info');
+        }
+        
+        // 检测安装完成标志
+        if (output.includes('You can delete this installer file now if you wish')) {
+          installerCompleted = true;
+          if (onProgress) {
+            onProgress('Forge/NeoForge安装器安装完成，准备运行服务端...', 'success');
+          }
+          
+          // 立即运行服务端脚本，不等待安装器进程退出
+          try {
+            if (onProgress) {
+              onProgress(`开始调用runForgeServerWithCancel，目录: ${workingDir}`, 'info');
+            }
+            await this.runForgeServerWithCancel(workingDir, onProgress);
+            if (onProgress) {
+              onProgress('runForgeServerWithCancel执行完成', 'success');
+            }
+            // 强制关闭安装器进程
+            if (!installerProcess.killed) {
+              installerProcess.kill('SIGTERM');
+            }
+            resolve(installerProcess);
+          } catch (error) {
+            if (onProgress) {
+              onProgress(`runForgeServerWithCancel执行失败: ${error}`, 'error');
+            }
+            if (!installerProcess.killed) {
+              installerProcess.kill('SIGTERM');
+            }
+            reject(error);
+          }
         }
       });
 
@@ -740,8 +773,16 @@ export class MrpackServerAPI {
       });
 
       // 监听进程退出
-      installerProcess.on('close', (code: number | null) => {
+      installerProcess.on('close', async (code: number | null) => {
         this.currentProcess = undefined;
+        
+        // 如果已经在输出监听中处理了完成逻辑，则直接返回
+        if (installerCompleted) {
+          if (onProgress) {
+            onProgress('Forge/NeoForge安装器进程已退出。', 'info');
+          }
+          return;
+        }
         
         if (this.cancelled) {
           reject(new Error('操作已取消'));
@@ -750,7 +791,7 @@ export class MrpackServerAPI {
 
         if (code === 0) {
           if (onProgress) {
-            onProgress('Forge/NeoForge安装器执行完成。', 'info');
+            onProgress('Forge/NeoForge安装器执行完成，但未检测到完成标志。', 'warn');
           }
           resolve(installerProcess);
         } else {
@@ -888,6 +929,152 @@ export class MrpackServerAPI {
           serverProcess.kill('SIGKILL');
           this.currentProcess = undefined;
           resolve(serverProcess);
+        }
+      }, 10 * 60 * 1000);
+    });
+  }
+
+  /**
+   * 运行forge/neoforge服务端直到EULA协议出现（支持取消）
+   */
+  private async runForgeServerWithCancel(serverDir: string, onProgress?: LogCallback): Promise<void> {
+    return new Promise((resolve, reject) => {
+      if (this.cancelled) {
+        reject(new Error('操作已取消'));
+        return;
+      }
+      
+      // 根据操作系统选择启动脚本
+      const isWindows = process.platform === 'win32';
+      const scriptName = isWindows ? 'run.bat' : 'run.sh';
+      const scriptPath = path.join(serverDir, scriptName);
+      
+      if (onProgress) {
+        onProgress(`正在检查启动脚本: ${scriptPath}`, 'info');
+      }
+      
+      // 检查启动脚本是否存在
+      if (!existsSync(scriptPath)) {
+        if (onProgress) {
+          onProgress(`启动脚本${scriptName}不存在于目录${serverDir}，跳过服务端运行`, 'warn');
+          // 列出目录中的文件以便调试
+          try {
+            const files = readdirSync(serverDir);
+            onProgress(`目录${serverDir}中的文件: ${files.join(', ')}`, 'info');
+          } catch (err) {
+            onProgress(`无法读取目录${serverDir}: ${err}`, 'error');
+          }
+        }
+        resolve();
+        return;
+      }
+      
+      if (onProgress) {
+        onProgress(`找到启动脚本${scriptName}，正在运行...`, 'info');
+      }
+      
+      const serverProcess: ChildProcess = isWindows 
+        ? spawn('cmd', ['/c', scriptName], {
+            cwd: serverDir,
+            stdio: ['pipe', 'pipe', 'pipe']
+          })
+        : spawn('bash', [scriptName], {
+            cwd: serverDir,
+            stdio: ['pipe', 'pipe', 'pipe']
+          });
+
+      this.currentProcess = serverProcess;
+      let hasEulaMessage = false;
+
+      // 监听标准输出
+      serverProcess.stdout?.on('data', (data: Buffer) => {
+        if (this.cancelled) {
+          serverProcess.kill('SIGTERM');
+          return;
+        }
+        
+        const output = data.toString();
+        if (onProgress) {
+          onProgress(output, 'info');
+        }
+        
+        // 检查是否出现EULA相关信息
+        if (output.toLowerCase().includes('eula') || 
+            output.toLowerCase().includes('you need to agree to the eula')) {
+          hasEulaMessage = true;
+          if (onProgress) {
+            onProgress('检测到EULA协议提示，正在关闭服务端...', 'info');
+          }
+          serverProcess.kill('SIGTERM');
+        }
+      });
+
+      // 监听标准错误
+      serverProcess.stderr?.on('data', (data: Buffer) => {
+        if (this.cancelled) {
+          serverProcess.kill('SIGTERM');
+          return;
+        }
+        
+        const output = data.toString();
+        if (onProgress) {
+          onProgress(output, 'error');
+        }
+        
+        if (output.toLowerCase().includes('eula')) {
+          hasEulaMessage = true;
+          if (onProgress) {
+            onProgress('检测到EULA协议提示，正在关闭服务端...', 'info');
+          }
+          serverProcess.kill('SIGTERM');
+        }
+      });
+
+      // 监听进程退出
+      serverProcess.on('close', (code: number | null) => {
+        this.currentProcess = undefined;
+        
+        if (this.cancelled) {
+          reject(new Error('操作已取消'));
+          return;
+        }
+
+        if (hasEulaMessage) {
+          if (onProgress) {
+            onProgress('服务端已关闭，EULA协议检测完成。', 'success');
+          }
+          resolve();
+        } else if (code === 0) {
+          if (onProgress) {
+            onProgress('服务端正常退出。', 'success');
+          }
+          resolve();
+        } else {
+          if (onProgress) {
+            onProgress(`服务端退出，退出码: ${code}`, 'info');
+          }
+          resolve();
+        }
+      });
+
+      // 监听进程错误
+      serverProcess.on('error', (error: Error) => {
+        this.currentProcess = undefined;
+        if (onProgress) {
+          onProgress(`启动服务端失败: ${error.message}`, 'error');
+        }
+        resolve(); // 不抛出错误，继续执行
+      });
+
+      // 设置超时（10分钟）
+      setTimeout(() => {
+        if (!serverProcess.killed && !this.cancelled) {
+          if (onProgress) {
+            onProgress('服务端运行超时，正在强制关闭...', 'warn');
+          }
+          serverProcess.kill('SIGKILL');
+          this.currentProcess = undefined;
+          resolve();
         }
       }, 10 * 60 * 1000);
     });

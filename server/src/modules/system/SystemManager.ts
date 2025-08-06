@@ -206,14 +206,14 @@ export class SystemManager extends EventEmitter {
       
       // 检测磁盘信息获取方法
       try {
-        await execAsync('wmic logicaldisk get size,freespace,caption', { timeout: 5000 })
-        this.logger.info('磁盘信息获取方法: WMIC命令')
-      } catch (wmicError) {
+        await execAsync('powershell "Get-WmiObject -Class Win32_LogicalDisk | Select-Object Size,FreeSpace,DeviceID | ConvertTo-Json"', { timeout: 8000 })
+        this.logger.info('磁盘信息获取方法: PowerShell WMI')
+      } catch (psError) {
         try {
-          await execAsync('powershell "Get-WmiObject -Class Win32_LogicalDisk | Select-Object Size,FreeSpace,DeviceID | ConvertTo-Json"', { timeout: 8000 })
-          this.logger.info('磁盘信息获取方法: PowerShell WMI (WMIC不可用)')
-        } catch (psError) {
-          this.logger.warn('磁盘信息获取方法: 备用方案 (WMIC和PowerShell均不可用)')
+          await execAsync('wmic logicaldisk get size,freespace,caption', { timeout: 5000 })
+          this.logger.info('磁盘信息获取方法: WMIC命令 (PowerShell不可用)')
+        } catch (wmicError) {
+          this.logger.warn('磁盘信息获取方法: 备用方案 (PowerShell和WMIC均不可用)')
         }
       }
     } else {
@@ -662,29 +662,28 @@ export class SystemManager extends EventEmitter {
    */
   private async getWindowsDiskInfo(): Promise<SystemStats['disk']> {
     try {
-      // 获取磁盘空间信息
-      let spaceCommand: string
+      // 优先使用PowerShell获取磁盘空间信息
+      let psCommand: string
       if (this.selectedDisk) {
         // 监控指定磁盘
-        spaceCommand = `wmic logicaldisk where "caption='${this.selectedDisk}'" get size,freespace,caption`
+        psCommand = `powershell "Get-WmiObject -Class Win32_LogicalDisk | Where-Object {$_.DeviceID -eq '${this.selectedDisk}'} | Select-Object Size,FreeSpace,DeviceID | ConvertTo-Json"`
       } else {
         // 监控所有磁盘总计
-        spaceCommand = 'wmic logicaldisk get size,freespace,caption'
+        psCommand = 'powershell "Get-WmiObject -Class Win32_LogicalDisk | Select-Object Size,FreeSpace,DeviceID | ConvertTo-Json"'
       }
       
-      const { stdout: spaceOutput } = await execAsync(spaceCommand, { timeout: 10000 })
+      const { stdout: spaceOutput } = await execAsync(psCommand, { timeout: 15000 })
       
-      const lines = spaceOutput.trim().split('\n').slice(1)
+      const disks = JSON.parse(spaceOutput)
+      const diskArray = Array.isArray(disks) ? disks : [disks]
+      
       let totalSize = 0
       let totalFree = 0
       
-      for (const line of lines) {
-        const parts = line.trim().split(/\s+/)
-        if (parts.length >= 3) {
-          const size = parseInt(parts[2]) || 0
-          const free = parseInt(parts[1]) || 0
-          totalSize += size
-          totalFree += free
+      for (const disk of diskArray) {
+        if (disk.Size && disk.FreeSpace) {
+          totalSize += parseInt(disk.Size) || 0
+          totalFree += parseInt(disk.FreeSpace) || 0
         }
       }
       
@@ -792,24 +791,33 @@ export class SystemManager extends EventEmitter {
         readOps: Math.round(readOps),
         writeOps: Math.round(writeOps)
       }
-    } catch (wmicError) {
-      this.logger.warn('wmic命令执行失败，尝试使用备用方案:', wmicError)
+    } catch (psError) {
+      this.logger.warn('PowerShell命令执行失败，尝试使用wmic备用方案:', psError)
       
       try {
-        // 备用方案1: 使用PowerShell
-        const psCommand = 'powershell "Get-WmiObject -Class Win32_LogicalDisk | Select-Object Size,FreeSpace,DeviceID | ConvertTo-Json"'
-        const { stdout } = await execAsync(psCommand, { timeout: 15000 })
+        // 备用方案1: 使用wmic
+        let spaceCommand: string
+        if (this.selectedDisk) {
+          // 监控指定磁盘
+          spaceCommand = `wmic logicaldisk where "caption='${this.selectedDisk}'" get size,freespace,caption`
+        } else {
+          // 监控所有磁盘总计
+          spaceCommand = 'wmic logicaldisk get size,freespace,caption'
+        }
         
-        const disks = JSON.parse(stdout)
-        const diskArray = Array.isArray(disks) ? disks : [disks]
+        const { stdout: spaceOutput } = await execAsync(spaceCommand, { timeout: 10000 })
         
+        const lines = spaceOutput.trim().split('\n').slice(1)
         let totalSize = 0
         let totalFree = 0
         
-        for (const disk of diskArray) {
-          if (disk.Size && disk.FreeSpace) {
-            totalSize += parseInt(disk.Size) || 0
-            totalFree += parseInt(disk.FreeSpace) || 0
+        for (const line of lines) {
+          const parts = line.trim().split(/\s+/)
+          if (parts.length >= 3) {
+            const size = parseInt(parts[2]) || 0
+            const free = parseInt(parts[1]) || 0
+            totalSize += size
+            totalFree += free
           }
         }
         
@@ -826,8 +834,8 @@ export class SystemManager extends EventEmitter {
           readOps: 0,
           writeOps: 0
         }
-      } catch (psError) {
-        this.logger.warn('PowerShell命令执行失败，使用Node.js备用方案:', psError)
+      } catch (wmicError) {
+        this.logger.warn('wmic命令执行失败，使用Node.js备用方案:', wmicError)
         
         // 备用方案2: 使用Node.js fs.statSync (仅获取主要驱动器信息)
         try {
@@ -1264,68 +1272,68 @@ export class SystemManager extends EventEmitter {
    */
   private async getWindowsDiskList(): Promise<DiskInfo[]> {
     try {
-      // 首先尝试使用wmic命令
-      const command = 'wmic logicaldisk get size,freespace,caption'
-      const { stdout } = await execAsync(command, { timeout: 10000 })
+      // 优先使用PowerShell获取磁盘信息
+      const psCommand = 'powershell "Get-WmiObject -Class Win32_LogicalDisk | Select-Object Size,FreeSpace,DeviceID | ConvertTo-Json"'
+      const { stdout } = await execAsync(psCommand, { timeout: 15000 })
       
-      const lines = stdout.trim().split('\n').slice(1)
+      const diskData = JSON.parse(stdout)
+      const diskArray = Array.isArray(diskData) ? diskData : [diskData]
       const disks: DiskInfo[] = []
       
-      for (const line of lines) {
-        const parts = line.trim().split(/\s+/)
-        if (parts.length >= 3) {
-          const caption = parts[0]
-          const freeSpace = parseInt(parts[1]) || 0
-          const size = parseInt(parts[2]) || 0
+      for (const disk of diskArray) {
+        if (disk.Size && disk.FreeSpace) {
+          const size = parseInt(disk.Size) || 0
+          const freeSpace = parseInt(disk.FreeSpace) || 0
           const used = size - freeSpace
           const usage = size > 0 ? (used / size) * 100 : 0
           
           disks.push({
-            filesystem: caption,
+            filesystem: disk.DeviceID,
             size,
             used,
             available: freeSpace,
             usage: Math.round(usage * 100) / 100,
-            mountpoint: caption
+            mountpoint: disk.DeviceID
           })
         }
       }
       
       return disks
-    } catch (wmicError) {
-      this.logger.warn('wmic命令执行失败，尝试使用PowerShell备用方案:', wmicError)
+    } catch (psError) {
+      this.logger.warn('PowerShell命令执行失败，尝试使用wmic备用方案:', psError)
       
       try {
-        // 备用方案: 使用PowerShell
-        const psCommand = 'powershell "Get-WmiObject -Class Win32_LogicalDisk | Select-Object Size,FreeSpace,DeviceID | ConvertTo-Json"'
-        const { stdout } = await execAsync(psCommand, { timeout: 15000 })
+        // 备用方案: 使用wmic命令
+        const command = 'wmic logicaldisk get size,freespace,caption'
+        const { stdout } = await execAsync(command, { timeout: 10000 })
         
-        const diskData = JSON.parse(stdout)
-        const diskArray = Array.isArray(diskData) ? diskData : [diskData]
+        const lines = stdout.trim().split('\n').slice(1)
         const disks: DiskInfo[] = []
         
-        for (const disk of diskArray) {
-          if (disk.Size && disk.FreeSpace) {
-            const size = parseInt(disk.Size) || 0
-            const freeSpace = parseInt(disk.FreeSpace) || 0
+        for (const line of lines) {
+          const parts = line.trim().split(/\s+/)
+          if (parts.length >= 3) {
+            const caption = parts[0]
+            const freeSpace = parseInt(parts[1]) || 0
+            const size = parseInt(parts[2]) || 0
             const used = size - freeSpace
             const usage = size > 0 ? (used / size) * 100 : 0
             
             disks.push({
-              filesystem: disk.DeviceID,
+              filesystem: caption,
               size,
               used,
               available: freeSpace,
               usage: Math.round(usage * 100) / 100,
-              mountpoint: disk.DeviceID
+              mountpoint: caption
             })
           }
         }
         
         return disks
-      } catch (psError) {
-        this.logger.error('PowerShell命令也执行失败:', psError)
-        throw psError
+      } catch (wmicError) {
+        this.logger.error('wmic备用方案也执行失败:', wmicError)
+        throw wmicError
       }
     }
   }
@@ -1431,75 +1439,131 @@ export class SystemManager extends EventEmitter {
    * 获取Windows进程列表
    */
   private async getWindowsProcessList(): Promise<ProcessInfo[]> {
-    // 使用 wmic 获取更详细的进程信息
-    const command = 'wmic process get Name,ProcessId,PageFileUsage,UserModeTime,KernelModeTime,CreationDate /format:csv'
-    const { stdout } = await execAsync(command, { timeout: 15000 })
-    
-    const result: ProcessInfo[] = []
-    const lines = stdout.trim().split('\n').filter(line => line.trim() && !line.startsWith('Node'))
-    
-    for (let i = 0; i < Math.min(lines.length, 100); i++) {
-      const line = lines[i].trim()
-      if (!line) continue
+    try {
+      // 优先使用PowerShell获取进程信息
+      const psCommand = 'powershell "Get-Process | Select-Object Name,Id,CPU,WorkingSet,StartTime | Sort-Object CPU -Descending | Select-Object -First 50 | ConvertTo-Json"'
+      const { stdout } = await execAsync(psCommand, { timeout: 15000 })
       
-      const parts = line.split(',')
-      if (parts.length >= 6) {
-        const creationDate = parts[1]
-        const kernelModeTime = parts[2] || '0'
-        const name = parts[3] || 'Unknown'
-        const pageFileUsage = parts[4] || '0'
-        const processId = parts[5] || '0'
-        const userModeTime = parts[6] || '0'
-        
-        const pid = parseInt(processId)
-        if (pid && pid > 0 && name !== 'Unknown') {
-          // 计算CPU使用率 (简化计算)
-          const totalTime = parseInt(kernelModeTime) + parseInt(userModeTime)
-          const cpu = totalTime > 0 ? Math.min(totalTime / 10000000, 100) : 0
+      if (!stdout.trim()) {
+        return []
+      }
+      
+      const processes = JSON.parse(stdout)
+      const processArray = Array.isArray(processes) ? processes : [processes]
+      const result: ProcessInfo[] = []
+      
+      for (const proc of processArray) {
+        if (proc.Id && proc.Id > 0) {
+          // 内存使用 (字节转MB)
+          const memoryMB = proc.WorkingSet ? (proc.WorkingSet / 1024 / 1024) : 0
           
-          // 内存使用 (KB转MB)
-          const memoryKB = parseInt(pageFileUsage) || 0
-          const memoryMB = memoryKB / 1024
+          // CPU使用率 (PowerShell返回的是总CPU时间，需要简化处理)
+          const cpu = proc.CPU ? Math.min(proc.CPU / 1000, 100) : 0
           
-          // 解析创建时间
+          // 解析启动时间
           let startTime = new Date()
-          if (creationDate && creationDate.length >= 14) {
+          if (proc.StartTime) {
             try {
-              const year = parseInt(creationDate.substring(0, 4))
-              const month = parseInt(creationDate.substring(4, 6)) - 1
-              const day = parseInt(creationDate.substring(6, 8))
-              const hour = parseInt(creationDate.substring(8, 10))
-              const minute = parseInt(creationDate.substring(10, 12))
-              const second = parseInt(creationDate.substring(12, 14))
-              startTime = new Date(year, month, day, hour, minute, second)
-              
-              // 验证日期是否有效
+              startTime = new Date(proc.StartTime)
               if (isNaN(startTime.getTime())) {
-                // 如果日期无效，使用当前时间
                 startTime = new Date()
               }
             } catch (e) {
-              // 使用默认时间
               startTime = new Date()
             }
           }
           
           result.push({
-            pid,
-            name: name.replace('.exe', ''),
+            pid: proc.Id,
+            name: proc.Name || 'Unknown',
             cpu: Math.round(cpu * 100) / 100,
-            memory: Math.round(memoryMB * 100) / 100, // 数字类型，单位MB
+            memory: Math.round(memoryMB * 100) / 100,
             status: 'Running',
-            startTime: startTime, // Date 对象
-            command: name
+            startTime: startTime,
+            command: proc.Name || 'Unknown'
           })
         }
       }
-    }
-    
-    // 按CPU使用率排序
-    return result.sort((a, b) => b.cpu - a.cpu).slice(0, 50)
-  }
+      
+      return result.sort((a, b) => b.cpu - a.cpu).slice(0, 50)
+    } catch (psError) {
+      this.logger.warn('PowerShell命令执行失败，尝试使用wmic备用方案:', psError)
+      
+      try {
+        // wmic备用方案
+        const command = 'wmic process get Name,ProcessId,PageFileUsage,UserModeTime,KernelModeTime,CreationDate /format:csv'
+        const { stdout } = await execAsync(command, { timeout: 15000 })
+        
+        const result: ProcessInfo[] = []
+        const lines = stdout.trim().split('\n').filter(line => line.trim() && !line.startsWith('Node'))
+        
+        for (let i = 0; i < Math.min(lines.length, 100); i++) {
+          const line = lines[i].trim()
+          if (!line) continue
+          
+          const parts = line.split(',')
+          if (parts.length >= 6) {
+            const creationDate = parts[1]
+            const kernelModeTime = parts[2] || '0'
+            const name = parts[3] || 'Unknown'
+            const pageFileUsage = parts[4] || '0'
+            const processId = parts[5] || '0'
+            const userModeTime = parts[6] || '0'
+            
+            const pid = parseInt(processId)
+            if (pid && pid > 0 && name !== 'Unknown') {
+              // 计算CPU使用率 (简化计算)
+              const totalTime = parseInt(kernelModeTime) + parseInt(userModeTime)
+              const cpu = totalTime > 0 ? Math.min(totalTime / 10000000, 100) : 0
+              
+              // 内存使用 (KB转MB)
+              const memoryKB = parseInt(pageFileUsage) || 0
+              const memoryMB = memoryKB / 1024
+              
+              // 解析创建时间
+              let startTime = new Date()
+              if (creationDate && creationDate.length >= 14) {
+                try {
+                  const year = parseInt(creationDate.substring(0, 4))
+                  const month = parseInt(creationDate.substring(4, 6)) - 1
+                  const day = parseInt(creationDate.substring(6, 8))
+                  const hour = parseInt(creationDate.substring(8, 10))
+                  const minute = parseInt(creationDate.substring(10, 12))
+                  const second = parseInt(creationDate.substring(12, 14))
+                  startTime = new Date(year, month, day, hour, minute, second)
+                  
+                  // 验证日期是否有效
+                  if (isNaN(startTime.getTime())) {
+                    // 如果日期无效，使用当前时间
+                    startTime = new Date()
+                  }
+                } catch (e) {
+                  // 使用默认时间
+                  startTime = new Date()
+                }
+              }
+              
+              result.push({
+                pid,
+                name: name.replace('.exe', ''),
+                cpu: Math.round(cpu * 100) / 100,
+                memory: Math.round(memoryMB * 100) / 100, // 数字类型，单位MB
+                status: 'Running',
+                startTime: startTime, // Date 对象
+                command: name
+              })
+            }
+          }
+        }
+        
+        // 按CPU使用率排序
+        return result.sort((a, b) => b.cpu - a.cpu).slice(0, 50)
+      } catch (wmicError) {
+         this.logger.error('获取进程列表失败:', wmicError)
+         return []
+       }
+     }
+   }
 
   /**
    * 获取Linux进程列表

@@ -12,6 +12,7 @@ import { spawn, ChildProcess } from 'child_process';
 import * as os from 'os';
 import * as tar from 'tar';
 import { MrpackServerAPI } from './mrpack-server-api.js';
+import { FileManager } from './minecraft-server-api.js';
 import { pipeline } from 'stream';
 import { promisify } from 'util';
 
@@ -670,7 +671,7 @@ export async function deployMinecraftServer(options: MinecraftDeployOptions): Pr
     if (!skipServerRun) {
       onLogCallback('正在首次运行服务器以生成配置文件...', 'info');
       deployment.cancellationToken.throwIfCancelled();
-      await runMinecraftServerOnceWithCancellation(jarPath, targetDirectory, deployment, onLog);
+      await runMinecraftServerWithCancellation(jarPath, deployment, onLog);
     } else {
       onLogCallback('已跳过首次运行服务器', 'warn');
     }
@@ -879,6 +880,45 @@ async function runMinecraftServerOnceWithCancellation(
         resolve();
       }
     }, 5 * 60 * 1000);
+  });
+}
+
+/**
+ * 使用MinecraftAPI运行服务器（支持取消和Forge/NeoForge安装器）
+ */
+async function runMinecraftServerWithCancellation(
+  jarPath: string,
+  deployment: ActiveDeployment,
+  onLog?: LogCallback
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    (deployment.cancellationToken as CancellationTokenImpl).throwIfCancelled();
+    
+    let isResolved = false;
+    
+    // 注册取消回调
+    deployment.cancellationToken.onCancelled(() => {
+      if (!isResolved) {
+        if (onLog) onLog('正在取消服务端运行...', 'warn');
+        isResolved = true;
+        reject(new Error('操作已被取消'));
+      }
+    });
+    
+    // 使用FileManager运行服务器
+     FileManager.runServerUntilEula(jarPath, onLog)
+      .then(() => {
+        if (!isResolved) {
+          isResolved = true;
+          resolve();
+        }
+      })
+      .catch((error) => {
+        if (!isResolved) {
+          isResolved = true;
+          reject(error);
+        }
+      });
   });
 }
 

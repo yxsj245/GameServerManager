@@ -83,6 +83,7 @@ const GameDeploymentPage: React.FC = () => {
   const [createInstanceModalAnimating, setCreateInstanceModalAnimating] = useState(false)
   const [instanceName, setInstanceName] = useState('')
   const [instanceDescription, setInstanceDescription] = useState('')
+  const [instanceStartCommand, setInstanceStartCommand] = useState('')
   const [creatingInstance, setCreatingInstance] = useState(false)
   
   // 更多游戏部署相关状态
@@ -120,6 +121,7 @@ const GameDeploymentPage: React.FC = () => {
   const [createMrpackInstanceModalAnimating, setCreateMrpackInstanceModalAnimating] = useState(false)
   const [mrpackInstanceName, setMrpackInstanceName] = useState('')
   const [mrpackInstanceDescription, setMrpackInstanceDescription] = useState('')
+  const [mrpackInstanceStartCommand, setMrpackInstanceStartCommand] = useState('')
   const [creatingMrpackInstance, setCreatingMrpackInstance] = useState(false)
   
   // 在线部署相关状态
@@ -739,6 +741,14 @@ const GameDeploymentPage: React.FC = () => {
         setMrpackDeployResult(data.data)
         currentMrpackDeploymentId.current = null // 重置整合包部署ID
         
+        // 自动生成启动命令
+        if (data.data?.serverType) {
+          setMrpackInstanceStartCommand(generateStartCommand(data.data.serverType))
+        } else {
+          // 默认启动命令
+          setMrpackInstanceStartCommand(data.data?.serverJarPath ? `java -jar "${data.data.serverJarPath}"` : 'java -jar server.jar')
+        }
+        
         addNotification({
           type: 'success',
           title: '部署完成',
@@ -1039,6 +1049,22 @@ const GameDeploymentPage: React.FC = () => {
     setHoveredMrpack(null)
   }
 
+  // 根据服务器类型生成启动命令
+  const generateStartCommand = (serverType: string, isWindows: boolean = process.platform === 'win32') => {
+    const lowerServerType = serverType.toLowerCase()
+    
+    if (lowerServerType.includes('forge') || lowerServerType.includes('neoforge')) {
+      // Forge/NeoForge 使用启动脚本
+      return isWindows ? 'run.bat' : './run.sh'
+    } else if (lowerServerType.includes('fabric') || lowerServerType.includes('quilt')) {
+      // Fabric/Quilt 重命名为 server.jar
+      return 'java -jar server.jar'
+    } else {
+      // 默认情况
+      return 'java -jar server.jar'
+    }
+  }
+
   // 创建Minecraft实例
   const createMinecraftInstance = async () => {
     if (!instanceName.trim() || !downloadResult) {
@@ -1053,12 +1079,13 @@ const GameDeploymentPage: React.FC = () => {
     try {
       setCreatingInstance(true)
       
-      const response = await apiClient.createMinecraftInstance({
+      const response = await apiClient.createInstance({
         name: instanceName.trim(),
         description: instanceDescription.trim() || `Minecraft ${selectedServer} ${selectedVersion}`,
         workingDirectory: downloadResult.targetDirectory,
-        version: selectedVersion,
-        serverType: selectedServer
+        startCommand: instanceStartCommand || generateStartCommand(selectedServer),
+        autoStart: false,
+        stopCommand: 'stop' as const
       })
       
       if (response.success) {
@@ -1080,6 +1107,7 @@ const GameDeploymentPage: React.FC = () => {
         setDownloadResult(null)
         setInstanceName('')
         setInstanceDescription('')
+        setInstanceStartCommand('')
         
         // 跳转到实例管理页面
         navigate('/instances')
@@ -1296,6 +1324,7 @@ const GameDeploymentPage: React.FC = () => {
       // 重置表单
       setMrpackInstanceName('')
       setMrpackInstanceDescription('')
+      setMrpackInstanceStartCommand('')
     }, 300)
   }
 
@@ -1331,7 +1360,7 @@ const GameDeploymentPage: React.FC = () => {
         name: mrpackInstanceName.trim(),
         description: mrpackInstanceDescription.trim() || `Minecraft整合包实例 - ${selectedMrpack?.title}`,
         workingDirectory: mrpackDeployResult.installPath,
-        startCommand: mrpackDeployResult.serverJarPath ? `java -jar "${mrpackDeployResult.serverJarPath}"` : 'java -jar server.jar',
+        startCommand: mrpackInstanceStartCommand || (mrpackDeployResult.serverJarPath ? `java -jar "${mrpackDeployResult.serverJarPath}"` : 'java -jar server.jar'),
         autoStart: false,
         stopCommand: 'stop' as const
       })
@@ -2319,7 +2348,14 @@ const GameDeploymentPage: React.FC = () => {
                       </label>
                       <select
                         value={selectedVersion}
-                        onChange={(e) => setSelectedVersion(e.target.value)}
+                        onChange={(e) => {
+                          const version = e.target.value
+                          setSelectedVersion(version)
+                          // 自动生成启动命令
+                          if (version && selectedServer) {
+                            setInstanceStartCommand(generateStartCommand(selectedServer))
+                          }
+                        }}
                         className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                       >
                         <option value="">请选择版本</option>
@@ -3395,6 +3431,20 @@ const GameDeploymentPage: React.FC = () => {
                   rows={3}
                 />
               </div>
+              
+              {/* 启动命令 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  启动命令
+                </label>
+                <input
+                  type="text"
+                  value={instanceStartCommand}
+                  onChange={(e) => setInstanceStartCommand(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  placeholder="启动命令（自动生成，可手动修改）"
+                />
+              </div>
             </div>
             
             <div className="flex space-x-3 p-6 border-t border-gray-200 dark:border-gray-700">
@@ -3708,6 +3758,20 @@ const GameDeploymentPage: React.FC = () => {
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                   placeholder="输入实例描述（可选）"
                   rows={3}
+                />
+              </div>
+              
+              {/* 启动命令 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  启动命令
+                </label>
+                <input
+                  type="text"
+                  value={mrpackInstanceStartCommand}
+                  onChange={(e) => setMrpackInstanceStartCommand(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  placeholder="启动命令（自动生成，可手动修改）"
                 />
               </div>
             </div>
