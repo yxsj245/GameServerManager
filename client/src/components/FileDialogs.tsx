@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { Modal, Form, Input, Upload, message, Progress } from 'antd'
 import { InboxOutlined } from '@ant-design/icons'
 import type { UploadProps, UploadFile } from 'antd'
@@ -21,10 +21,18 @@ export const CreateDialog: React.FC<CreateDialogProps> = ({
 }) => {
   const [form] = Form.useForm()
   const [loading, setLoading] = useState(false)
+  const inputRef = useRef<any>(null)
 
   useEffect(() => {
     if (visible) {
       form.resetFields()
+      // 延迟聚焦，确保Modal完全打开后再聚焦
+      setTimeout(() => {
+        if (inputRef.current) {
+          inputRef.current.focus()
+          inputRef.current.select()
+        }
+      }, 100)
     }
   }, [visible, form])
 
@@ -41,6 +49,13 @@ export const CreateDialog: React.FC<CreateDialogProps> = ({
     }
   }
 
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      handleOk()
+    }
+  }
+
   return (
     <Modal
       title={`创建${type === 'file' ? '文件' : '文件夹'}`}
@@ -54,6 +69,7 @@ export const CreateDialog: React.FC<CreateDialogProps> = ({
         form={form}
         layout="vertical"
         className="mt-4"
+        onFinish={handleOk}
       >
         <Form.Item
           name="name"
@@ -67,8 +83,9 @@ export const CreateDialog: React.FC<CreateDialogProps> = ({
           ]}
         >
           <Input 
+            ref={inputRef}
             placeholder={`请输入${type === 'file' ? '文件' : '文件夹'}名称`}
-            autoFocus
+            onKeyDown={handleKeyDown}
           />
         </Form.Item>
       </Form>
@@ -91,10 +108,26 @@ export const RenameDialog: React.FC<RenameDialogProps> = ({
 }) => {
   const [form] = Form.useForm()
   const [loading, setLoading] = useState(false)
+  const inputRef = useRef<any>(null)
 
   useEffect(() => {
     if (visible) {
       form.setFieldsValue({ name: currentName })
+      // 延迟聚焦，确保Modal完全打开后再聚焦
+      setTimeout(() => {
+        if (inputRef.current) {
+          inputRef.current.focus()
+          // 选中文件名（不包括扩展名）
+          const lastDotIndex = currentName.lastIndexOf('.')
+          if (lastDotIndex > 0) {
+            // 有扩展名，选中文件名部分
+            inputRef.current.setSelectionRange(0, lastDotIndex)
+          } else {
+            // 没有扩展名或是隐藏文件，选中全部
+            inputRef.current.select()
+          }
+        }
+      }, 100)
     }
   }, [visible, currentName, form])
 
@@ -111,6 +144,13 @@ export const RenameDialog: React.FC<RenameDialogProps> = ({
     }
   }
 
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      handleOk()
+    }
+  }
+
   return (
     <Modal
       title="重命名"
@@ -124,6 +164,7 @@ export const RenameDialog: React.FC<RenameDialogProps> = ({
         form={form}
         layout="vertical"
         className="mt-4"
+        onFinish={handleOk}
       >
         <Form.Item
           name="name"
@@ -137,8 +178,9 @@ export const RenameDialog: React.FC<RenameDialogProps> = ({
           ]}
         >
           <Input 
+            ref={inputRef}
             placeholder="请输入新名称"
-            autoFocus
+            onKeyDown={handleKeyDown}
           />
         </Form.Item>
       </Form>

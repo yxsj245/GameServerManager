@@ -282,6 +282,163 @@ const FileManagerPage: React.FC = () => {
     setSelectedDrive(driveValue)
     navigateToPath(driveValue)
   }, [navigateToPath])
+
+  // 右键菜单处理函数
+  const handleContextMenuOpen = useCallback((file: FileItem) => {
+    if (file.type === 'directory') {
+      navigateToPath(file.path)
+    } else {
+      openFile(file.path)
+      setEditorModalVisible(true)
+    }
+  }, [navigateToPath, openFile])
+  
+  const handleContextMenuRename = useCallback((file: FileItem) => {
+    setRenameDialog({ visible: true, file })
+  }, [])
+  
+  const handleContextMenuDelete = useCallback((files: FileItem[]) => {
+    setDeleteDialog({ visible: true, files })
+  }, [])
+  
+  const handleContextMenuDownload = useCallback((file: FileItem) => {
+    fileApiClient.downloadFile(file.path)
+    addNotification({
+      type: 'success',
+      title: '下载开始',
+      message: `正在下载 ${file.name}`
+    })
+  }, [addNotification])
+
+  const handleContextMenuDownloadWithProgress = useCallback(async (file: FileItem) => {
+    try {
+      const result = await downloadFileWithProgress(file.path)
+      addNotification({
+        type: 'success',
+        title: '下载任务已创建',
+        message: `正在下载 ${file.name}，任务ID: ${result.taskId}`
+      })
+    } catch (error: any) {
+      addNotification({
+        type: 'error',
+        title: '创建下载任务失败',
+        message: error.message || '未知错误'
+      })
+    }
+  }, [downloadFileWithProgress, addNotification])
+  
+  const handleContextMenuCopy = useCallback((files: FileItem[]) => {
+    const filePaths = files.map(file => file.path)
+    copyFiles(filePaths)
+    addNotification({
+      type: 'success',
+      title: '复制成功',
+      message: `已复制 ${files.length} 个项目到剪贴板`
+    })
+  }, [copyFiles, addNotification])
+  
+  const handleContextMenuCut = useCallback((files: FileItem[]) => {
+    const filePaths = files.map(file => file.path)
+    cutFiles(filePaths)
+    addNotification({
+      type: 'success',
+      title: '剪切成功',
+      message: `已剪切 ${files.length} 个项目到剪贴板`
+    })
+  }, [cutFiles, addNotification])
+  
+  // 粘贴处理
+  const handlePaste = useCallback(async () => {
+    if (!clipboard.operation || clipboard.items.length === 0) {
+      message.warning('剪贴板为空')
+      return
+    }
+    
+    const result = await pasteFiles(currentPath)
+    if (result.success) {
+      const operationText = clipboard.operation === 'copy' ? '复制' : '移动'
+      if (result.taskId) {
+        // 异步任务
+        addNotification({
+          type: 'success',
+          title: `${operationText}任务已创建`,
+          message: `正在${operationText} ${clipboard.items.length} 个项目，任务ID: ${result.taskId}`
+        })
+        // 刷新任务列表
+        await loadTasks()
+      } else {
+        // 同步操作
+        addNotification({
+          type: 'success',
+          title: '粘贴成功',
+          message: `成功${operationText} ${clipboard.items.length} 个项目`
+        })
+      }
+    } else {
+      addNotification({
+        type: 'error',
+        title: '粘贴失败',
+        message: result.message || '操作失败'
+      })
+    }
+  }, [clipboard, pasteFiles, currentPath, addNotification, loadTasks])
+  
+  const handleContextMenuView = useCallback((file: FileItem) => {
+    if (isTextFile(file.name)) {
+      openFile(file.path)
+      setEditorModalVisible(true)
+    } else if (isImageFile(file.name)) {
+      setPreviewImagePath(file.path)
+      setPreviewImageName(file.name)
+      setImagePreviewVisible(true)
+    } else {
+      message.info('该文件类型不支持预览')
+    }
+  }, [openFile])
+
+  // 压缩处理
+  const handleContextMenuCompress = useCallback((files: FileItem[]) => {
+    setCompressDialog({ visible: true, files })
+  }, [])
+
+  // 解压处理
+  const handleContextMenuExtract = useCallback(async (file: FileItem) => {
+    const success = await extractArchive(file.path)
+    if (success) {
+      addNotification({
+        type: 'success',
+        title: '解压成功',
+        message: `文件 "${file.name}" 解压完成`
+      })
+    }
+  }, [extractArchive, addNotification])
+
+  // 从此文件夹处打开终端
+  const handleContextMenuOpenTerminal = useCallback((file: FileItem) => {
+    // 如果是文件夹，使用文件夹路径；如果是空白区域（path为空），使用当前目录路径
+    const targetPath = file.path || currentPath
+    const targetName = file.name || '当前文件夹'
+    
+    if (file.type === 'directory' || !file.path) {
+      // 导航到终端页面，并传递文件夹路径作为查询参数
+      navigate(`/terminal?cwd=${encodeURIComponent(targetPath)}`)
+      addNotification({
+        type: 'success',
+        title: '打开终端',
+        message: `已在 "${targetName}" 中打开终端`
+      })
+    }
+  }, [currentPath, navigate, addNotification])
+
+  // 添加到播放列表
+  const handleAddToPlaylist = useCallback((files: FileItem[]) => {
+    addToPlaylist(files)
+    addNotification({
+      type: 'success',
+      title: '添加成功',
+      message: `已添加 ${files.length} 个文件到播放列表`
+    })
+  }, [addToPlaylist, addNotification])
   
   // 初始化
   useEffect(() => {
@@ -352,6 +509,31 @@ const FileManagerPage: React.FC = () => {
         return
       }
       
+      // 处理单独的按键
+      switch (event.key) {
+        case 'F2':
+          // F2重命名
+          if (selectedFiles.size === 1) {
+            event.preventDefault()
+            const selectedPath = Array.from(selectedFiles)[0]
+            const selectedFile = files.find(f => f.path === selectedPath)
+            if (selectedFile) {
+              handleContextMenuRename(selectedFile)
+            }
+          }
+          break
+        case 'Delete':
+          // Delete删除
+          if (selectedFiles.size > 0) {
+            event.preventDefault()
+            const selectedFileItems = Array.from(selectedFiles).map(path => 
+              files.find(f => f.path === path)
+            ).filter(Boolean) as FileItem[]
+            handleContextMenuDelete(selectedFileItems)
+          }
+          break
+      }
+      
       if (event.ctrlKey || event.metaKey) {
         switch (event.key.toLowerCase()) {
           case 'c':
@@ -384,7 +566,7 @@ const FileManagerPage: React.FC = () => {
     
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [selectedFiles, files, clipboard])
+  }, [selectedFiles, files, clipboard, handleContextMenuRename, handleContextMenuDelete, handleContextMenuCopy, handleContextMenuCut, handlePaste])
   
   // 错误处理
   useEffect(() => {
@@ -525,162 +707,7 @@ const FileManagerPage: React.FC = () => {
     }
   }
   
-  // 右键菜单处理
-  const handleContextMenuOpen = (file: FileItem) => {
-    if (file.type === 'directory') {
-      navigateToPath(file.path)
-    } else {
-      openFile(file.path)
-      setEditorModalVisible(true)
-    }
-  }
-  
-  const handleContextMenuRename = (file: FileItem) => {
-    setRenameDialog({ visible: true, file })
-  }
-  
-  const handleContextMenuDelete = (files: FileItem[]) => {
-    setDeleteDialog({ visible: true, files })
-  }
-  
-  const handleContextMenuDownload = (file: FileItem) => {
-    fileApiClient.downloadFile(file.path)
-    addNotification({
-      type: 'success',
-      title: '下载开始',
-      message: `正在下载 ${file.name}`
-    })
-  }
 
-  const handleContextMenuDownloadWithProgress = async (file: FileItem) => {
-    try {
-      const result = await downloadFileWithProgress(file.path)
-      addNotification({
-        type: 'success',
-        title: '下载任务已创建',
-        message: `正在下载 ${file.name}，任务ID: ${result.taskId}`
-      })
-    } catch (error: any) {
-      addNotification({
-        type: 'error',
-        title: '创建下载任务失败',
-        message: error.message || '未知错误'
-      })
-    }
-  }
-  
-  const handleContextMenuCopy = (files: FileItem[]) => {
-    const filePaths = files.map(file => file.path)
-    copyFiles(filePaths)
-    addNotification({
-      type: 'success',
-      title: '复制成功',
-      message: `已复制 ${files.length} 个项目到剪贴板`
-    })
-  }
-  
-  const handleContextMenuCut = (files: FileItem[]) => {
-    const filePaths = files.map(file => file.path)
-    cutFiles(filePaths)
-    addNotification({
-      type: 'success',
-      title: '剪切成功',
-      message: `已剪切 ${files.length} 个项目到剪贴板`
-    })
-  }
-  
-  // 粘贴处理
-  const handlePaste = async () => {
-    if (!clipboard.operation || clipboard.items.length === 0) {
-      message.warning('剪贴板为空')
-      return
-    }
-    
-    const result = await pasteFiles(currentPath)
-    if (result.success) {
-      const operationText = clipboard.operation === 'copy' ? '复制' : '移动'
-      if (result.taskId) {
-        // 异步任务
-        addNotification({
-          type: 'success',
-          title: `${operationText}任务已创建`,
-          message: `正在${operationText} ${clipboard.items.length} 个项目，任务ID: ${result.taskId}`
-        })
-        // 刷新任务列表
-        await loadTasks()
-      } else {
-        // 同步操作
-        addNotification({
-          type: 'success',
-          title: '粘贴成功',
-          message: `成功${operationText} ${clipboard.items.length} 个项目`
-        })
-      }
-    } else {
-      addNotification({
-        type: 'error',
-        title: '粘贴失败',
-        message: result.message || '操作失败'
-      })
-    }
-  }
-  
-  const handleContextMenuView = (file: FileItem) => {
-    if (isTextFile(file.name)) {
-      openFile(file.path)
-      setEditorModalVisible(true)
-    } else if (isImageFile(file.name)) {
-      setPreviewImagePath(file.path)
-      setPreviewImageName(file.name)
-      setImagePreviewVisible(true)
-    } else {
-      message.info('该文件类型不支持预览')
-    }
-  }
-
-  // 压缩处理
-  const handleContextMenuCompress = (files: FileItem[]) => {
-    setCompressDialog({ visible: true, files })
-  }
-
-  // 解压处理
-  const handleContextMenuExtract = async (file: FileItem) => {
-    const success = await extractArchive(file.path)
-    if (success) {
-      addNotification({
-        type: 'success',
-        title: '解压成功',
-        message: `文件 "${file.name}" 解压完成`
-      })
-    }
-  }
-
-  // 从此文件夹处打开终端
-  const handleContextMenuOpenTerminal = (file: FileItem) => {
-    // 如果是文件夹，使用文件夹路径；如果是空白区域（path为空），使用当前目录路径
-    const targetPath = file.path || currentPath
-    const targetName = file.name || '当前文件夹'
-    
-    if (file.type === 'directory' || !file.path) {
-      // 导航到终端页面，并传递文件夹路径作为查询参数
-      navigate(`/terminal?cwd=${encodeURIComponent(targetPath)}`)
-      addNotification({
-        type: 'success',
-        title: '打开终端',
-        message: `已在 "${targetName}" 中打开终端`
-      })
-    }
-  }
-
-  // 添加到播放列表
-  const handleAddToPlaylist = (files: FileItem[]) => {
-    addToPlaylist(files)
-    addNotification({
-      type: 'success',
-      title: '添加成功',
-      message: `已添加 ${files.length} 个文件到播放列表`
-    })
-  }
   
   // 处理换行符类型变化
   const handleLineEndingChange = (newLineEnding: LineEndingType) => {

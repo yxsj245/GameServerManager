@@ -726,6 +726,10 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                             <span>删除</span>
                             <kbd className="px-2 py-1 bg-gray-200 dark:bg-gray-700 rounded text-xs font-mono">Delete</kbd>
                           </div>
+                          <div className="flex justify-between">
+                            <span>重命名</span>
+                            <kbd className="px-2 py-1 bg-gray-200 dark:bg-gray-700 rounded text-xs font-mono">F2</kbd>
+                          </div>
                         </div>
                       </div>
                       <div>
