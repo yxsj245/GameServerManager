@@ -247,14 +247,26 @@ const SteamCMDOnboardingStep: React.FC = () => {
         </h3>
         
         <div className="space-y-3">
-          <label className="flex items-start space-x-3 cursor-pointer p-3 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+          <label
+            role="radio"
+            aria-checked={installMode === 'online'}
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if ((e.key === 'Enter' || e.key === ' ') && !isInstalling) setInstallMode('online')
+            }}
+            onClick={() => !isInstalling && setInstallMode('online')}
+            className={`flex items-start space-x-3 cursor-pointer p-3 border rounded-lg transition-colors
+              ${installMode === 'online'
+                ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 ring-2 ring-blue-400/50'
+                : 'border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
+          >
             <input
               type="radio"
               name="installMode"
               value="online"
               checked={installMode === 'online'}
-              onChange={(e) => setInstallMode(e.target.value as 'online')}
-              className="mt-1"
+              onChange={() => setInstallMode('online')}
+              className="sr-only"
               disabled={isInstalling}
             />
             <div className="flex-1">
@@ -267,19 +279,31 @@ const SteamCMDOnboardingStep: React.FC = () => {
             </div>
           </label>
           
-          <label className="flex items-start space-x-3 cursor-pointer p-3 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+          <label
+            role="radio"
+            aria-checked={installMode === 'manual'}
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if ((e.key === 'Enter' || e.key === ' ') && !isInstalling) setInstallMode('manual')
+            }}
+            onClick={() => !isInstalling && setInstallMode('manual')}
+            className={`flex items-start space-x-3 cursor-pointer p-3 border rounded-lg transition-colors
+              ${installMode === 'manual'
+                ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 ring-2 ring-blue-400/50'
+                : 'border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
+          >
             <input
               type="radio"
               name="installMode"
               value="manual"
               checked={installMode === 'manual'}
-              onChange={(e) => setInstallMode(e.target.value as 'manual')}
-              className="mt-1"
+              onChange={() => setInstallMode('manual')}
+              className="sr-only"
               disabled={isInstalling}
             />
             <div className="flex-1">
               <div className="font-medium text-gray-900 dark:text-white">
-                设置路径
+                保存路径
               </div>
               <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">
                 指定已安装的SteamCMD路径，适合已有SteamCMD的用户
@@ -349,8 +373,8 @@ const SteamCMDOnboardingStep: React.FC = () => {
           )}
           <span>
             {isInstalling 
-              ? (installMode === 'online' ? '安装中...' : '设置中...') 
-              : (installMode === 'online' ? '开始安装' : '设置路径')
+              ? (installMode === 'online' ? '安装中...' : '保存中...') 
+              : (installMode === 'online' ? '开始安装' : '保存路径')
             }
           </span>
         </button>
