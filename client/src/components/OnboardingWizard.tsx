@@ -159,7 +159,7 @@ const OnboardingWizard: React.FC = () => {
               disabled={!canGoNext}
               className="flex items-center space-x-2 px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
-              <span>{isLastStep ? '完成设置' : '下一步'}</span>
+              <span>{isLastStep ? '退出' : '下一步'}</span>
               {!isLastStep && <ChevronRight className="w-4 h-4" />}
             </button>
           </div>

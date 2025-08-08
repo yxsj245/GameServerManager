@@ -143,7 +143,7 @@ export const useOnboardingStore = create<OnboardingStore>()(
           steps: defaultSteps.map(step => ({ ...step, completed: false })),
           isOnboardingComplete: false,
           showOnboarding: false,
-          isFirstLogin: false
+          isFirstLogin: true  // 重置时设置为true，允许重新显示引导
         })
       },
 

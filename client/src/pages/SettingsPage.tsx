@@ -1404,23 +1404,7 @@ const SettingsPage: React.FC = () => {
             </div>
 
             {/* 操作按钮 */}
-            <div className="flex justify-between">
-              <button
-                onClick={() => {
-                  resetOnboarding()
-                  setShowOnboarding(true)
-                  addNotification({
-                    type: 'info',
-                    title: '新手引导已启动',
-                    message: '新手引导界面即将显示'
-                  })
-                }}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors flex items-center space-x-2"
-              >
-                <RefreshCw className="w-4 h-4" />
-                <span>重新启动新手引导</span>
-              </button>
-
+            <div className="flex justify-end">
               <button
                 onClick={saveGameSettings}
                 disabled={gameLoading}
@@ -1619,6 +1603,22 @@ const SettingsPage: React.FC = () => {
           
           <div className="flex space-x-3">
             <button
+              onClick={() => {
+                resetOnboarding()
+                setShowOnboarding(true)
+                addNotification({
+                  type: 'info',
+                  title: '新手引导已启动',
+                  message: '新手引导界面即将显示'
+                })
+              }}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors flex items-center space-x-2"
+            >
+              <RefreshCw className="w-4 h-4" />
+              <span>重新启动新手引导</span>
+            </button>
+
+            <button
               onClick={handleUpdateGameList}
               disabled={gameListUpdateLoading}
               className="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-green-600/50 text-white rounded-lg transition-colors flex items-center space-x-2 disabled:cursor-not-allowed"
@@ -1630,7 +1630,7 @@ const SettingsPage: React.FC = () => {
               )}
               <span>{gameListUpdateLoading ? '更新中...' : '更新Steam游戏部署清单'}</span>
             </button>
-            
+
             <button
               onClick={resetSettings}
               className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors flex items-center space-x-2"
@@ -1638,7 +1638,7 @@ const SettingsPage: React.FC = () => {
               <RotateCcw className="w-4 h-4" />
               <span>重置设置</span>
             </button>
-            
+
             <button
               onClick={saveSettings}
               className="btn-game px-4 py-2 flex items-center space-x-2"
