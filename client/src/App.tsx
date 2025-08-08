@@ -22,6 +22,7 @@ import GlobalMusicPlayer from '@/components/GlobalMusicPlayer'
 import GlobalSystemAlert from '@/components/GlobalSystemAlert'
 import GlobalSystemAlertManager from '@/components/GlobalSystemAlertManager'
 import BrowserCompatibilityChecker from '@/components/BrowserCompatibilityChecker'
+import OnboardingWizard from '@/components/OnboardingWizard'
 
 // GlobalMusicPlayer包装器组件 - 只在已登录时显示
 const GlobalMusicPlayerWrapper: React.FC = () => {
@@ -160,6 +161,11 @@ function App() {
             
             {/* 全局音乐播放器 - 只在已登录时显示 */}
             <GlobalMusicPlayerWrapper />
+
+            {/* 新手引导 - 只在已登录时显示 */}
+            <ProtectedRoute>
+              <OnboardingWizard />
+            </ProtectedRoute>
           </div>
         </AntdApp>
       </ConfigProvider>

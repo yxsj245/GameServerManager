@@ -9,6 +9,7 @@ import onlineDeployRoutes from './onlineDeploy.js'
 import configRoutes from './config.js'
 import taskRoutes from './tasks.js'
 import gameConfigRoutes from './gameconfig.js'
+import settingsRoutes from './settings.js'
 
 const router = Router()
 
@@ -43,5 +44,6 @@ router.use('/online-deploy', onlineDeployRoutes)
 router.use('/config', configRoutes)
 router.use('/tasks', taskRoutes)
 router.use('/gameconfig', gameConfigRoutes)
+router.use('/settings', settingsRoutes)
 
 export default router

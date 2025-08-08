@@ -22,6 +22,7 @@ import apiClient from '@/utils/api'
 import { MinecraftServerCategory, MinecraftDownloadOptions, MinecraftDownloadProgress, MoreGameInfo, Platform } from '@/types'
 import { io, Socket } from 'socket.io-client'
 import config from '@/config'
+import { useDefaultGamePath, useGameInstallPath } from '@/hooks/useDefaultGamePath'
 
 interface GameInfo {
   game_nameCN: string
@@ -46,6 +47,39 @@ const GameDeploymentPage: React.FC = () => {
   const { addNotification } = useNotificationStore()
   const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState('steamcmd')
+
+  // 获取默认游戏路径
+  const { path: defaultGamePath } = useDefaultGamePath()
+
+  // 生成带游戏名称的完整路径的函数
+  const generatePath = (gameName: string) => {
+    if (!defaultGamePath || !gameName) return defaultGamePath
+
+    // 清理游戏名称，移除特殊字符
+    const cleanName = gameName.replace(/[<>:"|?*]/g, '').trim()
+
+    // 根据平台使用正确的路径分隔符
+    const isWindows = navigator.platform.toLowerCase().includes('win')
+    const separator = isWindows ? '\\' : '/'
+
+    // 确保默认路径以分隔符结尾
+    const basePath = defaultGamePath.endsWith(separator) ? defaultGamePath : defaultGamePath + separator
+
+    return basePath + cleanName
+  }
+
+  // 当默认路径加载完成后，填充到各个路径字段
+  useEffect(() => {
+    if (defaultGamePath) {
+      // 使用setTimeout确保在下一个事件循环中执行，避免状态更新冲突
+      setTimeout(() => {
+        setMinecraftInstallPath(prev => prev || defaultGamePath)
+        setMoreGameInstallPath(prev => prev || defaultGamePath)
+        setMrpackInstallPath(prev => prev || defaultGamePath)
+        setOnlineGameInstallPath(prev => prev || defaultGamePath)
+      }, 0)
+    }
+  }, [defaultGamePath])
   const [games, setGames] = useState<Games>({})
   const [loading, setLoading] = useState(true)
   const [gameListError, setGameListError] = useState<string | null>(null)
@@ -1131,7 +1165,34 @@ const GameDeploymentPage: React.FC = () => {
     setSelectedServer(server)
     setSelectedVersion('')
     setAvailableVersions([])
+    // 自动填充默认路径
+    if (!minecraftInstallPath) {
+      setMinecraftInstallPath(generatePath(server))
+    }
     fetchMinecraftVersions(server)
+  }
+
+  // 处理更多游戏选择
+  const handleMoreGameSelect = (gameId: string) => {
+    setSelectedMoreGame(gameId)
+    // 自动填充默认路径
+    const selectedGame = moreGames.find(g => g.id === gameId)
+    if (selectedGame && !moreGameInstallPath) {
+      setMoreGameInstallPath(generatePath(selectedGame.name))
+    }
+  }
+
+  // 处理整合包选择
+  const handleMrpackSelect = (modpack: any) => {
+    setSelectedMrpack(modpack)
+    // 自动填充默认路径
+    if (!mrpackInstallPath && modpack.title) {
+      setMrpackInstallPath(generatePath(modpack.title))
+    }
+    // 获取版本列表
+    if (modpack.project_id) {
+      fetchMrpackVersions(modpack.project_id)
+    }
   }
 
   useEffect(() => {
@@ -1139,17 +1200,35 @@ const GameDeploymentPage: React.FC = () => {
     if (activeTab === 'minecraft') {
       fetchMinecraftCategories()
       validateJava()
+      // 确保Minecraft标签页有默认路径
+      if (defaultGamePath && !minecraftInstallPath) {
+        setMinecraftInstallPath(defaultGamePath)
+      }
     }
     if (activeTab === 'more-games') {
       fetchMoreGames()
+      // 确保更多游戏标签页有默认路径
+      if (defaultGamePath && !moreGameInstallPath) {
+        setMoreGameInstallPath(defaultGamePath)
+      }
+    }
+    if (activeTab === 'mrpack') {
+      // 确保整合包标签页有默认路径
+      if (defaultGamePath && !mrpackInstallPath) {
+        setMrpackInstallPath(defaultGamePath)
+      }
     }
     if (activeTab === 'online-deploy') {
       checkSponsorKey()
       if (sponsorKeyValid) {
         fetchOnlineGames()
       }
+      // 确保在线部署标签页有默认路径
+      if (defaultGamePath && !onlineGameInstallPath) {
+        setOnlineGameInstallPath(defaultGamePath)
+      }
     }
-  }, [activeTab, sponsorKeyValid])
+  }, [activeTab, sponsorKeyValid, defaultGamePath])
 
   // 清理WebSocket连接和定时器
   useEffect(() => {
@@ -1227,7 +1306,8 @@ const GameDeploymentPage: React.FC = () => {
   const openInstallModal = (gameKey: string, gameInfo: GameInfo) => {
     setSelectedGame({ key: gameKey, info: gameInfo })
     setInstanceName(gameInfo.game_nameCN)
-    setInstallPath('')
+    // 自动填充默认游戏路径
+    setInstallPath(generatePath(gameInfo.game_nameCN))
     setShowInstallModal(true)
     // 使用requestAnimationFrame确保DOM渲染完成后再触发动画
     requestAnimationFrame(() => {
@@ -1519,7 +1599,8 @@ const GameDeploymentPage: React.FC = () => {
   // 打开在线游戏安装对话框
   const handleOpenOnlineGameInstallModal = (game: any) => {
     setSelectedOnlineGame(game)
-    setOnlineGameInstallPath('')
+    // 自动填充默认路径
+    setOnlineGameInstallPath(generatePath(game.name || game.title || '游戏'))
     setShowOnlineGameInstallModal(true)
     setTimeout(() => setOnlineGameInstallModalAnimating(true), 10)
   }
@@ -2573,7 +2654,7 @@ const GameDeploymentPage: React.FC = () => {
                             : 'border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500 cursor-pointer'
                         }
                       `}
-                      onClick={() => isSupported && setSelectedMoreGame(game.id)}
+                      onClick={() => isSupported && handleMoreGameSelect(game.id)}
                     >
                       <div className="flex items-start space-x-3">
                         <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${
@@ -2866,7 +2947,7 @@ const GameDeploymentPage: React.FC = () => {
                         : 'border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500'
                       }
                     `}
-                    onClick={() => setSelectedMrpack(modpack)}
+                    onClick={() => handleMrpackSelect(modpack)}
                     onMouseEnter={() => handleMrpackMouseEnter(modpack.project_id)}
                     onMouseLeave={handleMrpackMouseLeave}
                   >

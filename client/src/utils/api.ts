@@ -718,6 +718,15 @@ class ApiClient {
     return this.put('/config/terminal', config)
   }
 
+  // 游戏配置API
+  async getGameConfig() {
+    return this.get('/config/game')
+  }
+
+  async updateGameConfig(config: { defaultInstallPath: string }) {
+    return this.put('/config/game', config)
+  }
+
   // Steam游戏部署清单API
   async updateSteamGameList() {
     return this.post('/game-deployment/update-game-list')

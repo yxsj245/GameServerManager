@@ -26,6 +26,7 @@ import { setupSystemRoutes } from './routes/system.js'
 import { setupAuthRoutes } from './routes/auth.js'
 import { setupScheduledTaskRoutes } from './routes/scheduledTasks.js'
 import { setupConfigRoutes } from './routes/config.js'
+import { setupSettingsRoutes } from './routes/settings.js'
 import { setAuthManager } from './middleware/auth.js'
 import filesRouter from './routes/files.js'
 import { setupInstanceRoutes } from './routes/instances.js'
@@ -598,12 +599,13 @@ async function startServer() {
     // 设置路由
     app.use('/api/auth', setupAuthRoutes(authManager))
     app.use('/api/terminal', setupTerminalRoutes(terminalManager))
-    app.use('/api/game', setupGameRoutes(gameManager))
+    app.use('/api/games', setupGameRoutes(gameManager))
     app.use('/api/system', setupSystemRoutes(systemManager))
     app.use('/api/files', filesRouter)
     app.use('/api/instances', setupInstanceRoutes(instanceManager))
     app.use('/api/scheduled-tasks', setupScheduledTaskRoutes(schedulerManager))
     app.use('/api/config', setupConfigRoutes(configManager))
+    app.use('/api/settings', setupSettingsRoutes(configManager))
     
     // 设置SteamCMD管理器和路由
     setSteamCMDManager(steamcmdManager, logger)
