@@ -259,11 +259,9 @@ const GamePathOnboardingStep: React.FC = () => {
             <p className="font-medium mb-2">注意事项:</p>
             <ul className="space-y-1 list-disc list-inside">
               <li>确保选择的路径有足够的磁盘空间（建议至少 50GB）</li>
-              <li>避免使用系统盘根目录或重要系统文件夹</li>
+              <li>默认路径为Docker环境，若您是Docker环境不懂请勿修改</li>
               <li>确保当前用户对该路径有读写权限</li>
-              <li>路径中避免使用特殊字符和中文字符</li>
               {isWindows && <li>Windows 用户建议使用非 C 盘的其他盘符</li>}
-              {!isWindows && <li>Linux 用户建议使用 /home 或 /opt 下的目录</li>}
             </ul>
           </div>
         </div>
