@@ -811,6 +811,22 @@ class ApiClient {
   async verifyVcRedistEnvironment(version: string, architecture: string) {
     return this.get(`/environment/vcredist/${version}/${architecture}/verify`)
   }
+
+  // DirectX管理API
+  async getDirectXEnvironments() {
+    return this.get('/environment/directx')
+  }
+
+  async installDirectXEnvironment(data: {
+    downloadUrl: string
+    socketId?: string
+  }) {
+    return this.post('/environment/directx/install', data)
+  }
+
+  async uninstallDirectXEnvironment() {
+    return this.delete('/environment/directx')
+  }
 }
 
 // 创建单例实例

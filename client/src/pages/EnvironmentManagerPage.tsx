@@ -45,10 +45,22 @@ interface VcRedistEnvironment {
   installStage?: 'download' | 'install'
 }
 
+interface DirectXEnvironment {
+  version: string
+  platform: string
+  downloadUrl: string
+  installed: boolean
+  installPath?: string
+  installing?: boolean
+  installProgress?: number
+  installStage?: 'download' | 'install'
+}
+
 const EnvironmentManagerPage: React.FC = () => {
   const [systemInfo, setSystemInfo] = useState<SystemInfo | null>(null)
   const [javaEnvironments, setJavaEnvironments] = useState<JavaEnvironment[]>([])
   const [vcRedistEnvironments, setVcRedistEnvironments] = useState<VcRedistEnvironment[]>([])
+  const [directxEnvironments, setDirectxEnvironments] = useState<DirectXEnvironment[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [activeTab, setActiveTab] = useState('java')
@@ -134,11 +146,28 @@ const EnvironmentManagerPage: React.FC = () => {
     }
   }
 
+  // 获取DirectX环境列表
+  const fetchDirectXEnvironments = async () => {
+    try {
+      const response = await apiClient.getDirectXEnvironments()
+      if (response.success && response.data) {
+        setDirectxEnvironments(response.data)
+      }
+    } catch (error) {
+      console.error('获取DirectX环境列表失败:', error)
+      addNotification({
+        type: 'error',
+        title: '错误',
+        message: '获取DirectX环境列表失败'
+      })
+    }
+  }
+
   // 初始化数据
   useEffect(() => {
     const initData = async () => {
       setLoading(true)
-      await Promise.all([fetchSystemInfo(), fetchJavaEnvironments(), fetchVcRedistEnvironments()])
+      await Promise.all([fetchSystemInfo(), fetchJavaEnvironments(), fetchVcRedistEnvironments(), fetchDirectXEnvironments()])
       setLoading(false)
     }
     initData()
@@ -239,11 +268,52 @@ const EnvironmentManagerPage: React.FC = () => {
       }
     }
 
+    // 监听DirectX安装进度
+    const handleDirectXInstallProgress = (data: { stage: 'download' | 'install'; progress: number }) => {
+      setDirectxEnvironments(prev => prev.map(env =>
+        env.version === 'DirectX 9.0c'
+          ? {
+              ...env,
+              installing: true,
+              installProgress: data.progress,
+              installStage: data.stage
+            }
+          : env
+      ))
+    }
+
+    // 监听DirectX安装完成
+    const handleDirectXInstallComplete = (data: { success: boolean; message: string }) => {
+      setDirectxEnvironments(prev => prev.map(env =>
+        env.version === 'DirectX 9.0c'
+          ? { ...env, installing: false, installProgress: 0, installStage: undefined }
+          : env
+      ))
+
+      addNotification({
+        type: data.success ? 'success' : 'error',
+        title: data.success ? '成功' : '错误',
+        message: data.message
+      })
+
+      if (data.success) {
+        // 立即刷新一次
+        fetchDirectXEnvironments()
+
+        // 5秒后再次刷新，确保检测到安装状态
+        setTimeout(() => {
+          fetchDirectXEnvironments()
+        }, 5000)
+      }
+    }
+
     socketClient.on('java-install-progress', handleInstallProgress)
     socketClient.on('java-install-complete', handleInstallComplete)
     socketClient.on('vcredist-install-progress', handleVcRedistInstallProgress)
     socketClient.on('vcredist-install-complete', handleVcRedistInstallComplete)
     socketClient.on('vcredist-uninstall-complete', handleVcRedistUninstallComplete)
+    socketClient.on('directx-install-progress', handleDirectXInstallProgress)
+    socketClient.on('directx-install-complete', handleDirectXInstallComplete)
 
     return () => {
       socketClient.off('java-install-progress', handleInstallProgress)
@@ -251,13 +321,15 @@ const EnvironmentManagerPage: React.FC = () => {
       socketClient.off('vcredist-install-progress', handleVcRedistInstallProgress)
       socketClient.off('vcredist-install-complete', handleVcRedistInstallComplete)
       socketClient.off('vcredist-uninstall-complete', handleVcRedistUninstallComplete)
+      socketClient.off('directx-install-progress', handleDirectXInstallProgress)
+      socketClient.off('directx-install-complete', handleDirectXInstallComplete)
     }
   }, [])
 
   // 刷新数据
   const handleRefresh = async () => {
     setRefreshing(true)
-    await Promise.all([fetchJavaEnvironments(), fetchVcRedistEnvironments()])
+    await Promise.all([fetchJavaEnvironments(), fetchVcRedistEnvironments(), fetchDirectXEnvironments()])
     setRefreshing(false)
   }
 
@@ -447,6 +519,83 @@ const EnvironmentManagerPage: React.FC = () => {
     }
   }
 
+  // 安装DirectX
+  const handleInstallDirectX = async (downloadUrl: string) => {
+    try {
+      // 更新安装状态
+      setDirectxEnvironments(prev => prev.map(env =>
+        env.version === 'DirectX 9.0c'
+          ? { ...env, installing: true, installProgress: 0 }
+          : env
+      ))
+
+      const response = await apiClient.installDirectXEnvironment({
+        downloadUrl,
+        socketId: socketClient.getId()
+      })
+
+      if (!response.success) {
+        addNotification({
+          type: 'error',
+          title: '错误',
+          message: `DirectX 启动安装失败: ${response.message}`
+        })
+        // 重置安装状态
+        setDirectxEnvironments(prev => prev.map(env =>
+          env.version === 'DirectX 9.0c'
+            ? { ...env, installing: false, installProgress: 0 }
+            : env
+        ))
+      }
+    } catch (error) {
+      console.error('安装DirectX失败:', error)
+      addNotification({
+        type: 'error',
+        title: '错误',
+        message: 'DirectX 安装失败'
+      })
+      // 重置安装状态
+      setDirectxEnvironments(prev => prev.map(env =>
+        env.version === 'DirectX 9.0c'
+          ? { ...env, installing: false, installProgress: 0 }
+          : env
+      ))
+    }
+  }
+
+  // 清理DirectX文件
+  const handleUninstallDirectX = async () => {
+    // 显示确认对话框
+    if (!window.confirm('确定要清理DirectX安装文件吗？\n\n注意：这只会删除下载的安装文件，不会卸载已安装的DirectX系统组件。')) {
+      return
+    }
+
+    try {
+      const response = await apiClient.uninstallDirectXEnvironment()
+      if (response.success) {
+        addNotification({
+          type: 'success',
+          title: '成功',
+          message: 'DirectX 安装文件已清理'
+        })
+        await fetchDirectXEnvironments()
+      } else {
+        addNotification({
+          type: 'error',
+          title: '错误',
+          message: `DirectX 文件清理失败: ${response.message}`
+        })
+      }
+    } catch (error) {
+      console.error('清理DirectX文件失败:', error)
+      addNotification({
+        type: 'error',
+        title: '错误',
+        message: 'DirectX 文件清理失败'
+      })
+    }
+  }
+
   // 复制Java路径
   const handleCopyJavaPath = (javaExecutable: string) => {
     navigator.clipboard.writeText(javaExecutable).then(() => {
@@ -553,6 +702,22 @@ const EnvironmentManagerPage: React.FC = () => {
                 <div className="flex items-center space-x-2">
                   <Package className="w-4 h-4" />
                   <span>Microsoft Visual C++</span>
+                </div>
+              </button>
+            )}
+            {/* 只在Windows系统上显示DirectX标签页 */}
+            {systemInfo?.platform === 'win32' && (
+              <button
+                onClick={() => setActiveTab('directx')}
+                className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                  activeTab === 'directx'
+                    ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
+                }`}
+              >
+                <div className="flex items-center space-x-2">
+                  <Monitor className="w-4 h-4" />
+                  <span>DirectX</span>
                 </div>
               </button>
             )}
@@ -800,6 +965,156 @@ const EnvironmentManagerPage: React.FC = () => {
                 <div className="text-center py-12">
                   <Package className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                   <p className="text-gray-500 dark:text-gray-400">暂无可用的运行库</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* DirectX标签页内容 */}
+          {activeTab === 'directx' && systemInfo?.platform === 'win32' && (
+            <div className="space-y-6">
+              <div className="text-center mb-6">
+                <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+                  DirectX 9.0c 运行库
+                </h2>
+                <p className="text-gray-600 dark:text-gray-400 mb-3">
+                  安装DirectX 9.0c运行时组件，确保老游戏和多媒体应用程序正常运行
+                </p>
+                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
+                  <p className="text-sm text-blue-800 dark:text-blue-200">
+                    <strong>说明：</strong> 即使您的系统有DirectX 12，许多老游戏仍需要DirectX 9.0c的特定运行时组件。
+                    这些组件不会随DirectX 12自动安装。
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {directxEnvironments.map((env) => {
+                  const isInstalling = env.installing || false
+
+                  return (
+                    <div
+                      key={env.version}
+                      className="bg-gray-50 dark:bg-gray-700 rounded-lg p-6 border border-gray-200 dark:border-gray-600"
+                    >
+                      {/* 卡片头部 */}
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center space-x-2">
+                          <Monitor className="w-5 h-5 text-blue-500" />
+                          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                            {env.version}
+                          </h3>
+                        </div>
+                        <div className={`flex items-center space-x-1 px-2 py-1 rounded-full text-xs font-medium ${
+                          env.installed
+                            ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+                            : 'bg-gray-100 text-gray-800 dark:bg-gray-600 dark:text-gray-300'
+                        }`}>
+                          {env.installed ? (
+                            <>
+                              <CheckCircle className="w-3 h-3" />
+                              <span>已安装</span>
+                            </>
+                          ) : (
+                            <>
+                              <AlertCircle className="w-3 h-3" />
+                              <span>未安装</span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* 描述 */}
+                      <div className="mb-4">
+                        <p className="text-gray-600 dark:text-gray-400 text-sm mb-2">
+                          DirectX 9.0c 运行时组件，包含d3dx9、xinput1_3、xaudio2_7等老游戏必需的DLL文件
+                        </p>
+                        {env.installed && env.installPath && (
+                          <p className="text-xs text-gray-500 dark:text-gray-400">
+                            安装文件位置: {env.installPath}
+                          </p>
+                        )}
+                        {!env.installed && (
+                          <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded p-2 mt-2">
+                            <p className="text-xs text-yellow-800 dark:text-yellow-200">
+                              <strong>为什么需要安装？</strong> 即使系统有DirectX 12，老游戏仍需要DirectX 9.0c的特定运行时文件。
+                              这些文件不会自动包含在新版DirectX中。
+                            </p>
+                          </div>
+                        )}
+                        {env.installed && (
+                          <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded p-2 mt-2">
+                            <p className="text-xs text-green-800 dark:text-green-200">
+                              <strong>已安装：</strong> 检测到DirectX 9.0c运行时组件。"清理文件"仅删除安装程序，不影响已安装的组件。
+                            </p>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* 安装进度 */}
+                      {isInstalling && env.installProgress !== undefined && (
+                        <div className="mb-4">
+                          <div className="flex items-center justify-between text-sm text-gray-600 dark:text-gray-400 mb-2">
+                            <span>
+                              {env.installStage === 'download' ? '下载中...' : '安装中...'}
+                            </span>
+                            <span>{env.installProgress}%</span>
+                          </div>
+                          <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-2">
+                            <div
+                              className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                              style={{ width: `${env.installProgress}%` }}
+                            />
+                          </div>
+                        </div>
+                      )}
+
+                      {/* 操作按钮 */}
+                      <div className="flex space-x-2">
+                        {!env.installed ? (
+                          <button
+                            onClick={() => handleInstallDirectX(env.downloadUrl)}
+                            disabled={isInstalling}
+                            className="flex-1 flex items-center justify-center space-x-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded-lg transition-colors"
+                          >
+                            {isInstalling ? (
+                              <>
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                                <span>安装中...</span>
+                              </>
+                            ) : (
+                              <>
+                                <Download className="w-4 h-4" />
+                                <span>安装</span>
+                              </>
+                            )}
+                          </button>
+                        ) : (
+                          <>
+                            <div className="flex-1 flex items-center justify-center space-x-2 px-4 py-2 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400 rounded-lg">
+                              <CheckCircle className="w-4 h-4" />
+                              <span>已安装</span>
+                            </div>
+                            <button
+                              onClick={() => handleUninstallDirectX()}
+                              className="flex items-center justify-center space-x-2 px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg transition-colors"
+                              title="清理DirectX安装文件（不会卸载系统组件）"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                              <span>清理文件</span>
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+
+              {directxEnvironments.length === 0 && (
+                <div className="text-center py-12">
+                  <Monitor className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                  <p className="text-gray-500 dark:text-gray-400">暂无可用的DirectX运行库</p>
                 </div>
               )}
             </div>
