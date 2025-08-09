@@ -434,8 +434,12 @@ router.post('/packages/:packageManager/install', authenticateToken, async (req, 
       message: '操作命令已下发'
     })
 
-    // 后台执行安装
-    await packageManager.installPackages(pmName, packages)
+    // 后台执行安装，通过WebSocket发送进度更新
+    await packageManager.installPackages(pmName, packages, (task) => {
+      if (io && socketId) {
+        io.to(socketId).emit('package-task-progress', task)
+      }
+    })
 
     // 安装完成通知
     if (io && socketId) {
@@ -480,8 +484,12 @@ router.post('/packages/:packageManager/uninstall', authenticateToken, async (req
       message: '操作命令已下发'
     })
 
-    // 后台执行卸载
-    await packageManager.uninstallPackages(pmName, packages)
+    // 后台执行卸载，通过WebSocket发送进度更新
+    await packageManager.uninstallPackages(pmName, packages, (task) => {
+      if (io && socketId) {
+        io.to(socketId).emit('package-task-progress', task)
+      }
+    })
 
     // 卸载完成通知
     if (io && socketId) {

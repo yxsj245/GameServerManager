@@ -13,6 +13,17 @@ export interface PackageInfo {
   installing?: boolean
 }
 
+export interface PackageInstallTask {
+  id: string
+  packageName: string
+  packageManager: string
+  operation: 'install' | 'uninstall'
+  status: 'preparing' | 'installing' | 'completed' | 'failed'
+  startTime: Date
+  endTime?: Date
+  error?: string
+}
+
 export interface PackageManager {
   name: string
   displayName: string
@@ -266,7 +277,11 @@ export class LinuxPackageManager {
   /**
    * 安装包
    */
-  async installPackages(packageManagerName: string, packageNames: string[]): Promise<void> {
+  async installPackages(
+    packageManagerName: string,
+    packageNames: string[],
+    onProgress?: (task: PackageInstallTask) => void
+  ): Promise<void> {
     const pm = this.packageManagers.find(p => p.name === packageManagerName)
     if (!pm || !pm.available) {
       throw new Error(`包管理器 ${packageManagerName} 不可用`)
@@ -283,15 +298,40 @@ export class LinuxPackageManager {
       }
     }
 
-    // 分批处理包，避免单个包失败影响整体安装
+    // 并行处理所有包的安装
     const results: { package: string; success: boolean; error?: string }[] = []
 
-    for (const packageName of packageNames) {
+    // 首先过滤出需要安装的包
+    const packagesToInstall: string[] = []
+
+    for (let i = 0; i < packageNames.length; i++) {
+      const packageName = packageNames[i]
+      const taskId = `${packageManagerName}-install-${Date.now()}-${i}`
+
+      // 创建任务对象
+      const task: PackageInstallTask = {
+        id: taskId,
+        packageName,
+        packageManager: packageManagerName,
+        operation: 'install',
+        status: 'preparing',
+        startTime: new Date()
+      }
+
       try {
+        // 发送准备安装状态
+        if (onProgress) {
+          onProgress(task)
+        }
+
         // 检查包是否可用
         const available = await this.checkPackageAvailable(packageManagerName, packageName)
         if (!available) {
           logger.warn(`包 ${packageName} 在仓库中不可用，跳过安装`)
+          task.status = 'failed'
+          task.error = '包在仓库中不可用'
+          task.endTime = new Date()
+          if (onProgress) onProgress(task)
           results.push({ package: packageName, success: false, error: '包在仓库中不可用' })
           continue
         }
@@ -300,23 +340,78 @@ export class LinuxPackageManager {
         const installed = await this.checkPackageInstalled(packageManagerName, packageName)
         if (installed) {
           logger.info(`包 ${packageName} 已安装，跳过`)
+          task.status = 'completed'
+          task.endTime = new Date()
+          if (onProgress) onProgress(task)
           results.push({ package: packageName, success: true })
           continue
         }
 
-        const command = `sudo ${pm.installCommand} ${packageName}`
-        logger.info(`执行安装命令: ${command}`)
+        // 添加到待安装列表
+        packagesToInstall.push(packageName)
 
-        await execAsync(command, { timeout: 300000 }) // 5分钟超时
-        logger.info(`成功安装包: ${packageName}`)
-        results.push({ package: packageName, success: true })
+        // 更新为正在安装状态
+        task.status = 'installing'
+        if (onProgress) onProgress(task)
       } catch (error) {
-        logger.error(`安装包 ${packageName} 失败:`, error)
+        logger.error(`检查包 ${packageName} 失败:`, error)
+        task.status = 'failed'
+        task.error = error instanceof Error ? error.message : '未知错误'
+        task.endTime = new Date()
+        if (onProgress) onProgress(task)
         results.push({
           package: packageName,
           success: false,
           error: error instanceof Error ? error.message : '未知错误'
         })
+      }
+    }
+
+    // 如果有包需要安装，使用单个命令同时安装所有包
+    if (packagesToInstall.length > 0) {
+      try {
+        const command = `sudo ${pm.installCommand} ${packagesToInstall.join(' ')}`
+        logger.info(`执行批量安装命令: ${command}`)
+
+        await execAsync(command, { timeout: 600000 }) // 10分钟超时
+        logger.info(`成功安装所有包: ${packagesToInstall.join(', ')}`)
+
+        // 更新所有包为完成状态
+        for (const packageName of packagesToInstall) {
+          const task: PackageInstallTask = {
+            id: `${packageManagerName}-install-${Date.now()}-completed`,
+            packageName,
+            packageManager: packageManagerName,
+            operation: 'install',
+            status: 'completed',
+            startTime: new Date(),
+            endTime: new Date()
+          }
+          if (onProgress) onProgress(task)
+          results.push({ package: packageName, success: true })
+        }
+      } catch (error) {
+        logger.error(`批量安装失败:`, error)
+
+        // 更新所有包为失败状态
+        for (const packageName of packagesToInstall) {
+          const task: PackageInstallTask = {
+            id: `${packageManagerName}-install-${Date.now()}-failed`,
+            packageName,
+            packageManager: packageManagerName,
+            operation: 'install',
+            status: 'failed',
+            startTime: new Date(),
+            endTime: new Date(),
+            error: error instanceof Error ? error.message : '未知错误'
+          }
+          if (onProgress) onProgress(task)
+          results.push({
+            package: packageName,
+            success: false,
+            error: error instanceof Error ? error.message : '未知错误'
+          })
+        }
       }
     }
 
@@ -340,38 +435,118 @@ export class LinuxPackageManager {
   /**
    * 卸载包
    */
-  async uninstallPackages(packageManagerName: string, packageNames: string[]): Promise<void> {
+  async uninstallPackages(
+    packageManagerName: string,
+    packageNames: string[],
+    onProgress?: (task: PackageInstallTask) => void
+  ): Promise<void> {
     const pm = this.packageManagers.find(p => p.name === packageManagerName)
     if (!pm || !pm.available) {
       throw new Error(`包管理器 ${packageManagerName} 不可用`)
     }
 
-    // 分批处理包，避免单个包失败影响整体卸载
+    // 并行处理所有包的卸载
     const results: { package: string; success: boolean; error?: string }[] = []
 
-    for (const packageName of packageNames) {
+    // 首先过滤出需要卸载的包
+    const packagesToUninstall: string[] = []
+
+    for (let i = 0; i < packageNames.length; i++) {
+      const packageName = packageNames[i]
+      const taskId = `${packageManagerName}-uninstall-${Date.now()}-${i}`
+
+      // 创建任务对象
+      const task: PackageInstallTask = {
+        id: taskId,
+        packageName,
+        packageManager: packageManagerName,
+        operation: 'uninstall',
+        status: 'preparing',
+        startTime: new Date()
+      }
+
       try {
+        // 发送准备卸载状态
+        if (onProgress) {
+          onProgress(task)
+        }
+
         // 检查是否已安装
         const installed = await this.checkPackageInstalled(packageManagerName, packageName)
         if (!installed) {
           logger.info(`包 ${packageName} 未安装，跳过卸载`)
+          task.status = 'completed'
+          task.endTime = new Date()
+          if (onProgress) onProgress(task)
           results.push({ package: packageName, success: true })
           continue
         }
 
-        const command = `sudo ${pm.uninstallCommand} ${packageName}`
-        logger.info(`执行卸载命令: ${command}`)
+        // 添加到待卸载列表
+        packagesToUninstall.push(packageName)
 
-        await execAsync(command, { timeout: 300000 }) // 5分钟超时
-        logger.info(`成功卸载包: ${packageName}`)
-        results.push({ package: packageName, success: true })
+        // 更新为正在卸载状态
+        task.status = 'installing'
+        if (onProgress) onProgress(task)
       } catch (error) {
-        logger.error(`卸载包 ${packageName} 失败:`, error)
+        logger.error(`检查包 ${packageName} 失败:`, error)
+        task.status = 'failed'
+        task.error = error instanceof Error ? error.message : '未知错误'
+        task.endTime = new Date()
+        if (onProgress) onProgress(task)
         results.push({
           package: packageName,
           success: false,
           error: error instanceof Error ? error.message : '未知错误'
         })
+      }
+    }
+
+    // 如果有包需要卸载，使用单个命令同时卸载所有包
+    if (packagesToUninstall.length > 0) {
+      try {
+        const command = `sudo ${pm.uninstallCommand} ${packagesToUninstall.join(' ')}`
+        logger.info(`执行批量卸载命令: ${command}`)
+
+        await execAsync(command, { timeout: 600000 }) // 10分钟超时
+        logger.info(`成功卸载所有包: ${packagesToUninstall.join(', ')}`)
+
+        // 更新所有包为完成状态
+        for (const packageName of packagesToUninstall) {
+          const task: PackageInstallTask = {
+            id: `${packageManagerName}-uninstall-${Date.now()}-completed`,
+            packageName,
+            packageManager: packageManagerName,
+            operation: 'uninstall',
+            status: 'completed',
+            startTime: new Date(),
+            endTime: new Date()
+          }
+          if (onProgress) onProgress(task)
+          results.push({ package: packageName, success: true })
+        }
+      } catch (error) {
+        logger.error(`批量卸载失败:`, error)
+
+        // 更新所有包为失败状态
+        for (const packageName of packagesToUninstall) {
+          const task: PackageInstallTask = {
+            id: `${packageManagerName}-uninstall-${Date.now()}-failed`,
+            packageName,
+            packageManager: packageManagerName,
+            operation: 'uninstall',
+            status: 'failed',
+            startTime: new Date(),
+            endTime: new Date(),
+            error: error instanceof Error ? error.message : '未知错误'
+          }
+          if (onProgress) onProgress(task)
+          results.push({
+            package: packageName,
+            success: false,
+            error: error instanceof Error ? error.message : '未知错误'
+          })
+        }
       }
     }
 

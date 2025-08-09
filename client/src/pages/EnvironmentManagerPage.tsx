@@ -47,6 +47,17 @@ interface PackageInfo {
   installing?: boolean
 }
 
+interface PackageInstallTask {
+  id: string
+  packageName: string
+  packageManager: string
+  operation: 'install' | 'uninstall'
+  status: 'preparing' | 'installing' | 'completed' | 'failed'
+  startTime: Date
+  endTime?: Date
+  error?: string
+}
+
 interface VcRedistEnvironment {
   version: string
   platform: string
@@ -79,6 +90,10 @@ const EnvironmentManagerPage: React.FC = () => {
   const [packages, setPackages] = useState<PackageInfo[]>([])
   const [selectedPackageManager, setSelectedPackageManager] = useState<string>('')
   const [selectedPackages, setSelectedPackages] = useState<string[]>([])
+  const [packageTasks, setPackageTasks] = useState<PackageInstallTask[]>([])
+  const [showTaskProgress, setShowTaskProgress] = useState(false)
+  const [taskProgressAnimating, setTaskProgressAnimating] = useState(false)
+  const [packagesLoading, setPackagesLoading] = useState(false)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [activeTab, setActiveTab] = useState('java')
@@ -206,6 +221,7 @@ const EnvironmentManagerPage: React.FC = () => {
   const fetchPackages = async (packageManagerName: string) => {
     if (!packageManagerName) return
 
+    setPackagesLoading(true)
     try {
       const response = await apiClient.getPackageList(packageManagerName)
       if (response.success && response.data) {
@@ -218,6 +234,8 @@ const EnvironmentManagerPage: React.FC = () => {
         title: '错误',
         message: '获取包列表失败'
       })
+    } finally {
+      setPackagesLoading(false)
     }
   }
 
@@ -371,6 +389,34 @@ const EnvironmentManagerPage: React.FC = () => {
       }
     }
 
+    // 监听包任务进度
+    const handlePackageTaskProgress = (task: PackageInstallTask) => {
+      setPackageTasks(prev => {
+        // 尝试通过包名和操作类型匹配任务（因为服务端生成的ID可能不同）
+        const existingIndex = prev.findIndex(t =>
+          t.packageName === task.packageName &&
+          t.operation === task.operation &&
+          t.packageManager === task.packageManager &&
+          (t.status === 'preparing' || t.status === 'installing')
+        )
+
+        if (existingIndex >= 0) {
+          // 更新现有任务
+          const updated = [...prev]
+          updated[existingIndex] = {
+            ...updated[existingIndex],
+            status: task.status,
+            error: task.error,
+            endTime: task.endTime ? new Date(task.endTime) : undefined
+          }
+          return updated
+        } else {
+          // 如果找不到匹配的任务，添加新任务
+          return [...prev, { ...task, startTime: new Date(task.startTime) }]
+        }
+      })
+    }
+
     // 监听包安装/卸载完成
     const handlePackageInstallComplete = (data: { packageManager: string; packages: string[]; success: boolean; message: string }) => {
       addNotification({
@@ -405,6 +451,7 @@ const EnvironmentManagerPage: React.FC = () => {
     socketClient.on('vcredist-uninstall-complete', handleVcRedistUninstallComplete)
     socketClient.on('directx-install-progress', handleDirectXInstallProgress)
     socketClient.on('directx-install-complete', handleDirectXInstallComplete)
+    socketClient.on('package-task-progress', handlePackageTaskProgress)
     socketClient.on('package-install-complete', handlePackageInstallComplete)
     socketClient.on('package-uninstall-complete', handlePackageUninstallComplete)
 
@@ -416,6 +463,7 @@ const EnvironmentManagerPage: React.FC = () => {
       socketClient.off('vcredist-uninstall-complete', handleVcRedistUninstallComplete)
       socketClient.off('directx-install-progress', handleDirectXInstallProgress)
       socketClient.off('directx-install-complete', handleDirectXInstallComplete)
+      socketClient.off('package-task-progress', handlePackageTaskProgress)
       socketClient.off('package-install-complete', handlePackageInstallComplete)
       socketClient.off('package-uninstall-complete', handlePackageUninstallComplete)
     }
@@ -427,6 +475,21 @@ const EnvironmentManagerPage: React.FC = () => {
       fetchPackages(selectedPackageManager)
     }
   }, [selectedPackageManager])
+
+  // 处理进度窗口淡入动画
+  useEffect(() => {
+    if (showTaskProgress) {
+      // 延迟触发淡入动画，确保DOM已渲染
+      const timer = setTimeout(() => {
+        setTaskProgressAnimating(true)
+      }, 50) // 稍长的延迟确保DOM完全渲染
+
+      return () => clearTimeout(timer)
+    } else {
+      // 窗口关闭时重置动画状态
+      setTaskProgressAnimating(false)
+    }
+  }, [showTaskProgress])
 
   // 刷新数据
   const handleRefresh = async () => {
@@ -768,6 +831,19 @@ const EnvironmentManagerPage: React.FC = () => {
     }
 
     try {
+      // 预先创建所有任务并显示
+      const newTasks: PackageInstallTask[] = uninstalledPackages.map((packageName, index) => ({
+        id: `${selectedPackageManager}-install-${Date.now()}-${index}`,
+        packageName,
+        packageManager: selectedPackageManager,
+        operation: 'install',
+        status: 'preparing',
+        startTime: new Date()
+      }))
+
+      setPackageTasks(prev => [...prev, ...newTasks])
+      showTaskProgressModal()
+
       await apiClient.installPackages({
         packageManager: selectedPackageManager,
         packages: uninstalledPackages,
@@ -817,6 +893,19 @@ const EnvironmentManagerPage: React.FC = () => {
     }
 
     try {
+      // 预先创建所有任务并显示
+      const newTasks: PackageInstallTask[] = installedPackages.map((packageName, index) => ({
+        id: `${selectedPackageManager}-uninstall-${Date.now()}-${index}`,
+        packageName,
+        packageManager: selectedPackageManager,
+        operation: 'uninstall',
+        status: 'preparing',
+        startTime: new Date()
+      }))
+
+      setPackageTasks(prev => [...prev, ...newTasks])
+      showTaskProgressModal()
+
       await apiClient.uninstallPackages({
         packageManager: selectedPackageManager,
         packages: installedPackages,
@@ -838,6 +927,97 @@ const EnvironmentManagerPage: React.FC = () => {
         message: '批量卸载失败'
       })
     }
+  }
+
+  // 单个包安装
+  const handleSingleInstall = async (packageName: string) => {
+    if (!selectedPackageManager) return
+
+    try {
+      // 预先创建任务并显示
+      const newTask: PackageInstallTask = {
+        id: `${selectedPackageManager}-install-${Date.now()}-single`,
+        packageName,
+        packageManager: selectedPackageManager,
+        operation: 'install',
+        status: 'preparing',
+        startTime: new Date()
+      }
+
+      setPackageTasks(prev => [...prev, newTask])
+      showTaskProgressModal()
+
+      await apiClient.installPackages({
+        packageManager: selectedPackageManager,
+        packages: [packageName],
+        socketId: socketClient.getId()
+      })
+
+      addNotification({
+        type: 'success',
+        title: '成功',
+        message: '操作命令已下发'
+      })
+    } catch (error) {
+      console.error('安装失败:', error)
+      addNotification({
+        type: 'error',
+        title: '错误',
+        message: '安装失败'
+      })
+    }
+  }
+
+  // 单个包卸载
+  const handleSingleUninstall = async (packageName: string) => {
+    if (!selectedPackageManager) return
+
+    try {
+      // 预先创建任务并显示
+      const newTask: PackageInstallTask = {
+        id: `${selectedPackageManager}-uninstall-${Date.now()}-single`,
+        packageName,
+        packageManager: selectedPackageManager,
+        operation: 'uninstall',
+        status: 'preparing',
+        startTime: new Date()
+      }
+
+      setPackageTasks(prev => [...prev, newTask])
+      showTaskProgressModal()
+
+      await apiClient.uninstallPackages({
+        packageManager: selectedPackageManager,
+        packages: [packageName],
+        socketId: socketClient.getId()
+      })
+
+      addNotification({
+        type: 'success',
+        title: '成功',
+        message: '操作命令已下发'
+      })
+    } catch (error) {
+      console.error('卸载失败:', error)
+      addNotification({
+        type: 'error',
+        title: '错误',
+        message: '卸载失败'
+      })
+    }
+  }
+
+  // 显示进度窗口
+  const showTaskProgressModal = () => {
+    setShowTaskProgress(true) // DOM会被创建，useEffect会处理动画
+  }
+
+  // 隐藏进度窗口
+  const hideTaskProgressModal = () => {
+    setTaskProgressAnimating(false) // 触发淡出动画
+    setTimeout(() => {
+      setShowTaskProgress(false)
+    }, 300) // 等待淡出动画完成（与CSS动画时间一致）
   }
 
   // 获取平台图标
@@ -1367,7 +1547,7 @@ const EnvironmentManagerPage: React.FC = () => {
           {activeTab === 'packages' && (
             <div className="space-y-6">
               {/* 包管理器选择 */}
-              {packageManagers.length > 0 && (
+              {!loading && packageManagers.length > 0 && (
                 <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-3">
@@ -1386,38 +1566,52 @@ const EnvironmentManagerPage: React.FC = () => {
                       </select>
                     </div>
 
-                    {/* 批量操作按钮 */}
-                    {selectedPackages.length > 0 && (
-                      <div className="flex items-center space-x-2">
-                        <span className="text-sm text-gray-600 dark:text-gray-400">
-                          已选择 {selectedPackages.length} 个包
-                        </span>
+                    {/* 操作按钮区域 */}
+                    <div className="flex items-center space-x-2">
+                      {/* 进度按钮 */}
+                      {packageTasks.length > 0 && (
                         <button
-                          onClick={handleBatchInstall}
-                          className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-sm rounded transition-colors"
+                          onClick={() => showTaskProgress ? hideTaskProgressModal() : showTaskProgressModal()}
+                          className="flex items-center space-x-2 px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded transition-colors"
                         >
-                          批量安装
+                          <Loader2 className="w-4 h-4" />
+                          <span>任务进度 ({packageTasks.filter(t => t.status === 'installing' || t.status === 'preparing').length})</span>
                         </button>
-                        <button
-                          onClick={handleBatchUninstall}
-                          className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-sm rounded transition-colors"
-                        >
-                          批量卸载
-                        </button>
-                        <button
-                          onClick={() => setSelectedPackages([])}
-                          className="px-3 py-1 bg-gray-600 hover:bg-gray-700 text-white text-sm rounded transition-colors"
-                        >
-                          清空选择
-                        </button>
-                      </div>
-                    )}
+                      )}
+
+                      {/* 批量操作按钮 */}
+                      {selectedPackages.length > 0 && (
+                        <>
+                          <span className="text-sm text-gray-600 dark:text-gray-400">
+                            已选择 {selectedPackages.length} 个包
+                          </span>
+                          <button
+                            onClick={handleBatchInstall}
+                            className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-sm rounded transition-colors"
+                          >
+                            批量安装
+                          </button>
+                          <button
+                            onClick={handleBatchUninstall}
+                            className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-sm rounded transition-colors"
+                          >
+                            批量卸载
+                          </button>
+                          <button
+                            onClick={() => setSelectedPackages([])}
+                            className="px-3 py-1 bg-gray-600 hover:bg-gray-700 text-white text-sm rounded transition-colors"
+                          >
+                            清空选择
+                          </button>
+                        </>
+                      )}
+                    </div>
                   </div>
                 </div>
               )}
 
               {/* 包列表 */}
-              {packages.length > 0 && (
+              {!loading && !packagesLoading && packages.length > 0 && (
                 <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
                   {/* 表头 */}
                   <div className="border-b border-gray-200 dark:border-gray-700 p-4">
@@ -1497,20 +1691,14 @@ const EnvironmentManagerPage: React.FC = () => {
                               <div className="flex items-center space-x-2">
                                 {pkg.installed ? (
                                   <button
-                                    onClick={async () => {
-                                      setSelectedPackages([pkg.name])
-                                      await handleBatchUninstall()
-                                    }}
+                                    onClick={() => handleSingleUninstall(pkg.name)}
                                     className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-sm rounded transition-colors"
                                   >
                                     卸载
                                   </button>
                                 ) : (
                                   <button
-                                    onClick={async () => {
-                                      setSelectedPackages([pkg.name])
-                                      await handleBatchInstall()
-                                    }}
+                                    onClick={() => handleSingleInstall(pkg.name)}
                                     className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-sm rounded transition-colors"
                                   >
                                     安装
@@ -1526,18 +1714,147 @@ const EnvironmentManagerPage: React.FC = () => {
                 </div>
               )}
 
+              {/* 正在检测包管理器 */}
+              {loading && (
+                <div className="text-center py-12">
+                  <Loader2 className="w-12 h-12 animate-spin text-blue-500 mx-auto mb-4" />
+                  <p className="text-gray-500 dark:text-gray-400">正在检测可用的包管理器...</p>
+                </div>
+              )}
+
+              {/* 正在检测包列表 */}
+              {!loading && packagesLoading && (
+                <div className="text-center py-12">
+                  <Loader2 className="w-12 h-12 animate-spin text-blue-500 mx-auto mb-4" />
+                  <p className="text-gray-500 dark:text-gray-400">正在检测可用的包...</p>
+                </div>
+              )}
+
               {/* 空状态 */}
-              {packageManagers.length === 0 && (
+              {!loading && !packagesLoading && packageManagers.length === 0 && (
                 <div className="text-center py-12">
                   <Package className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                   <p className="text-gray-500 dark:text-gray-400">当前系统不支持包管理器或未检测到可用的包管理器</p>
                 </div>
               )}
 
-              {packageManagers.length > 0 && packages.length === 0 && selectedPackageManager && (
+              {!loading && !packagesLoading && packageManagers.length > 0 && packages.length === 0 && selectedPackageManager && (
                 <div className="text-center py-12">
                   <Package className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                   <p className="text-gray-500 dark:text-gray-400">暂无可用的包</p>
+                </div>
+              )}
+
+              {/* 任务进度显示窗口 */}
+              {showTaskProgress && packageTasks.length > 0 && (
+                <div
+                  className={`fixed inset-0 bg-black flex items-center justify-center z-50 transition-all duration-200 ease-in-out ${
+                    taskProgressAnimating ? 'bg-opacity-50' : 'bg-opacity-0'
+                  }`}
+                  onClick={hideTaskProgressModal}
+                >
+                  <div
+                    className={`bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-96 overflow-hidden transform transition-all duration-300 ease-out ${
+                      taskProgressAnimating ? 'scale-100 opacity-100 translate-y-0' : 'scale-95 opacity-0 translate-y-4'
+                    }`}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {/* 窗口头部 */}
+                    <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
+                      <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center">
+                        <Loader2 className="w-5 h-5 mr-2 text-blue-500" />
+                        安装任务进度
+                      </h3>
+                      <button
+                        onClick={hideTaskProgressModal}
+                        className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                      >
+                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </div>
+
+                    {/* 任务列表 */}
+                    <div className="p-4 max-h-80 overflow-y-auto">
+                      <div className="space-y-3">
+                        {packageTasks.map((task) => (
+                          <div key={task.id} className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
+                            <div className="flex items-center justify-between">
+                              <div className="flex-1">
+                                <div className="flex items-center space-x-2">
+                                  <span className="font-medium text-gray-900 dark:text-white font-mono text-sm">
+                                    {task.packageName}
+                                  </span>
+                                  <span className="text-xs text-gray-500 dark:text-gray-400">
+                                    ({task.operation === 'install' ? '安装' : '卸载'})
+                                  </span>
+                                </div>
+                                {task.error && (
+                                  <p className="text-sm text-red-600 dark:text-red-400 mt-1">
+                                    {task.error}
+                                  </p>
+                                )}
+                              </div>
+
+                              {/* 状态指示器 */}
+                              <div className={`flex items-center space-x-1 px-2 py-1 rounded-full text-xs font-medium ${
+                                task.status === 'preparing'
+                                  ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
+                                  : task.status === 'installing'
+                                  ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400'
+                                  : task.status === 'completed'
+                                  ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+                                  : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
+                              }`}>
+                                {task.status === 'preparing' && (
+                                  <>
+                                    <AlertCircle className="w-3 h-3" />
+                                    <span>准备处理</span>
+                                  </>
+                                )}
+                                {task.status === 'installing' && (
+                                  <>
+                                    <Loader2 className="w-3 h-3 animate-spin" />
+                                    <span>正在{task.operation === 'install' ? '安装' : '卸载'}</span>
+                                  </>
+                                )}
+                                {task.status === 'completed' && (
+                                  <>
+                                    <CheckCircle className="w-3 h-3" />
+                                    <span>{task.operation === 'install' ? '安装' : '卸载'}完成</span>
+                                  </>
+                                )}
+                                {task.status === 'failed' && (
+                                  <>
+                                    <AlertCircle className="w-3 h-3" />
+                                    <span>{task.operation === 'install' ? '安装' : '卸载'}失败</span>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* 窗口底部 */}
+                    <div className="border-t border-gray-200 dark:border-gray-700 p-4">
+                      <div className="flex items-center justify-between">
+                        <div className="text-sm text-gray-600 dark:text-gray-400">
+                          总计: {packageTasks.length} 个任务，
+                          完成: {packageTasks.filter(t => t.status === 'completed').length}，
+                          失败: {packageTasks.filter(t => t.status === 'failed').length}
+                        </div>
+                        <button
+                          onClick={() => setPackageTasks([])}
+                          className="px-3 py-1 bg-gray-600 hover:bg-gray-700 text-white text-sm rounded transition-colors"
+                        >
+                          清空记录
+                        </button>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
