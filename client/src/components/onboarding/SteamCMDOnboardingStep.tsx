@@ -29,11 +29,19 @@ const SteamCMDOnboardingStep: React.FC = () => {
     path?: string
   }>({ isInstalled: false })
 
-  // 根据平台设置默认路径
+  // 根据平台设置默认路径和安装模式
   useEffect(() => {
     if (systemInfo?.platform) {
       const isWindows = systemInfo.platform.toLowerCase().includes('windows')
+      const isLinux = systemInfo.platform.toLowerCase().includes('linux')
+
+      // 设置默认路径
       setInstallPath(isWindows ? 'C:\\SteamCMD' : '/root/steamcmd')
+
+      // Linux平台默认选择手动指定路径
+      if (isLinux) {
+        setInstallMode('manual')
+      }
     }
   }, [systemInfo])
 
@@ -214,9 +222,9 @@ const SteamCMDOnboardingStep: React.FC = () => {
               检测到系统平台: {systemInfo?.platform || '未知'}
             </h3>
             <p className="text-sm text-blue-700 dark:text-blue-300 mt-1">
-              {isWindows 
-                ? '建议使用在线安装，系统将自动下载并配置SteamCMD' 
-                : '建议使用在线安装，或手动指定已安装的SteamCMD路径'
+              {isWindows
+                ? '建议使用在线安装，系统将自动下载并配置SteamCMD'
+                : '已为您选择手动指定路径模式，适合Docker环境或已安装SteamCMD的系统'
               }
             </p>
           </div>
@@ -303,7 +311,7 @@ const SteamCMDOnboardingStep: React.FC = () => {
             />
             <div className="flex-1">
               <div className="font-medium text-gray-900 dark:text-white">
-                保存路径
+                手动指定路径
               </div>
               <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">
                 指定已安装的SteamCMD路径，适合已有SteamCMD的用户
@@ -323,18 +331,31 @@ const SteamCMDOnboardingStep: React.FC = () => {
           value={installPath}
           onChange={(e) => setInstallPath(e.target.value)}
           className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-          placeholder={installMode === 'online' 
+          placeholder={installMode === 'online'
             ? (isWindows ? '例如: C:\\SteamCMD' : '例如: /root/steamcmd')
             : (isWindows ? '例如: C:\\SteamCMD' : '例如: /root/steamcmd')
           }
           disabled={isInstalling}
         />
         <p className="text-xs text-gray-500 dark:text-gray-400">
-          {installMode === 'online' 
-            ? '选择一个空目录用于安装SteamCMD' 
+          {installMode === 'online'
+            ? '选择一个空目录用于安装SteamCMD'
             : '指向包含steamcmd.exe或steamcmd.sh的目录'
           }
         </p>
+
+        {/* Docker环境提示 - 仅在Linux平台且为手动模式时显示 */}
+        {!isWindows && installMode === 'manual' && (
+          <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
+            <div className="flex items-start space-x-2">
+              <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0" />
+              <div className="text-sm text-amber-700 dark:text-amber-300">
+                <p className="font-medium">Docker 环境提示</p>
+                <p className="mt-1">若您是Docker环境请勿更改此路径，保持默认的 <code className="bg-amber-100 dark:bg-amber-900/50 px-1 rounded">/root/steamcmd</code> 即可。</p>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* 安装进度 */}
