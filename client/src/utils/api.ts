@@ -827,6 +827,37 @@ class ApiClient {
   async uninstallDirectXEnvironment() {
     return this.delete('/environment/directx')
   }
+
+  // 动态链接库管理API
+  async getPackageManagers() {
+    return this.get('/environment/package-managers')
+  }
+
+  async getPackageList(packageManager: string) {
+    return this.get(`/environment/packages/${packageManager}`)
+  }
+
+  async installPackages(data: {
+    packageManager: string
+    packages: string[]
+    socketId?: string
+  }) {
+    return this.post(`/environment/packages/${data.packageManager}/install`, {
+      packages: data.packages,
+      socketId: data.socketId
+    })
+  }
+
+  async uninstallPackages(data: {
+    packageManager: string
+    packages: string[]
+    socketId?: string
+  }) {
+    return this.post(`/environment/packages/${data.packageManager}/uninstall`, {
+      packages: data.packages,
+      socketId: data.socketId
+    })
+  }
 }
 
 // 创建单例实例

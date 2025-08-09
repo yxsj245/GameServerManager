@@ -4,7 +4,7 @@ import os from 'os'
 import axios from 'axios'
 import AdmZip from 'adm-zip'
 import tar from 'tar'
-import logger from '../../utils/logger'
+import logger from '../../utils/logger.js'
 
 export interface JavaEnvironment {
   version: string

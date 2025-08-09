@@ -2,7 +2,7 @@ import path from 'path'
 import fs from 'fs-extra'
 import os from 'os'
 import axios from 'axios'
-import logger from '../../utils/logger'
+import logger from '../../utils/logger.js'
 import { spawn } from 'child_process'
 
 export interface DirectXEnvironment {

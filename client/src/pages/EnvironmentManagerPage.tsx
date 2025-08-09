@@ -33,6 +33,20 @@ interface SystemInfo {
   arch: string
 }
 
+interface PackageManager {
+  name: string
+  displayName: string
+  available: boolean
+}
+
+interface PackageInfo {
+  name: string
+  description: string
+  category: string
+  installed: boolean
+  installing?: boolean
+}
+
 interface VcRedistEnvironment {
   version: string
   platform: string
@@ -61,6 +75,10 @@ const EnvironmentManagerPage: React.FC = () => {
   const [javaEnvironments, setJavaEnvironments] = useState<JavaEnvironment[]>([])
   const [vcRedistEnvironments, setVcRedistEnvironments] = useState<VcRedistEnvironment[]>([])
   const [directxEnvironments, setDirectxEnvironments] = useState<DirectXEnvironment[]>([])
+  const [packageManagers, setPackageManagers] = useState<PackageManager[]>([])
+  const [packages, setPackages] = useState<PackageInfo[]>([])
+  const [selectedPackageManager, setSelectedPackageManager] = useState<string>('')
+  const [selectedPackages, setSelectedPackages] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [activeTab, setActiveTab] = useState('java')
@@ -163,11 +181,57 @@ const EnvironmentManagerPage: React.FC = () => {
     }
   }
 
+  // 获取包管理器列表
+  const fetchPackageManagers = async () => {
+    try {
+      const response = await apiClient.getPackageManagers()
+      if (response.success && response.data) {
+        setPackageManagers(response.data)
+        // 如果有可用的包管理器，默认选择第一个
+        if (response.data.length > 0) {
+          setSelectedPackageManager(response.data[0].name)
+        }
+      }
+    } catch (error) {
+      console.error('获取包管理器列表失败:', error)
+      addNotification({
+        type: 'error',
+        title: '错误',
+        message: '获取包管理器列表失败'
+      })
+    }
+  }
+
+  // 获取包列表
+  const fetchPackages = async (packageManagerName: string) => {
+    if (!packageManagerName) return
+
+    try {
+      const response = await apiClient.getPackageList(packageManagerName)
+      if (response.success && response.data) {
+        setPackages(response.data)
+      }
+    } catch (error) {
+      console.error('获取包列表失败:', error)
+      addNotification({
+        type: 'error',
+        title: '错误',
+        message: '获取包列表失败'
+      })
+    }
+  }
+
   // 初始化数据
   useEffect(() => {
     const initData = async () => {
       setLoading(true)
-      await Promise.all([fetchSystemInfo(), fetchJavaEnvironments(), fetchVcRedistEnvironments(), fetchDirectXEnvironments()])
+      await Promise.all([
+        fetchSystemInfo(),
+        fetchJavaEnvironments(),
+        fetchVcRedistEnvironments(),
+        fetchDirectXEnvironments(),
+        fetchPackageManagers()
+      ])
       setLoading(false)
     }
     initData()
@@ -307,6 +371,33 @@ const EnvironmentManagerPage: React.FC = () => {
       }
     }
 
+    // 监听包安装/卸载完成
+    const handlePackageInstallComplete = (data: { packageManager: string; packages: string[]; success: boolean; message: string }) => {
+      addNotification({
+        type: data.success ? 'success' : 'error',
+        title: data.success ? '成功' : '错误',
+        message: data.message
+      })
+
+      // 刷新包列表
+      if (data.success) {
+        fetchPackages(data.packageManager)
+      }
+    }
+
+    const handlePackageUninstallComplete = (data: { packageManager: string; packages: string[]; success: boolean; message: string }) => {
+      addNotification({
+        type: data.success ? 'success' : 'error',
+        title: data.success ? '成功' : '错误',
+        message: data.message
+      })
+
+      // 刷新包列表
+      if (data.success) {
+        fetchPackages(data.packageManager)
+      }
+    }
+
     socketClient.on('java-install-progress', handleInstallProgress)
     socketClient.on('java-install-complete', handleInstallComplete)
     socketClient.on('vcredist-install-progress', handleVcRedistInstallProgress)
@@ -314,6 +405,8 @@ const EnvironmentManagerPage: React.FC = () => {
     socketClient.on('vcredist-uninstall-complete', handleVcRedistUninstallComplete)
     socketClient.on('directx-install-progress', handleDirectXInstallProgress)
     socketClient.on('directx-install-complete', handleDirectXInstallComplete)
+    socketClient.on('package-install-complete', handlePackageInstallComplete)
+    socketClient.on('package-uninstall-complete', handlePackageUninstallComplete)
 
     return () => {
       socketClient.off('java-install-progress', handleInstallProgress)
@@ -323,13 +416,30 @@ const EnvironmentManagerPage: React.FC = () => {
       socketClient.off('vcredist-uninstall-complete', handleVcRedistUninstallComplete)
       socketClient.off('directx-install-progress', handleDirectXInstallProgress)
       socketClient.off('directx-install-complete', handleDirectXInstallComplete)
+      socketClient.off('package-install-complete', handlePackageInstallComplete)
+      socketClient.off('package-uninstall-complete', handlePackageUninstallComplete)
     }
   }, [])
+
+  // 监听选中的包管理器变化，获取对应的包列表
+  useEffect(() => {
+    if (selectedPackageManager) {
+      fetchPackages(selectedPackageManager)
+    }
+  }, [selectedPackageManager])
 
   // 刷新数据
   const handleRefresh = async () => {
     setRefreshing(true)
-    await Promise.all([fetchJavaEnvironments(), fetchVcRedistEnvironments(), fetchDirectXEnvironments()])
+    await Promise.all([
+      fetchJavaEnvironments(),
+      fetchVcRedistEnvironments(),
+      fetchDirectXEnvironments(),
+      fetchPackageManagers()
+    ])
+    if (selectedPackageManager) {
+      await fetchPackages(selectedPackageManager)
+    }
     setRefreshing(false)
   }
 
@@ -613,6 +723,123 @@ const EnvironmentManagerPage: React.FC = () => {
     })
   }
 
+  // 处理包选择
+  const handlePackageSelect = (packageName: string, checked: boolean) => {
+    if (checked) {
+      setSelectedPackages(prev => [...prev, packageName])
+    } else {
+      setSelectedPackages(prev => prev.filter(name => name !== packageName))
+    }
+  }
+
+  // 全选/取消全选
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      const allPackageNames = packages.map(pkg => pkg.name)
+      setSelectedPackages(allPackageNames)
+    } else {
+      setSelectedPackages([])
+    }
+  }
+
+  // 批量安装包
+  const handleBatchInstall = async () => {
+    if (!selectedPackageManager || selectedPackages.length === 0) {
+      addNotification({
+        type: 'warning',
+        title: '警告',
+        message: '请选择要安装的包'
+      })
+      return
+    }
+
+    const uninstalledPackages = selectedPackages.filter(name => {
+      const pkg = packages.find(p => p.name === name)
+      return pkg && !pkg.installed
+    })
+
+    if (uninstalledPackages.length === 0) {
+      addNotification({
+        type: 'warning',
+        title: '警告',
+        message: '所选包均已安装'
+      })
+      return
+    }
+
+    try {
+      await apiClient.installPackages({
+        packageManager: selectedPackageManager,
+        packages: uninstalledPackages,
+        socketId: socketClient.getId()
+      })
+
+      addNotification({
+        type: 'success',
+        title: '成功',
+        message: '操作命令已下发'
+      })
+
+      setSelectedPackages([])
+    } catch (error) {
+      console.error('批量安装失败:', error)
+      addNotification({
+        type: 'error',
+        title: '错误',
+        message: '批量安装失败'
+      })
+    }
+  }
+
+  // 批量卸载包
+  const handleBatchUninstall = async () => {
+    if (!selectedPackageManager || selectedPackages.length === 0) {
+      addNotification({
+        type: 'warning',
+        title: '警告',
+        message: '请选择要卸载的包'
+      })
+      return
+    }
+
+    const installedPackages = selectedPackages.filter(name => {
+      const pkg = packages.find(p => p.name === name)
+      return pkg && pkg.installed
+    })
+
+    if (installedPackages.length === 0) {
+      addNotification({
+        type: 'warning',
+        title: '警告',
+        message: '所选包均未安装'
+      })
+      return
+    }
+
+    try {
+      await apiClient.uninstallPackages({
+        packageManager: selectedPackageManager,
+        packages: installedPackages,
+        socketId: socketClient.getId()
+      })
+
+      addNotification({
+        type: 'success',
+        title: '成功',
+        message: '操作命令已下发'
+      })
+
+      setSelectedPackages([])
+    } catch (error) {
+      console.error('批量卸载失败:', error)
+      addNotification({
+        type: 'error',
+        title: '错误',
+        message: '批量卸载失败'
+      })
+    }
+  }
+
   // 获取平台图标
   const getPlatformIcon = () => {
     if (!systemInfo) return <Monitor className="w-4 h-4" />
@@ -718,6 +945,22 @@ const EnvironmentManagerPage: React.FC = () => {
                 <div className="flex items-center space-x-2">
                   <Monitor className="w-4 h-4" />
                   <span>DirectX</span>
+                </div>
+              </button>
+            )}
+            {/* 只在Linux系统上显示动态链接库标签页 */}
+            {systemInfo?.platform === 'linux' && (
+              <button
+                onClick={() => setActiveTab('packages')}
+                className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                  activeTab === 'packages'
+                    ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
+                }`}
+              >
+                <div className="flex items-center space-x-2">
+                  <Package className="w-4 h-4" />
+                  <span>动态链接库</span>
                 </div>
               </button>
             )}
@@ -1115,6 +1358,186 @@ const EnvironmentManagerPage: React.FC = () => {
                 <div className="text-center py-12">
                   <Monitor className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                   <p className="text-gray-500 dark:text-gray-400">暂无可用的DirectX运行库</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* 动态链接库标签页内容 */}
+          {activeTab === 'packages' && (
+            <div className="space-y-6">
+              {/* 包管理器选择 */}
+              {packageManagers.length > 0 && (
+                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-3">
+                      <Package className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                      <span className="text-blue-800 dark:text-blue-200 font-medium">包管理器:</span>
+                      <select
+                        value={selectedPackageManager}
+                        onChange={(e) => setSelectedPackageManager(e.target.value)}
+                        className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded px-3 py-1 text-sm"
+                      >
+                        {packageManagers.map(pm => (
+                          <option key={pm.name} value={pm.name}>
+                            {pm.displayName}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* 批量操作按钮 */}
+                    {selectedPackages.length > 0 && (
+                      <div className="flex items-center space-x-2">
+                        <span className="text-sm text-gray-600 dark:text-gray-400">
+                          已选择 {selectedPackages.length} 个包
+                        </span>
+                        <button
+                          onClick={handleBatchInstall}
+                          className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-sm rounded transition-colors"
+                        >
+                          批量安装
+                        </button>
+                        <button
+                          onClick={handleBatchUninstall}
+                          className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-sm rounded transition-colors"
+                        >
+                          批量卸载
+                        </button>
+                        <button
+                          onClick={() => setSelectedPackages([])}
+                          className="px-3 py-1 bg-gray-600 hover:bg-gray-700 text-white text-sm rounded transition-colors"
+                        >
+                          清空选择
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* 包列表 */}
+              {packages.length > 0 && (
+                <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+                  {/* 表头 */}
+                  <div className="border-b border-gray-200 dark:border-gray-700 p-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-3">
+                        <input
+                          type="checkbox"
+                          checked={selectedPackages.length === packages.length}
+                          onChange={(e) => handleSelectAll(e.target.checked)}
+                          className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+                        />
+                        <span className="font-medium text-gray-900 dark:text-white">全选</span>
+                      </div>
+                      <div className="text-sm text-gray-500 dark:text-gray-400">
+                        共 {packages.length} 个包，已安装 {packages.filter(p => p.installed).length} 个
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 按分类分组显示包 */}
+                  {Object.entries(
+                    packages.reduce((groups, pkg) => {
+                      const category = pkg.category || '其他'
+                      if (!groups[category]) groups[category] = []
+                      groups[category].push(pkg)
+                      return groups
+                    }, {} as Record<string, typeof packages>)
+                  ).map(([category, categoryPackages]) => (
+                    <div key={category} className="border-b border-gray-200 dark:border-gray-700 last:border-b-0">
+                      {/* 分类标题 */}
+                      <div className="bg-gray-50 dark:bg-gray-700/50 px-4 py-2 border-b border-gray-200 dark:border-gray-600">
+                        <h3 className="font-medium text-gray-900 dark:text-white">{category}</h3>
+                      </div>
+
+                      {/* 分类下的包列表 */}
+                      <div className="divide-y divide-gray-200 dark:divide-gray-700">
+                        {categoryPackages.map((pkg) => (
+                          <div key={pkg.name} className="p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center space-x-3 flex-1">
+                                <input
+                                  type="checkbox"
+                                  checked={selectedPackages.includes(pkg.name)}
+                                  onChange={(e) => handlePackageSelect(pkg.name, e.target.checked)}
+                                  className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+                                />
+                                <div className="flex-1">
+                                  <div className="flex items-center space-x-2">
+                                    <span className="font-medium text-gray-900 dark:text-white font-mono text-sm">
+                                      {pkg.name}
+                                    </span>
+                                    <div className={`flex items-center space-x-1 px-2 py-1 rounded-full text-xs font-medium ${
+                                      pkg.installed
+                                        ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+                                        : 'bg-gray-100 text-gray-800 dark:bg-gray-600 dark:text-gray-300'
+                                    }`}>
+                                      {pkg.installed ? (
+                                        <>
+                                          <CheckCircle className="w-3 h-3" />
+                                          <span>已安装</span>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <AlertCircle className="w-3 h-3" />
+                                          <span>未安装</span>
+                                        </>
+                                      )}
+                                    </div>
+                                  </div>
+                                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                                    {pkg.description}
+                                  </p>
+                                </div>
+                              </div>
+
+                              {/* 单个包操作按钮 */}
+                              <div className="flex items-center space-x-2">
+                                {pkg.installed ? (
+                                  <button
+                                    onClick={async () => {
+                                      setSelectedPackages([pkg.name])
+                                      await handleBatchUninstall()
+                                    }}
+                                    className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-sm rounded transition-colors"
+                                  >
+                                    卸载
+                                  </button>
+                                ) : (
+                                  <button
+                                    onClick={async () => {
+                                      setSelectedPackages([pkg.name])
+                                      await handleBatchInstall()
+                                    }}
+                                    className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-sm rounded transition-colors"
+                                  >
+                                    安装
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* 空状态 */}
+              {packageManagers.length === 0 && (
+                <div className="text-center py-12">
+                  <Package className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                  <p className="text-gray-500 dark:text-gray-400">当前系统不支持包管理器或未检测到可用的包管理器</p>
+                </div>
+              )}
+
+              {packageManagers.length > 0 && packages.length === 0 && selectedPackageManager && (
+                <div className="text-center py-12">
+                  <Package className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                  <p className="text-gray-500 dark:text-gray-400">暂无可用的包</p>
                 </div>
               )}
             </div>
