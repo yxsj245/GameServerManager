@@ -23,6 +23,28 @@ export class VcRedistManager {
   }
 
   /**
+   * 将可能包含“Visual C++”或“Microsoft Visual C++”前缀的版本名规范化为内部键（如：2015-2022、2013、2012、2010）
+   */
+  private normalizeVersion(input: string): string {
+    if (!input) return input
+    let v = input.replace(/^\s*Microsoft\s+Visual\s+C\+\+\s*/i, '')
+                 .replace(/^\s*Visual\s+C\+\+\s*/i, '')
+                 .trim()
+    // 常见写法中可能混入“Redistributable”等，保留年份关键即可
+    // 提取前四位数字或形如“2015-2022”的段
+    const rangeMatch = v.match(/20\d{2}\s*-\s*20\d{2}/)
+    if (rangeMatch) return rangeMatch[0].replace(/\s*/g, '')
+    const yearMatch = v.match(/20\d{2}/)
+    if (yearMatch) {
+      const y = yearMatch[0]
+      if (['2010','2012','2013'].includes(y)) return y
+      if (['2015','2017','2019','2022'].includes(y)) return '2015-2022'
+    }
+    // 已是标准键或其他：直接返回去空格后的字符串
+    return v.replace(/\s*/g, '')
+  }
+
+  /**
    * 确保安装目录存在
    */
   private async ensureInstallDir(): Promise<void> {
@@ -196,7 +218,6 @@ export class VcRedistManager {
   async getVcRedistEnvironments(): Promise<VcRedistEnvironment[]> {
     await this.ensureInstallDir()
 
-    // 只在Windows平台上提供
     if (os.platform() !== 'win32') {
       return []
     }
@@ -205,15 +226,15 @@ export class VcRedistManager {
     const versions = ['2015-2022', '2013', '2012', '2010']
     const architectures: ('x86' | 'x64')[] = ['x86', 'x64']
 
-    for (const version of versions) {
+    for (const v of versions) {
       for (const arch of architectures) {
-        const installed = await this.checkVcRedistInstalled(version, arch)
-        const versionDir = this.getVersionDir(version, arch)
+        const installed = await this.checkVcRedistInstalled(v, arch)
+        const versionDir = this.getVersionDir(v, arch)
 
         environments.push({
-          version: `Visual C++ ${version}`,
+          version: `Visual C++ ${v}`,
           platform: 'win32',
-          downloadUrl: this.getDownloadUrl(version, arch),
+          downloadUrl: this.getDownloadUrl(v, arch),
           installed,
           installPath: installed ? versionDir : undefined,
           architecture: arch
@@ -228,6 +249,7 @@ export class VcRedistManager {
    * 获取下载URL
    */
   private getDownloadUrl(version: string, arch: string): string {
+    const key = this.normalizeVersion(version)
     const urlMap: { [key: string]: { [key: string]: string } } = {
       '2015-2022': {
         'x86': 'https://aka.ms/vs/17/release/vc_redist.x86.exe',
@@ -247,7 +269,7 @@ export class VcRedistManager {
       }
     }
 
-    return urlMap[version]?.[arch] || ''
+    return urlMap[key]?.[arch] || ''
   }
 
   /**
@@ -301,10 +323,12 @@ export class VcRedistManager {
 
     await this.ensureInstallDir()
 
-    const versionDir = this.getVersionDir(version, architecture)
+    // 标准化版本键
+    const versionKey = this.normalizeVersion(version)
+    const versionDir = this.getVersionDir(versionKey, architecture)
 
     // 检查是否已安装
-    const installed = await this.checkVcRedistInstalled(version, architecture)
+    const installed = await this.checkVcRedistInstalled(versionKey, architecture)
     if (installed) {
       throw new Error(`Visual C++ ${version} ${architecture} 已经安装`)
     }
@@ -337,7 +361,7 @@ export class VcRedistManager {
         logger.warn(`安装完成但检测不到 ${version} ${architecture}，可能需要等待系统更新`)
       }
 
-      logger.info(`Visual C++ ${version} ${architecture} 安装完成，检测状态: ${installed ? '已安装' : '待确认'}`)
+      logger.info(`Visual C++ ${versionKey} ${architecture} 安装完成，检测状态: ${installed ? '已安装' : '待确认'}`)
     } catch (error) {
       logger.error(`安装 Visual C++ ${version} ${architecture} 失败:`, error)
 
@@ -392,20 +416,31 @@ export class VcRedistManager {
       throw new Error('Visual C++运行库只能在Windows系统上卸载')
     }
 
-    const installed = await this.checkVcRedistInstalled(version, architecture)
+    const versionKey = this.normalizeVersion(version)
+
+    const installed = await this.checkVcRedistInstalled(versionKey, architecture)
     if (!installed) {
-      throw new Error(`Visual C++ ${version} ${architecture} 未安装`)
+      throw new Error(`Visual C++ ${versionKey} ${architecture} 未安装`)
     }
 
-    logger.info(`开始卸载 Visual C++ ${version} ${architecture}`)
+    logger.info(`开始卸载 Visual C++ ${versionKey} ${architecture}`)
 
     try {
-      const uninstallString = await this.getUninstallString(version, architecture)
-      if (!uninstallString) {
+      const uninstallInfo = await this.getUninstallInfo(versionKey, architecture)
+      if (!uninstallInfo) {
         throw new Error('未找到卸载程序')
       }
 
-      await this.executeUninstaller(uninstallString)
+      // 优先使用QuietUninstallString，其次使用UninstallString（控制面板逻辑）
+      const uninstallCommand = uninstallInfo.quietUninstallString || uninstallInfo.uninstallString
+      if (!uninstallCommand) {
+        throw new Error('未找到有效的卸载命令')
+      }
+
+      logger.info(`找到程序: ${uninstallInfo.displayName}`)
+      logger.info(`卸载命令: ${uninstallCommand}`)
+
+      await this.executeUninstaller(uninstallCommand)
 
       // 等待一段时间让系统完成卸载
       await new Promise(resolve => setTimeout(resolve, 2000))
@@ -424,126 +459,240 @@ export class VcRedistManager {
   }
 
   /**
-   * 获取卸载字符串
+   * 获取卸载信息（完全模拟控制面板"程序和功能"的逻辑）
    */
-  private async getUninstallString(version: string, architecture: string): Promise<string | null> {
+  private async getUninstallInfo(version: string, architecture: string): Promise<{
+    uninstallString?: string
+    quietUninstallString?: string
+    displayName?: string
+    keyPath?: string
+  } | null> {
     try {
       const { exec } = await import('child_process')
       const { promisify } = await import('util')
       const execAsync = promisify(exec)
 
+      // 控制面板查询的注册表路径（64位和32位程序）
+      const uninstallKeys = [
+        'HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall',
+        'HKEY_LOCAL_MACHINE\\SOFTWARE\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall'
+      ]
+
       const searchPatterns = this.getSearchPatterns(version, architecture)
-      const baseKey = 'HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall'
-      const regViews = [' /reg:64', ' /reg:32']
 
-      for (const pattern of searchPatterns) {
-        for (const view of regViews) {
-          try {
-            // 搜索卸载字符串，优先 QuietUninstallString
-            const { stdout } = await execAsync(`reg query "${baseKey}" /s /f "${pattern}" /d${view}`)
+      for (const baseKey of uninstallKeys) {
+        try {
+          // 枚举所有子键
+          const { stdout: subKeys } = await execAsync(`reg query "${baseKey}"`)
+          const keyLines = subKeys.split('\n').filter(line => line.includes('HKEY_LOCAL_MACHINE'))
 
-            if (stdout.includes('Microsoft Visual C++') && stdout.includes(pattern)) {
-              // 提取注册表键路径
-              const lines = stdout.split('\n')
-              for (const line of lines) {
-                if (line.includes('HKEY_LOCAL_MACHINE') && line.includes('Uninstall')) {
-                  const keyPath = line.trim()
-                  try {
-                    // 优先QuietUninstallString
-                    const { stdout: quietInfo } = await execAsync(`reg query "${keyPath}" /v QuietUninstallString`)
-                    const quietMatch = quietInfo.match(/QuietUninstallString\s+REG_SZ\s+(.+)/)
-                    if (quietMatch) {
-                      return quietMatch[1].trim()
-                    }
-                  } catch (_) {}
+          for (const keyLine of keyLines) {
+            const keyPath = keyLine.trim()
+            if (!keyPath) continue
 
-                  try {
-                    const { stdout: uninstallInfo } = await execAsync(`reg query "${keyPath}" /v UninstallString`)
-                    const match = uninstallInfo.match(/UninstallString\s+REG_SZ\s+(.+)/)
-                    if (match) {
-                      return match[1].trim()
-                    }
-                  } catch (error) {
-                    continue
-                  }
+            try {
+              // 读取该程序的所有信息
+              const { stdout: keyInfo } = await execAsync(`reg query "${keyPath}"`)
+
+              // 检查是否匹配我们要找的程序
+              let displayName = ''
+              const displayNameMatch = keyInfo.match(/DisplayName\s+REG_SZ\s+(.+)/i)
+              if (displayNameMatch) {
+                displayName = displayNameMatch[1].trim()
+              }
+
+              // 检查是否为我们要找的Visual C++运行库
+              const isMatch = searchPatterns.some(pattern =>
+                displayName.toLowerCase().includes(pattern.toLowerCase()) ||
+                displayName.toLowerCase().includes('microsoft visual c++')
+              )
+
+              if (isMatch && this.isArchitectureMatch(displayName, architecture)) {
+                // 提取卸载信息
+                const uninstallMatch = keyInfo.match(/UninstallString\s+REG_SZ\s+(.+)/i)
+                const quietUninstallMatch = keyInfo.match(/QuietUninstallString\s+REG_SZ\s+(.+)/i)
+
+                // 检查SystemComponent标志（如果为1，则不在控制面板显示）
+                const systemComponentMatch = keyInfo.match(/SystemComponent\s+REG_DWORD\s+0x1/i)
+                if (systemComponentMatch) {
+                  continue // 跳过系统组件
+                }
+
+                // 检查WindowsInstaller标志（MSI安装的程序）
+                const windowsInstallerMatch = keyInfo.match(/WindowsInstaller\s+REG_DWORD\s+0x1/i)
+                const isMsiInstall = !!windowsInstallerMatch
+
+                logger.info(`找到匹配的程序: ${displayName} (${keyPath})`)
+                logger.info(`MSI安装: ${isMsiInstall}, 卸载字符串: ${uninstallMatch?.[1] || '无'}`)
+
+                return {
+                  uninstallString: uninstallMatch?.[1]?.trim(),
+                  quietUninstallString: quietUninstallMatch?.[1]?.trim(),
+                  displayName: displayName,
+                  keyPath: keyPath
                 }
               }
+            } catch (error) {
+              // 跳过无法读取的键
+              continue
             }
-          } catch (error) {
-            continue
           }
+        } catch (error) {
+          // 跳过无法访问的注册表路径
+          continue
         }
       }
 
       return null
     } catch (error) {
-      logger.error('获取卸载字符串失败:', error)
+      logger.error('获取卸载信息失败:', error)
       return null
     }
   }
 
   /**
-   * 执行卸载程序
+   * 检查架构是否匹配
+   */
+  private isArchitectureMatch(displayName: string, targetArch: string): boolean {
+    const name = displayName.toLowerCase()
+
+    if (targetArch === 'x64') {
+      return name.includes('(x64)') || name.includes('64-bit') ||
+             (!name.includes('(x86)') && !name.includes('32-bit'))
+    } else if (targetArch === 'x86') {
+      return name.includes('(x86)') || name.includes('32-bit')
+    }
+
+    return false
+  }
+
+  /**
+   * 执行卸载程序（完全模拟控制面板"程序和功能"的卸载逻辑）
    */
   private async executeUninstaller(uninstallString: string): Promise<void> {
     return new Promise((resolve, reject) => {
-      // 解析卸载命令
-      let command = uninstallString
+      const trimmed = uninstallString.trim()
+      let command: string
       let args: string[] = []
 
-      const trimmed = uninstallString.trim()
+      logger.info(`原始卸载命令: ${trimmed}`)
 
-      // MSI卸载（控制面板同源）
+      // 解析命令行（处理引号）
       if (trimmed.toLowerCase().startsWith('msiexec')) {
-        const parts = trimmed.split(' ')
-        command = parts.shift()!.replace(/"/g, '')
+        // MSI卸载 - 控制面板使用的标准方式
+        const parts = this.parseCommandLine(trimmed)
+        command = parts.shift()!
         args = parts
-        // 标准静默卸载参数
-        if (!args.some(a => a.toLowerCase() === '/x')) {
-          // 如果没有/x，尝试从GUID中构造；这里假设卸载字符串已经包含/x {GUID}
-        }
+
+        // 确保有静默参数（控制面板在后台卸载时使用）
         if (!args.some(a => a.toLowerCase() === '/quiet' || a.toLowerCase() === '/qn')) {
           args.push('/quiet')
         }
         if (!args.some(a => a.toLowerCase() === '/norestart')) {
           args.push('/norestart')
         }
-      } else if (trimmed.includes('.exe')) {
-        // 常规EXE卸载
-        const parts = trimmed.split(' ')
-        command = parts[0].replace(/"/g, '')
-        args = parts.slice(1)
-        // 添加静默卸载参数
-        if (!args.some(arg => /\/quiet|\/silent|\/S|\-s/i.test(arg))) {
-          args.push('/quiet', '/norestart')
+      } else {
+        // EXE卸载程序
+        const parts = this.parseCommandLine(trimmed)
+        command = parts.shift()!
+        args = parts
+
+        // 如果QuietUninstallString已经包含静默参数，不要重复添加
+        const hasQuietParam = args.some(arg =>
+          /\/quiet|\/silent|\/s|\/q|\-s|\-q|\/uninstall/i.test(arg)
+        )
+
+        if (!hasQuietParam) {
+          // 尝试常见的静默参数
+          args.push('/quiet')
         }
       }
 
-      logger.info(`执行卸载命令: ${command} ${args.join(' ')}`)
+      logger.info(`解析后命令: ${command}`)
+      logger.info(`解析后参数: ${args.join(' ')}`)
 
       const proc = spawn(command, args, {
-        stdio: 'pipe'
+        stdio: 'pipe',
+        shell: false
       })
 
+      let stdout = ''
       let stderr = ''
+
+      proc.stdout.on('data', (data) => {
+        stdout += data.toString()
+      })
 
       proc.stderr.on('data', (data) => {
         stderr += data.toString()
       })
 
       proc.on('close', (code) => {
-        // Windows Installer 3010 表示需要重启，视为成功
-        if (code === 0 || code === 3010) {
+        logger.info(`卸载程序退出，代码: ${code}`)
+        if (stdout) logger.info(`标准输出: ${stdout}`)
+        if (stderr) logger.info(`错误输出: ${stderr}`)
+
+        // Windows Installer 退出代码
+        // 0: 成功
+        // 3010: 成功，需要重启
+        // 1605: 产品未安装
+        // 1641: 成功，安装程序启动了重启
+        if (code === 0 || code === 3010 || code === 1641) {
           resolve()
+        } else if (code === 1605) {
+          reject(new Error('程序未安装或已被卸载'))
         } else {
-          reject(new Error(`卸载失败，退出代码: ${code}, 错误信息: ${stderr}`))
+          reject(new Error(`卸载失败，退出代码: ${code}${stderr ? ', 错误信息: ' + stderr : ''}`))
         }
       })
 
       proc.on('error', (error) => {
         reject(new Error(`启动卸载程序失败: ${error.message}`))
       })
+
+      // 设置超时（10分钟）
+      setTimeout(() => {
+        if (!proc.killed) {
+          proc.kill()
+          reject(new Error('卸载超时'))
+        }
+      }, 600000)
     })
+  }
+
+  /**
+   * 解析命令行（正确处理引号）
+   */
+  private parseCommandLine(commandLine: string): string[] {
+    const args: string[] = []
+    let current = ''
+    let inQuotes = false
+    let quoteChar = ''
+
+    for (let i = 0; i < commandLine.length; i++) {
+      const char = commandLine[i]
+
+      if ((char === '"' || char === "'") && !inQuotes) {
+        inQuotes = true
+        quoteChar = char
+      } else if (char === quoteChar && inQuotes) {
+        inQuotes = false
+        quoteChar = ''
+      } else if (char === ' ' && !inQuotes) {
+        if (current.trim()) {
+          args.push(current.trim())
+          current = ''
+        }
+      } else {
+        current += char
+      }
+    }
+
+    if (current.trim()) {
+      args.push(current.trim())
+    }
+
+    return args
   }
 
   /**

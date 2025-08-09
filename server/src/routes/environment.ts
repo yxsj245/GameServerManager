@@ -182,7 +182,13 @@ router.post('/vcredist/install', authenticateToken, async (req, res) => {
   }
 
   try {
-    // 开始安装
+    // 立即返回响应，安装过程在后台进行
+    res.json({
+      success: true,
+      message: `Visual C++ ${version} ${architecture} 开始安装`
+    })
+
+    // 后台执行安装，通过WebSocket发送进度更新
     await vcRedistManager.installVcRedist(
       version,
       architecture,
@@ -199,40 +205,66 @@ router.post('/vcredist/install', authenticateToken, async (req, res) => {
       }
     )
 
-    res.json({
-      success: true,
-      message: `Visual C++ ${version} ${architecture} 安装成功`
-    })
+    // 安装完成通知
+    if (io && socketId) {
+      io.to(socketId).emit('vcredist-install-complete', {
+        version,
+        architecture,
+        success: true,
+        message: `Visual C++ ${version} ${architecture} 安装成功`
+      })
+    }
   } catch (error) {
     logger.error(`安装 Visual C++ ${version} ${architecture} 失败:`, error)
 
-    const statusCode = error instanceof Error && error.message.includes('已经安装') ? 409 : 500
-    res.status(statusCode).json({
-      success: false,
-      message: `安装 Visual C++ ${version} ${architecture} 失败: ${error instanceof Error ? error.message : '未知错误'}`
-    })
+    // 安装失败通知
+    if (io && socketId) {
+      io.to(socketId).emit('vcredist-install-complete', {
+        version,
+        architecture,
+        success: false,
+        message: `Visual C++ ${version} ${architecture} 安装失败: ${error instanceof Error ? error.message : '未知错误'}`
+      })
+    }
   }
 })
 
 // 卸载Visual C++运行库
 router.delete('/vcredist/:version/:architecture', authenticateToken, async (req, res) => {
   const { version, architecture } = req.params
+  const { socketId } = req.body
 
   try {
-    await vcRedistManager.uninstallVcRedist(version, architecture)
-
+    // 立即返回响应，卸载过程在后台进行
     res.json({
       success: true,
-      message: `Visual C++ ${version} ${architecture} 卸载成功`
+      message: `Visual C++ ${version} ${architecture} 卸载命令已下发`
     })
+
+    // 后台执行卸载
+    await vcRedistManager.uninstallVcRedist(version, architecture)
+
+    // 卸载完成通知
+    if (io && socketId) {
+      io.to(socketId).emit('vcredist-uninstall-complete', {
+        version,
+        architecture,
+        success: true,
+        message: `Visual C++ ${version} ${architecture} 卸载成功`
+      })
+    }
   } catch (error) {
     logger.error(`卸载 Visual C++ ${version} ${architecture} 失败:`, error)
 
-    const statusCode = error instanceof Error && error.message.includes('未安装') ? 404 : 500
-    res.status(statusCode).json({
-      success: false,
-      message: `卸载 Visual C++ ${version} ${architecture} 失败: ${error instanceof Error ? error.message : '未知错误'}`
-    })
+    // 卸载失败通知
+    if (io && socketId) {
+      io.to(socketId).emit('vcredist-uninstall-complete', {
+        version,
+        architecture,
+        success: false,
+        message: `Visual C++ ${version} ${architecture} 卸载失败: ${error instanceof Error ? error.message : '未知错误'}`
+      })
+    }
   }
 })
 

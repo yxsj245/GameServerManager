@@ -802,8 +802,10 @@ class ApiClient {
     return this.post('/environment/vcredist/install', data)
   }
 
-  async uninstallVcRedistEnvironment(version: string, architecture: string) {
-    return this.delete(`/environment/vcredist/${version}/${architecture}`)
+  async uninstallVcRedistEnvironment(version: string, architecture: string, socketId?: string) {
+    return this.delete(`/environment/vcredist/${version}/${architecture}`, {
+      data: { socketId }
+    })
   }
 
   async verifyVcRedistEnvironment(version: string, architecture: string) {

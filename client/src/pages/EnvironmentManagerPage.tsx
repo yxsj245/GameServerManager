@@ -220,16 +220,37 @@ const EnvironmentManagerPage: React.FC = () => {
       }
     }
 
+    // 监听Visual C++运行库卸载完成
+    const handleVcRedistUninstallComplete = (data: { version: string; architecture: string; success: boolean; message: string }) => {
+      addNotification({
+        type: data.success ? 'success' : 'error',
+        title: data.success ? '成功' : '错误',
+        message: data.message
+      })
+
+      if (data.success) {
+        // 立即刷新一次
+        fetchVcRedistEnvironments()
+
+        // 3秒后再次刷新，确保检测到卸载状态
+        setTimeout(() => {
+          fetchVcRedistEnvironments()
+        }, 3000)
+      }
+    }
+
     socketClient.on('java-install-progress', handleInstallProgress)
     socketClient.on('java-install-complete', handleInstallComplete)
     socketClient.on('vcredist-install-progress', handleVcRedistInstallProgress)
     socketClient.on('vcredist-install-complete', handleVcRedistInstallComplete)
+    socketClient.on('vcredist-uninstall-complete', handleVcRedistUninstallComplete)
 
     return () => {
       socketClient.off('java-install-progress', handleInstallProgress)
       socketClient.off('java-install-complete', handleInstallComplete)
       socketClient.off('vcredist-install-progress', handleVcRedistInstallProgress)
       socketClient.off('vcredist-install-complete', handleVcRedistInstallComplete)
+      socketClient.off('vcredist-uninstall-complete', handleVcRedistUninstallComplete)
     }
   }, [])
 
@@ -402,14 +423,13 @@ const EnvironmentManagerPage: React.FC = () => {
   // 卸载Visual C++运行库
   const handleUninstallVcRedist = async (version: string, architecture: string) => {
     try {
-      const response = await apiClient.uninstallVcRedistEnvironment(version, architecture)
+      const response = await apiClient.uninstallVcRedistEnvironment(version, architecture, socketClient.getId())
       if (response.success) {
         addNotification({
-          type: 'success',
-          title: '成功',
-          message: `${version} ${architecture} 卸载成功`
+          type: 'info',
+          title: '提示',
+          message: response.message || `${version} ${architecture} 卸载命令已下发`
         })
-        await fetchVcRedistEnvironments()
       } else {
         addNotification({
           type: 'error',
