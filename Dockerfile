@@ -1,4 +1,4 @@
-FROM debian:bullseye-slim
+FROM debian:trixie-slim
 
 ENV DEBIAN_FRONTEND=noninteractive \
     STEAM_USER=steam \
@@ -7,11 +7,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
     GAMES_DIR=/root/games \
     NODE_VERSION=22.17.0
 
-# 将apt源改为中国镜像源（阿里云）
-# RUN sed -i 's/deb.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list \
-#     && sed -i 's/security.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list
-
-# 安装所有依赖、Node.js、Java和Python，并清理缓存
+# 安装所有依赖并清理缓存
 RUN apt-get update && apt-get upgrade -y \
     && dpkg --add-architecture i386 \
     && apt-get update \
@@ -22,7 +18,6 @@ RUN apt-get update && apt-get upgrade -y \
         curl \
         jq \
         xdg-user-dirs \
-        sudo \
         # Node.js相关依赖
         gnupg \
         # Python相关依赖
@@ -30,12 +25,10 @@ RUN apt-get update && apt-get upgrade -y \
         python3-pip \
         python3-dev \
         python3-venv \
-        # Java相关依赖
-        apt-transport-https \
         # 游戏服务器依赖
-        libncurses5:i386 \
+        libncurses6:i386 \
         libbz2-1.0:i386 \
-        libicu67:i386 \
+        libicu-dev \
         libxml2:i386 \
         libstdc++6:i386 \
         lib32gcc-s1 \
@@ -43,9 +36,9 @@ RUN apt-get update && apt-get upgrade -y \
         lib32stdc++6 \
         libcurl4-gnutls-dev:i386 \
         libcurl4-gnutls-dev \
-        libgl1-mesa-glx:i386 \
-        gcc-10-base:i386 \
-        libssl1.1:i386 \
+        libgl1 \
+        gcc-13-base:i386 \
+        libssl3:i386 \
         libopenal1:i386 \
         libtinfo6:i386 \
         libtcmalloc-minimal4:i386 \
@@ -55,13 +48,12 @@ RUN apt-get update && apt-get upgrade -y \
         libasound2 \
         libpulse0 \
         libnss3 \
-        libgconf-2-4 \
         libcap2 \
         libatk1.0-0 \
         libcairo2 \
         libcups2 \
         libgtk-3-0 \
-        libgdk-pixbuf2.0-0 \
+        libgdk-pixbuf-2.0-0 \
         libpango-1.0-0 \
         libx11-6 \
         libxt6 \
@@ -76,7 +68,6 @@ RUN apt-get update && apt-get upgrade -y \
         libpugixml1v5 \
         libvulkan1 \
         libvulkan1:i386 \
-        libgconf-2-4:i386 \
         # 额外的Unity引擎依赖（特别针对7日杀）
         libatk1.0-0:i386 \
         libxcomposite1 \
@@ -104,7 +95,7 @@ RUN apt-get update && apt-get upgrade -y \
         libatomic1:i386 \
         nano \
         net-tools \
-        netcat \
+        netcat-openbsd \
         procps \
         tar \
         unzip \
@@ -118,9 +109,10 @@ RUN apt-get update && apt-get upgrade -y \
     # 安装Node.js
     && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
     && apt-get install -y nodejs \
-    # 安装Java 21
-    && wget -qO - https://packages.adoptium.net/artifactory/api/gpg/key/public | apt-key add - \
-    && echo "deb https://packages.adoptium.net/artifactory/deb $(awk -F= '/^VERSION_CODENAME/{print$2}' /etc/os-release) main" | tee /etc/apt/sources.list.d/adoptium.list \
+    # 安装Java 21（通过Adoptium仓库，使用 keyrings 方式，替代已弃用的 apt-key）
+    && install -d -m 0755 /usr/share/keyrings \
+    && wget -qO /usr/share/keyrings/adoptium.gpg https://packages.adoptium.net/artifactory/api/gpg/key/public \
+    && echo "deb [signed-by=/usr/share/keyrings/adoptium.gpg] https://packages.adoptium.net/artifactory/deb $(awk -F= '/^VERSION_CODENAME/{print$2}' /etc/os-release) main" > /etc/apt/sources.list.d/adoptium.list \
     && apt-get update \
     && apt-get install -y --no-install-recommends temurin-21-jdk \
     # 配置npm和pip镜像源
@@ -170,26 +162,12 @@ USER root
 RUN mkdir -p ${STEAMCMD_DIR} \
     && cd ${STEAMCMD_DIR} \
     # 下载并安装SteamCMD
-    && (if curl -s --connect-timeout 3 http://192.168.10.23:7890 >/dev/null 2>&1 || wget -q --timeout=3 --tries=1 http://192.168.10.23:7890 -O /dev/null >/dev/null 2>&1; then \
-          echo "代理服务器可用，使用代理下载和初始化"; \
-          export http_proxy=http://192.168.10.23:7890; \
-          export https_proxy=http://192.168.10.23:7890; \
-          wget -t 5 --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 -O steamcmd_linux.tar.gz https://steamcdn-a.akamaihd.net/client/installer/steamcmd_linux.tar.gz \
-          || wget -t 5 --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 -O steamcmd_linux.tar.gz https://media.steampowered.com/installer/steamcmd_linux.tar.gz; \
-          tar -xzvf steamcmd_linux.tar.gz; \
-          rm steamcmd_linux.tar.gz; \
-          chmod +x ${STEAMCMD_DIR}/steamcmd.sh; \
-          cd ${STEAMCMD_DIR} && ./steamcmd.sh +quit; \
-          unset http_proxy https_proxy; \
-        else \
-          echo "代理服务器不可用，使用直接连接"; \
-          wget -t 5 --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 -O steamcmd_linux.tar.gz https://steamcdn-a.akamaihd.net/client/installer/steamcmd_linux.tar.gz \
-          || wget -t 5 --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 -O steamcmd_linux.tar.gz https://media.steampowered.com/installer/steamcmd_linux.tar.gz; \
-          tar -xzvf steamcmd_linux.tar.gz; \
-          rm steamcmd_linux.tar.gz; \
-          chmod +x ${STEAMCMD_DIR}/steamcmd.sh; \
-          cd ${STEAMCMD_DIR} && ./steamcmd.sh +quit; \
-        fi) \
+    && wget -t 5 --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 -O steamcmd_linux.tar.gz https://steamcdn-a.akamaihd.net/client/installer/steamcmd_linux.tar.gz \
+    || wget -t 5 --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 -O steamcmd_linux.tar.gz https://media.steampowered.com/installer/steamcmd_linux.tar.gz \
+    && tar -xzvf steamcmd_linux.tar.gz \
+    && rm steamcmd_linux.tar.gz \
+    && chmod +x ${STEAMCMD_DIR}/steamcmd.sh \
+    && cd ${STEAMCMD_DIR} && ./steamcmd.sh +quit \
     # 创建steamclient.so符号链接
     && mkdir -p ${STEAM_HOME}/.steam/sdk32 ${STEAM_HOME}/.steam/sdk64 \
     && ln -sf ${STEAMCMD_DIR}/linux32/steamclient.so ${STEAM_HOME}/.steam/sdk32/steamclient.so \
