@@ -333,8 +333,6 @@ export class VcRedistManager {
       throw new Error(`Visual C++ ${version} ${architecture} 已经安装`)
     }
 
-    logger.info(`开始安装 Visual C++ ${version} ${architecture}，下载地址: ${downloadUrl}`)
-
     try {
       // 创建版本目录
       await fs.ensureDir(versionDir)
@@ -360,8 +358,6 @@ export class VcRedistManager {
       if (!installed) {
         logger.warn(`安装完成但检测不到 ${version} ${architecture}，可能需要等待系统更新`)
       }
-
-      logger.info(`Visual C++ ${versionKey} ${architecture} 安装完成，检测状态: ${installed ? '已安装' : '待确认'}`)
     } catch (error) {
       logger.error(`安装 Visual C++ ${version} ${architecture} 失败:`, error)
 
@@ -437,8 +433,8 @@ export class VcRedistManager {
         throw new Error('未找到有效的卸载命令')
       }
 
-      logger.info(`找到程序: ${uninstallInfo.displayName}`)
-      logger.info(`卸载命令: ${uninstallCommand}`)
+      // logger.info(`找到程序: ${uninstallInfo.displayName}`)
+      // logger.info(`卸载命令: ${uninstallCommand}`)
 
       await this.executeUninstaller(uninstallCommand)
 
@@ -450,8 +446,6 @@ export class VcRedistManager {
       if (stillInstalled) {
         logger.warn(`卸载完成但仍检测到 ${version} ${architecture}`)
       }
-
-      logger.info(`Visual C++ ${version} ${architecture} 卸载完成`)
     } catch (error) {
       logger.error(`卸载 Visual C++ ${version} ${architecture} 失败:`, error)
       throw error
@@ -522,8 +516,8 @@ export class VcRedistManager {
                 const windowsInstallerMatch = keyInfo.match(/WindowsInstaller\s+REG_DWORD\s+0x1/i)
                 const isMsiInstall = !!windowsInstallerMatch
 
-                logger.info(`找到匹配的程序: ${displayName} (${keyPath})`)
-                logger.info(`MSI安装: ${isMsiInstall}, 卸载字符串: ${uninstallMatch?.[1] || '无'}`)
+                // logger.info(`找到匹配的程序: ${displayName} (${keyPath})`)
+                // logger.info(`MSI安装: ${isMsiInstall}, 卸载字符串: ${uninstallMatch?.[1] || '无'}`)
 
                 return {
                   uninstallString: uninstallMatch?.[1]?.trim(),
@@ -575,7 +569,7 @@ export class VcRedistManager {
       let command: string
       let args: string[] = []
 
-      logger.info(`原始卸载命令: ${trimmed}`)
+      // logger.info(`原始卸载命令: ${trimmed}`)
 
       // 解析命令行（处理引号）
       if (trimmed.toLowerCase().startsWith('msiexec')) {
@@ -608,8 +602,8 @@ export class VcRedistManager {
         }
       }
 
-      logger.info(`解析后命令: ${command}`)
-      logger.info(`解析后参数: ${args.join(' ')}`)
+      // logger.info(`解析后命令: ${command}`)
+      // logger.info(`解析后参数: ${args.join(' ')}`)
 
       const proc = spawn(command, args, {
         stdio: 'pipe',
