@@ -1,15 +1,16 @@
 import React, { useState, useEffect } from 'react'
-import { 
-  Coffee, 
-  Download, 
-  CheckCircle, 
-  AlertCircle, 
-  Copy, 
-  Trash2, 
+import {
+  Coffee,
+  Download,
+  CheckCircle,
+  AlertCircle,
+  Copy,
+  Trash2,
   RefreshCw,
   Monitor,
   Server,
-  Loader2
+  Loader2,
+  Package
 } from 'lucide-react'
 import { useNotificationStore } from '@/stores/notificationStore'
 import apiClient from '@/utils/api'
@@ -32,9 +33,22 @@ interface SystemInfo {
   arch: string
 }
 
+interface VcRedistEnvironment {
+  version: string
+  platform: string
+  downloadUrl: string
+  installed: boolean
+  installPath?: string
+  architecture: 'x86' | 'x64' | 'arm64'
+  installing?: boolean
+  installProgress?: number
+  installStage?: 'download' | 'install'
+}
+
 const EnvironmentManagerPage: React.FC = () => {
   const [systemInfo, setSystemInfo] = useState<SystemInfo | null>(null)
   const [javaEnvironments, setJavaEnvironments] = useState<JavaEnvironment[]>([])
+  const [vcRedistEnvironments, setVcRedistEnvironments] = useState<VcRedistEnvironment[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [activeTab, setActiveTab] = useState('java')
@@ -103,11 +117,28 @@ const EnvironmentManagerPage: React.FC = () => {
     }
   }
 
+  // 获取Visual C++运行库环境列表
+  const fetchVcRedistEnvironments = async () => {
+    try {
+      const response = await apiClient.getVcRedistEnvironments()
+      if (response.success && response.data) {
+        setVcRedistEnvironments(response.data)
+      }
+    } catch (error) {
+      console.error('获取Visual C++运行库环境列表失败:', error)
+      addNotification({
+        type: 'error',
+        title: '错误',
+        message: '获取Visual C++运行库环境列表失败'
+      })
+    }
+  }
+
   // 初始化数据
   useEffect(() => {
     const initData = async () => {
       setLoading(true)
-      await Promise.all([fetchSystemInfo(), fetchJavaEnvironments()])
+      await Promise.all([fetchSystemInfo(), fetchJavaEnvironments(), fetchVcRedistEnvironments()])
       setLoading(false)
     }
     initData()
@@ -145,19 +176,67 @@ const EnvironmentManagerPage: React.FC = () => {
       }
     }
 
+    // 监听Visual C++运行库安装进度
+    const handleVcRedistInstallProgress = (data: { version: string; architecture: string; stage: 'download' | 'install'; progress: number }) => {
+      setVcRedistEnvironments(prev => prev.map(env =>
+        env.version === data.version && env.architecture === data.architecture
+          ? {
+              ...env,
+              installing: true,
+              installStage: data.stage,
+              installProgress: data.stage === 'download' ? data.progress * 0.5 : 50 + (data.progress * 0.5)
+            }
+          : env
+      ))
+    }
+
+    // 监听Visual C++运行库安装完成
+    const handleVcRedistInstallComplete = (data: { version: string; architecture: string; success: boolean; message: string }) => {
+      setVcRedistEnvironments(prev => prev.map(env =>
+        env.version === data.version && env.architecture === data.architecture
+          ? { ...env, installing: false, installProgress: 0, installStage: undefined }
+          : env
+      ))
+
+      addNotification({
+        type: data.success ? 'success' : 'error',
+        title: data.success ? '成功' : '错误',
+        message: data.message
+      })
+
+      if (data.success) {
+        // 立即刷新一次
+        fetchVcRedistEnvironments()
+
+        // 5秒后再次刷新，确保检测到安装状态
+        setTimeout(() => {
+          fetchVcRedistEnvironments()
+        }, 5000)
+
+        // 10秒后最后一次刷新
+        setTimeout(() => {
+          fetchVcRedistEnvironments()
+        }, 10000)
+      }
+    }
+
     socketClient.on('java-install-progress', handleInstallProgress)
     socketClient.on('java-install-complete', handleInstallComplete)
+    socketClient.on('vcredist-install-progress', handleVcRedistInstallProgress)
+    socketClient.on('vcredist-install-complete', handleVcRedistInstallComplete)
 
     return () => {
       socketClient.off('java-install-progress', handleInstallProgress)
       socketClient.off('java-install-complete', handleInstallComplete)
+      socketClient.off('vcredist-install-progress', handleVcRedistInstallProgress)
+      socketClient.off('vcredist-install-complete', handleVcRedistInstallComplete)
     }
   }, [])
 
   // 刷新数据
   const handleRefresh = async () => {
     setRefreshing(true)
-    await fetchJavaEnvironments()
+    await Promise.all([fetchJavaEnvironments(), fetchVcRedistEnvironments()])
     setRefreshing(false)
   }
 
@@ -256,6 +335,98 @@ const EnvironmentManagerPage: React.FC = () => {
     }
   }
 
+  // 安装Visual C++运行库
+  const handleInstallVcRedist = async (version: string, architecture: string, downloadUrl: string) => {
+    if (!systemInfo) {
+      addNotification({
+        type: 'error',
+        title: '错误',
+        message: '系统信息未加载'
+      })
+      return
+    }
+
+    if (systemInfo.platform !== 'win32') {
+      addNotification({
+        type: 'error',
+        title: '错误',
+        message: 'Visual C++运行库只能在Windows系统上安装'
+      })
+      return
+    }
+
+    try {
+      // 更新安装状态
+      setVcRedistEnvironments(prev => prev.map(env =>
+        env.version === version && env.architecture === architecture
+          ? { ...env, installing: true, installProgress: 0 }
+          : env
+      ))
+
+      const response = await apiClient.installVcRedistEnvironment({
+        version,
+        architecture,
+        downloadUrl,
+        socketId: socketClient.getId()
+      })
+
+      if (!response.success) {
+        addNotification({
+          type: 'error',
+          title: '错误',
+          message: `${version} ${architecture} 启动安装失败: ${response.message}`
+        })
+        // 重置安装状态
+        setVcRedistEnvironments(prev => prev.map(env =>
+          env.version === version && env.architecture === architecture
+            ? { ...env, installing: false, installProgress: 0 }
+            : env
+        ))
+      }
+    } catch (error) {
+      console.error('安装Visual C++运行库失败:', error)
+      addNotification({
+        type: 'error',
+        title: '错误',
+        message: `${version} ${architecture} 安装失败`
+      })
+      // 重置安装状态
+      setVcRedistEnvironments(prev => prev.map(env =>
+        env.version === version && env.architecture === architecture
+          ? { ...env, installing: false, installProgress: 0 }
+          : env
+      ))
+    }
+  }
+
+  // 卸载Visual C++运行库
+  const handleUninstallVcRedist = async (version: string, architecture: string) => {
+    try {
+      const response = await apiClient.uninstallVcRedistEnvironment(version, architecture)
+      if (response.success) {
+        addNotification({
+          type: 'success',
+          title: '成功',
+          message: `${version} ${architecture} 卸载成功`
+        })
+        await fetchVcRedistEnvironments()
+      } else {
+        addNotification({
+          type: 'error',
+          title: '错误',
+          message: `${version} ${architecture} 卸载失败: ${response.message}`
+        })
+      }
+    } catch (error) {
+      console.error('卸载Visual C++运行库失败:', error)
+      addNotification({
+        type: 'error',
+        title: '错误',
+        message: `${version} ${architecture} 卸载失败`
+      })
+    }
+  }
+
   // 复制Java路径
   const handleCopyJavaPath = (javaExecutable: string) => {
     navigator.clipboard.writeText(javaExecutable).then(() => {
@@ -349,6 +520,22 @@ const EnvironmentManagerPage: React.FC = () => {
                 <span>Java 环境</span>
               </div>
             </button>
+            {/* 只在Windows系统上显示Microsoft Visual C++标签页 */}
+            {systemInfo?.platform === 'win32' && (
+              <button
+                onClick={() => setActiveTab('vcredist')}
+                className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                  activeTab === 'vcredist'
+                    ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
+                }`}
+              >
+                <div className="flex items-center space-x-2">
+                  <Package className="w-4 h-4" />
+                  <span>Microsoft Visual C++</span>
+                </div>
+              </button>
+            )}
           </nav>
         </div>
 
@@ -471,6 +658,130 @@ const EnvironmentManagerPage: React.FC = () => {
                   </div>
                 )
               })}
+            </div>
+          )}
+
+          {/* Visual C++运行库标签页内容 */}
+          {activeTab === 'vcredist' && systemInfo?.platform === 'win32' && (
+            <div className="space-y-6">
+              <div className="text-center mb-6">
+                <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+                  Microsoft Visual C++ 运行库
+                </h2>
+                <p className="text-gray-600 dark:text-gray-400">
+                  安装各版本的Microsoft Visual C++运行库，确保应用程序正常运行
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {vcRedistEnvironments.map((env) => {
+                  const isInstalling = env.installing || false
+
+                  return (
+                    <div
+                      key={`${env.version}-${env.architecture}`}
+                      className="bg-gray-50 dark:bg-gray-700 rounded-lg p-6 border border-gray-200 dark:border-gray-600"
+                    >
+                      {/* 卡片头部 */}
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center space-x-2">
+                          <Package className="w-5 h-5 text-blue-500" />
+                          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                            {env.version}
+                          </h3>
+                          <span className="px-2 py-1 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300 text-xs rounded">
+                            {env.architecture}
+                          </span>
+                        </div>
+                        <div className={`flex items-center space-x-1 px-2 py-1 rounded-full text-xs font-medium ${
+                          env.installed
+                            ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+                            : 'bg-gray-100 text-gray-800 dark:bg-gray-600 dark:text-gray-300'
+                        }`}>
+                          {env.installed ? (
+                            <>
+                              <CheckCircle className="w-3 h-3" />
+                              <span>已安装</span>
+                            </>
+                          ) : (
+                            <>
+                              <AlertCircle className="w-3 h-3" />
+                              <span>未安装</span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* 描述 */}
+                      <p className="text-gray-600 dark:text-gray-400 text-sm mb-4">
+                        Microsoft Visual C++ {env.version.replace('Visual C++ ', '')} 运行库 ({env.architecture})
+                      </p>
+
+                      {/* 安装进度 */}
+                      {isInstalling && env.installProgress !== undefined && (
+                        <div className="mb-4">
+                          <div className="flex items-center justify-between text-sm text-gray-600 dark:text-gray-400 mb-2">
+                            <span>
+                              {env.installStage === 'download' ? '下载中...' : '安装中...'}
+                            </span>
+                            <span>{env.installProgress}%</span>
+                          </div>
+                          <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-2">
+                            <div
+                              className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                              style={{ width: `${env.installProgress}%` }}
+                            />
+                          </div>
+                        </div>
+                      )}
+
+                      {/* 操作按钮 */}
+                      <div className="flex space-x-2">
+                        {!env.installed ? (
+                          <button
+                            onClick={() => handleInstallVcRedist(env.version, env.architecture, env.downloadUrl)}
+                            disabled={isInstalling}
+                            className="flex-1 flex items-center justify-center space-x-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded-lg transition-colors"
+                          >
+                            {isInstalling ? (
+                              <>
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                                <span>安装中...</span>
+                              </>
+                            ) : (
+                              <>
+                                <Download className="w-4 h-4" />
+                                <span>安装</span>
+                              </>
+                            )}
+                          </button>
+                        ) : (
+                          <>
+                            <div className="flex-1 flex items-center justify-center space-x-2 px-4 py-2 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400 rounded-lg">
+                              <CheckCircle className="w-4 h-4" />
+                              <span>已安装</span>
+                            </div>
+                            <button
+                              onClick={() => handleUninstallVcRedist(env.version, env.architecture)}
+                              className="flex items-center justify-center space-x-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                              <span>卸载</span>
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+
+              {vcRedistEnvironments.length === 0 && (
+                <div className="text-center py-12">
+                  <Package className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                  <p className="text-gray-500 dark:text-gray-400">暂无可用的运行库</p>
+                </div>
+              )}
             </div>
           )}
         </div>

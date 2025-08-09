@@ -787,6 +787,28 @@ class ApiClient {
   async verifyJavaEnvironment(version: string) {
     return this.get(`/environment/java/${version}/verify`)
   }
+
+  // Visual C++运行库管理API
+  async getVcRedistEnvironments() {
+    return this.get('/environment/vcredist')
+  }
+
+  async installVcRedistEnvironment(data: {
+    version: string
+    architecture: string
+    downloadUrl: string
+    socketId?: string
+  }) {
+    return this.post('/environment/vcredist/install', data)
+  }
+
+  async uninstallVcRedistEnvironment(version: string, architecture: string) {
+    return this.delete(`/environment/vcredist/${version}/${architecture}`)
+  }
+
+  async verifyVcRedistEnvironment(version: string, architecture: string) {
+    return this.get(`/environment/vcredist/${version}/${architecture}/verify`)
+  }
 }
 
 // 创建单例实例
