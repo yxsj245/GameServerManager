@@ -197,6 +197,18 @@ const GameDeploymentPage: React.FC = () => {
   const [showDocsModal, setShowDocsModal] = useState(false)
   const [docsModalAnimating, setDocsModalAnimating] = useState(false)
   const [selectedGameDocs, setSelectedGameDocs] = useState<GameInfo | null>(null)
+
+  // Java环境相关状态
+  const [javaEnvironments, setJavaEnvironments] = useState<any[]>([])
+  const [javaEnvironmentsLoading, setJavaEnvironmentsLoading] = useState(false)
+  const [selectedMinecraftJava, setSelectedMinecraftJava] = useState<string>(() => {
+    // 从localStorage读取保存的选择
+    return localStorage.getItem('selectedMinecraftJava') || 'default'
+  })
+  const [selectedMrpackJava, setSelectedMrpackJava] = useState<string>(() => {
+    // 从localStorage读取保存的选择
+    return localStorage.getItem('selectedMrpackJava') || 'default'
+  })
   
   // 帮助模态框相关状态
   const [showHelpModal, setShowHelpModal] = useState(false)
@@ -653,7 +665,7 @@ const GameDeploymentPage: React.FC = () => {
     try {
       const response = await apiClient.validateJavaEnvironment()
       setJavaValidated(response.success)
-      
+
       if (!response.success) {
         addNotification({
           type: 'warning',
@@ -664,6 +676,65 @@ const GameDeploymentPage: React.FC = () => {
     } catch (error: any) {
       console.error('Java环境验证失败:', error)
       setJavaValidated(false)
+    }
+  }
+
+  // 获取Java环境列表
+  const fetchJavaEnvironments = async () => {
+    try {
+      setJavaEnvironmentsLoading(true)
+      const response = await apiClient.getJavaEnvironments()
+
+      if (response.success) {
+        setJavaEnvironments(response.data || [])
+        // 验证保存的Java版本是否仍然有效
+        setTimeout(() => validateSavedJavaVersions(), 100)
+      } else {
+        console.error('获取Java环境列表失败:', response.message)
+        addNotification({
+          type: 'error',
+          title: '错误',
+          message: '获取Java环境列表失败'
+        })
+      }
+    } catch (error) {
+      console.error('获取Java环境列表失败:', error)
+      addNotification({
+        type: 'error',
+        title: '错误',
+        message: '获取Java环境列表失败'
+      })
+    } finally {
+      setJavaEnvironmentsLoading(false)
+    }
+  }
+
+  // 保存Minecraft Java选择到localStorage
+  const handleMinecraftJavaChange = (javaVersion: string) => {
+    setSelectedMinecraftJava(javaVersion)
+    localStorage.setItem('selectedMinecraftJava', javaVersion)
+  }
+
+  // 保存整合包Java选择到localStorage
+  const handleMrpackJavaChange = (javaVersion: string) => {
+    setSelectedMrpackJava(javaVersion)
+    localStorage.setItem('selectedMrpackJava', javaVersion)
+  }
+
+  // 验证保存的Java版本是否仍然有效
+  const validateSavedJavaVersions = () => {
+    const installedVersions = javaEnvironments.filter(env => env.installed).map(env => env.version)
+
+    // 验证Minecraft Java选择
+    if (selectedMinecraftJava !== 'default' && !installedVersions.includes(selectedMinecraftJava)) {
+      console.log(`保存的Minecraft Java版本 ${selectedMinecraftJava} 不再可用，重置为默认`)
+      handleMinecraftJavaChange('default')
+    }
+
+    // 验证整合包Java选择
+    if (selectedMrpackJava !== 'default' && !installedVersions.includes(selectedMrpackJava)) {
+      console.log(`保存的整合包Java版本 ${selectedMrpackJava} 不再可用，重置为默认`)
+      handleMrpackJavaChange('default')
     }
   }
 
@@ -777,10 +848,11 @@ const GameDeploymentPage: React.FC = () => {
         
         // 自动生成启动命令
         if (data.data?.serverType) {
-          setMrpackInstanceStartCommand(generateStartCommand(data.data.serverType))
+          setMrpackInstanceStartCommand(generateStartCommand(data.data.serverType, selectedMrpackJava))
         } else {
           // 默认启动命令
-          setMrpackInstanceStartCommand(data.data?.serverJarPath ? `java -jar "${data.data.serverJarPath}"` : 'java -jar server.jar')
+          const defaultCommand = data.data?.serverJarPath ? `java -jar "${data.data.serverJarPath}"` : 'java -jar server.jar'
+          setMrpackInstanceStartCommand(selectedMrpackJava !== 'default' ? replaceJavaInCommand(defaultCommand, selectedMrpackJava) : defaultCommand)
         }
         
         addNotification({
@@ -1083,20 +1155,47 @@ const GameDeploymentPage: React.FC = () => {
     setHoveredMrpack(null)
   }
 
+  // 获取选中的Java可执行文件路径
+  const getSelectedJavaExecutable = (selectedJava: string) => {
+    if (selectedJava === 'default') {
+      return 'java'
+    }
+
+    const javaEnv = javaEnvironments.find(env => env.version === selectedJava)
+    if (javaEnv && javaEnv.javaExecutable) {
+      // 如果路径包含空格，需要用引号包围
+      return javaEnv.javaExecutable.includes(' ') ? `"${javaEnv.javaExecutable}"` : javaEnv.javaExecutable
+    }
+
+    return 'java' // 回退到默认
+  }
+
   // 根据服务器类型生成启动命令
-  const generateStartCommand = (serverType: string, isWindows: boolean = process.platform === 'win32') => {
+  const generateStartCommand = (serverType: string, selectedJava: string = 'default', isWindows: boolean = process.platform === 'win32') => {
     const lowerServerType = serverType.toLowerCase()
-    
+    const javaExecutable = getSelectedJavaExecutable(selectedJava)
+
     if (lowerServerType.includes('forge') || lowerServerType.includes('neoforge')) {
       // Forge/NeoForge 使用启动脚本
       return isWindows ? 'run.bat' : './run.sh'
     } else if (lowerServerType.includes('fabric') || lowerServerType.includes('quilt')) {
       // Fabric/Quilt 重命名为 server.jar
-      return 'java -jar server.jar'
+      return `${javaExecutable} -jar server.jar`
     } else {
       // 默认情况
-      return 'java -jar server.jar'
+      return `${javaExecutable} -jar server.jar`
     }
+  }
+
+  // 替换启动命令中的Java路径
+  const replaceJavaInCommand = (command: string, selectedJava: string) => {
+    if (selectedJava === 'default') {
+      return command
+    }
+
+    const javaExecutable = getSelectedJavaExecutable(selectedJava)
+    // 替换命令开头的java为指定的Java可执行文件路径
+    return command.replace(/^java\b/, javaExecutable)
   }
 
   // 创建Minecraft实例
@@ -1113,11 +1212,19 @@ const GameDeploymentPage: React.FC = () => {
     try {
       setCreatingInstance(true)
       
+      // 生成启动命令，考虑选中的Java版本
+      let finalStartCommand = instanceStartCommand || generateStartCommand(selectedServer, selectedMinecraftJava)
+
+      // 如果用户手动输入了启动命令且选择了特定Java版本，替换其中的java
+      if (instanceStartCommand && selectedMinecraftJava !== 'default') {
+        finalStartCommand = replaceJavaInCommand(instanceStartCommand, selectedMinecraftJava)
+      }
+
       const response = await apiClient.createInstance({
         name: instanceName.trim(),
         description: instanceDescription.trim() || `Minecraft ${selectedServer} ${selectedVersion}`,
         workingDirectory: downloadResult.targetDirectory,
-        startCommand: instanceStartCommand || generateStartCommand(selectedServer),
+        startCommand: finalStartCommand,
         autoStart: false,
         stopCommand: 'stop' as const
       })
@@ -1200,6 +1307,7 @@ const GameDeploymentPage: React.FC = () => {
     if (activeTab === 'minecraft') {
       fetchMinecraftCategories()
       validateJava()
+      fetchJavaEnvironments()
       // 确保Minecraft标签页有默认路径
       if (defaultGamePath && !minecraftInstallPath) {
         setMinecraftInstallPath(defaultGamePath)
@@ -1213,6 +1321,7 @@ const GameDeploymentPage: React.FC = () => {
       }
     }
     if (activeTab === 'mrpack') {
+      fetchJavaEnvironments()
       // 确保整合包标签页有默认路径
       if (defaultGamePath && !mrpackInstallPath) {
         setMrpackInstallPath(defaultGamePath)
@@ -1229,6 +1338,26 @@ const GameDeploymentPage: React.FC = () => {
       }
     }
   }, [activeTab, sponsorKeyValid, defaultGamePath])
+
+  // 监听Java版本选择变化，自动更新启动命令
+  useEffect(() => {
+    // 更新Minecraft实例启动命令
+    if (selectedServer && selectedVersion && selectedMinecraftJava) {
+      setInstanceStartCommand(generateStartCommand(selectedServer, selectedMinecraftJava))
+    }
+  }, [selectedMinecraftJava, selectedServer])
+
+  useEffect(() => {
+    // 更新整合包实例启动命令
+    if (mrpackDeployResult && selectedMrpackJava) {
+      if (mrpackDeployResult.serverType) {
+        setMrpackInstanceStartCommand(generateStartCommand(mrpackDeployResult.serverType, selectedMrpackJava))
+      } else {
+        const defaultCommand = mrpackDeployResult.serverJarPath ? `java -jar "${mrpackDeployResult.serverJarPath}"` : 'java -jar server.jar'
+        setMrpackInstanceStartCommand(selectedMrpackJava !== 'default' ? replaceJavaInCommand(defaultCommand, selectedMrpackJava) : defaultCommand)
+      }
+    }
+  }, [selectedMrpackJava, mrpackDeployResult])
 
   // 清理WebSocket连接和定时器
   useEffect(() => {
@@ -1435,12 +1564,23 @@ const GameDeploymentPage: React.FC = () => {
 
     try {
       setCreatingMrpackInstance(true)
-      
+
+      // 生成启动命令，考虑选中的Java版本
+      let finalStartCommand = mrpackInstanceStartCommand
+      if (!finalStartCommand) {
+        // 如果没有自定义启动命令，生成默认命令
+        const defaultCommand = mrpackDeployResult.serverJarPath ? `java -jar "${mrpackDeployResult.serverJarPath}"` : 'java -jar server.jar'
+        finalStartCommand = selectedMrpackJava !== 'default' ? replaceJavaInCommand(defaultCommand, selectedMrpackJava) : defaultCommand
+      } else if (selectedMrpackJava !== 'default') {
+        // 如果有自定义启动命令且选择了特定Java版本，替换其中的java
+        finalStartCommand = replaceJavaInCommand(mrpackInstanceStartCommand, selectedMrpackJava)
+      }
+
       const response = await apiClient.createInstance({
         name: mrpackInstanceName.trim(),
         description: mrpackInstanceDescription.trim() || `Minecraft整合包实例 - ${selectedMrpack?.title}`,
         workingDirectory: mrpackDeployResult.installPath,
-        startCommand: mrpackInstanceStartCommand || (mrpackDeployResult.serverJarPath ? `java -jar "${mrpackDeployResult.serverJarPath}"` : 'java -jar server.jar'),
+        startCommand: finalStartCommand,
         autoStart: false,
         stopCommand: 'stop' as const
       })
@@ -2331,32 +2471,76 @@ const GameDeploymentPage: React.FC = () => {
         <div className="space-y-6">
           {/* Java环境状态 */}
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
-            <div className="flex items-center space-x-3">
-              {javaValidated === null ? (
-                <Loader className="w-5 h-5 animate-spin text-blue-500" />
-              ) : javaValidated ? (
-                <CheckCircle className="w-5 h-5 text-green-500" />
-              ) : (
-                <AlertCircle className="w-5 h-5 text-red-500" />
-              )}
-              <div>
-                <h3 className="font-medium text-gray-900 dark:text-white">
-                  Java环境状态
-                </h3>
-                <p className="text-sm text-gray-600 dark:text-gray-400">
-                  {javaValidated === null
-                    ? '检查中...'
-                    : javaValidated
-                    ? 'Java环境正常'
-                    : 'Java环境未找到，请安装Java并添加到PATH环境变量'}
-                </p>
+            <div className="space-y-4">
+              <div className="flex items-center space-x-3">
+                {javaValidated === null ? (
+                  <Loader className="w-5 h-5 animate-spin text-blue-500" />
+                ) : javaValidated ? (
+                  <CheckCircle className="w-5 h-5 text-green-500" />
+                ) : (
+                  <AlertCircle className="w-5 h-5 text-red-500" />
+                )}
+                <div className="flex-1">
+                  <h3 className="font-medium text-gray-900 dark:text-white">
+                    Java环境状态
+                  </h3>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    {javaValidated === null
+                      ? '检查中...'
+                      : javaValidated
+                      ? 'Java环境正常'
+                      : 'Java环境未找到，请安装Java并添加到PATH环境变量'}
+                  </p>
+                </div>
+                <button
+                  onClick={validateJava}
+                  className="px-3 py-1 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors"
+                >
+                  重新检查
+                </button>
               </div>
-              <button
-                onClick={validateJava}
-                className="ml-auto px-3 py-1 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors"
-              >
-                重新检查
-              </button>
+
+              {/* Java版本选择 */}
+              <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
+                <div className="flex items-center space-x-4">
+                  <label className="text-sm font-medium text-gray-700 dark:text-gray-300 min-w-0 flex-shrink-0">
+                    Java版本选择:
+                  </label>
+                  <div className="flex-1">
+                    {javaEnvironmentsLoading ? (
+                      <div className="flex items-center space-x-2">
+                        <Loader className="w-4 h-4 animate-spin text-blue-500" />
+                        <span className="text-sm text-gray-600 dark:text-gray-400">加载中...</span>
+                      </div>
+                    ) : (
+                      <select
+                        value={selectedMinecraftJava}
+                        onChange={(e) => handleMinecraftJavaChange(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                      >
+                        <option value="default">默认Java (系统PATH)</option>
+                        {javaEnvironments.filter(env => env.installed).map((env) => (
+                          <option key={env.version} value={env.version}>
+                            {env.version} {env.javaExecutable ? `(${env.javaExecutable})` : '(未找到可执行文件)'}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+                  <button
+                    onClick={fetchJavaEnvironments}
+                    disabled={javaEnvironmentsLoading}
+                    className="px-3 py-1 text-sm bg-gray-600 hover:bg-gray-700 text-white rounded transition-colors disabled:opacity-50"
+                  >
+                    <RefreshCw className={`w-4 h-4 ${javaEnvironmentsLoading ? 'animate-spin' : ''}`} />
+                  </button>
+                </div>
+                {selectedMinecraftJava !== 'default' && (
+                  <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                    已选择特定Java版本，创建实例时将使用此版本的Java运行时
+                  </p>
+                )}
+              </div>
             </div>
           </div>
 
@@ -2434,7 +2618,7 @@ const GameDeploymentPage: React.FC = () => {
                           setSelectedVersion(version)
                           // 自动生成启动命令
                           if (version && selectedServer) {
-                            setInstanceStartCommand(generateStartCommand(selectedServer))
+                            setInstanceStartCommand(generateStartCommand(selectedServer, selectedMinecraftJava))
                           }
                         }}
                         className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
@@ -2896,6 +3080,81 @@ const GameDeploymentPage: React.FC = () => {
       {/* Minecraft整合包部署标签页内容 */}
       {activeTab === 'mrpack' && (
         <div className="space-y-6">
+          {/* Java环境状态 */}
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
+            <div className="space-y-4">
+              <div className="flex items-center space-x-3">
+                {javaValidated === null ? (
+                  <Loader className="w-5 h-5 animate-spin text-blue-500" />
+                ) : javaValidated ? (
+                  <CheckCircle className="w-5 h-5 text-green-500" />
+                ) : (
+                  <AlertCircle className="w-5 h-5 text-red-500" />
+                )}
+                <div className="flex-1">
+                  <h3 className="font-medium text-gray-900 dark:text-white">
+                    Java环境状态
+                  </h3>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    {javaValidated === null
+                      ? '检查中...'
+                      : javaValidated
+                      ? 'Java环境正常'
+                      : 'Java环境未找到，请安装Java并添加到PATH环境变量'}
+                  </p>
+                </div>
+                <button
+                  onClick={validateJava}
+                  className="px-3 py-1 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors"
+                >
+                  重新检查
+                </button>
+              </div>
+
+              {/* Java版本选择 */}
+              <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
+                <div className="flex items-center space-x-4">
+                  <label className="text-sm font-medium text-gray-700 dark:text-gray-300 min-w-0 flex-shrink-0">
+                    Java版本选择:
+                  </label>
+                  <div className="flex-1">
+                    {javaEnvironmentsLoading ? (
+                      <div className="flex items-center space-x-2">
+                        <Loader className="w-4 h-4 animate-spin text-blue-500" />
+                        <span className="text-sm text-gray-600 dark:text-gray-400">加载中...</span>
+                      </div>
+                    ) : (
+                      <select
+                        value={selectedMrpackJava}
+                        onChange={(e) => handleMrpackJavaChange(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                      >
+                        <option value="default">默认Java (系统PATH)</option>
+                        {javaEnvironments.filter(env => env.installed).map((env) => (
+                          <option key={env.version} value={env.version}>
+                            {env.version} {env.javaExecutable ? `(${env.javaExecutable})` : '(未找到可执行文件)'}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+                  <button
+                    onClick={fetchJavaEnvironments}
+                    disabled={javaEnvironmentsLoading}
+                    className="px-3 py-1 text-sm bg-gray-600 hover:bg-gray-700 text-white rounded transition-colors disabled:opacity-50"
+                  >
+                    <RefreshCw className={`w-4 h-4 ${javaEnvironmentsLoading ? 'animate-spin' : ''}`} />
+                  </button>
+                </div>
+                {selectedMrpackJava !== 'default' && (
+                  <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                    已选择特定Java版本，创建实例时将使用此版本的Java运行时
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+
           {/* 搜索整合包 */}
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
