@@ -1,6 +1,5 @@
 1. 将服务端所有需要保存的数据统一保存在server\data 目录下
 2. 前端使用的token存储键是'gsm3_token'
-3. 路由文件的导入语句需要添加.js扩展名。
 4. 需要安装的库直接写进package.json文件中
 5. 切记所有涉及/api接口必须要加认证中间件import { authenticateToken } from '../middleware/auth.js'前端的6. 实例管理 API 调用都通过 `api.ts` 中的 ApiClient 类进行
 7. 涉及实时通信相关需要使用websocket

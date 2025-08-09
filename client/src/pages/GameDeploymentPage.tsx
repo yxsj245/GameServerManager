@@ -59,13 +59,38 @@ const GameDeploymentPage: React.FC = () => {
     const cleanName = gameName.replace(/[<>:"|?*]/g, '').trim()
 
     // 根据平台使用正确的路径分隔符
-    const isWindows = navigator.platform.toLowerCase().includes('win')
+    const isWindows = process.platform === 'win32'
     const separator = isWindows ? '\\' : '/'
 
     // 确保默认路径以分隔符结尾
-    const basePath = defaultGamePath.endsWith(separator) ? defaultGamePath : defaultGamePath + separator
+    const basePath = defaultGamePath.endsWith(separator) || defaultGamePath.endsWith('/') || defaultGamePath.endsWith('\\')
+      ? defaultGamePath
+      : defaultGamePath + separator
 
     return basePath + cleanName
+  }
+
+  // 生成Minecraft服务端路径的函数
+  const generateMinecraftPath = (serverType: string, version: string) => {
+    if (!defaultGamePath || !serverType || !version) return defaultGamePath
+
+    // 清理服务端名称和版本，移除特殊字符
+    const cleanServerType = serverType.replace(/[<>:"|?*]/g, '').trim()
+    const cleanVersion = version.replace(/[<>:"|?*]/g, '').trim()
+
+    // 组合文件夹名称：服务端名称+Minecraft版本
+    const folderName = `${cleanServerType}-${cleanVersion}`
+
+    // 根据平台使用正确的路径分隔符
+    const isWindows = process.platform === 'win32'
+    const separator = isWindows ? '\\' : '/'
+
+    // 确保默认路径以分隔符结尾
+    const basePath = defaultGamePath.endsWith(separator) || defaultGamePath.endsWith('/') || defaultGamePath.endsWith('\\')
+      ? defaultGamePath
+      : defaultGamePath + separator
+
+    return basePath + folderName
   }
 
   // 当默认路径加载完成后，填充到各个路径字段
@@ -73,9 +98,8 @@ const GameDeploymentPage: React.FC = () => {
     if (defaultGamePath) {
       // 使用setTimeout确保在下一个事件循环中执行，避免状态更新冲突
       setTimeout(() => {
-        setMinecraftInstallPath(prev => prev || defaultGamePath)
+        // Minecraft和整合包的路径将在用户选择后自动生成，不设置默认值
         setMoreGameInstallPath(prev => prev || defaultGamePath)
-        setMrpackInstallPath(prev => prev || defaultGamePath)
         setOnlineGameInstallPath(prev => prev || defaultGamePath)
       }, 0)
     }
@@ -1272,10 +1296,8 @@ const GameDeploymentPage: React.FC = () => {
     setSelectedServer(server)
     setSelectedVersion('')
     setAvailableVersions([])
-    // 自动填充默认路径
-    if (!minecraftInstallPath) {
-      setMinecraftInstallPath(generatePath(server))
-    }
+    // 重置安装路径，等待版本选择后再生成完整路径
+    setMinecraftInstallPath('')
     fetchMinecraftVersions(server)
   }
 
@@ -1292,8 +1314,8 @@ const GameDeploymentPage: React.FC = () => {
   // 处理整合包选择
   const handleMrpackSelect = (modpack: any) => {
     setSelectedMrpack(modpack)
-    // 自动填充默认路径
-    if (!mrpackInstallPath && modpack.title) {
+    // 自动生成整合包路径
+    if (modpack.title) {
       setMrpackInstallPath(generatePath(modpack.title))
     }
     // 获取版本列表
@@ -1308,10 +1330,7 @@ const GameDeploymentPage: React.FC = () => {
       fetchMinecraftCategories()
       validateJava()
       fetchJavaEnvironments()
-      // 确保Minecraft标签页有默认路径
-      if (defaultGamePath && !minecraftInstallPath) {
-        setMinecraftInstallPath(defaultGamePath)
-      }
+      // Minecraft标签页的路径将在选择服务器和版本后自动生成
     }
     if (activeTab === 'more-games') {
       fetchMoreGames()
@@ -1322,10 +1341,7 @@ const GameDeploymentPage: React.FC = () => {
     }
     if (activeTab === 'mrpack') {
       fetchJavaEnvironments()
-      // 确保整合包标签页有默认路径
-      if (defaultGamePath && !mrpackInstallPath) {
-        setMrpackInstallPath(defaultGamePath)
-      }
+      // 整合包标签页的路径将在选择整合包后自动生成
     }
     if (activeTab === 'online-deploy') {
       checkSponsorKey()
@@ -2619,6 +2635,8 @@ const GameDeploymentPage: React.FC = () => {
                           // 自动生成启动命令
                           if (version && selectedServer) {
                             setInstanceStartCommand(generateStartCommand(selectedServer, selectedMinecraftJava))
+                            // 自动更新安装路径
+                            setMinecraftInstallPath(generateMinecraftPath(selectedServer, version))
                           }
                         }}
                         className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
