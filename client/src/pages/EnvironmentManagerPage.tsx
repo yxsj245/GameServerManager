@@ -98,6 +98,22 @@ const EnvironmentManagerPage: React.FC = () => {
   const [refreshing, setRefreshing] = useState(false)
   const [activeTab, setActiveTab] = useState('java')
 
+  // 标签页数据加载状态
+  const [tabLoadingStates, setTabLoadingStates] = useState({
+    java: false,
+    vcredist: false,
+    directx: false,
+    packages: false
+  })
+
+  // 标签页数据是否已加载
+  const [tabDataLoaded, setTabDataLoaded] = useState({
+    java: false,
+    vcredist: false,
+    directx: false,
+    packages: false
+  })
+
   const { addNotification } = useNotificationStore()
 
   // Java版本配置
@@ -147,10 +163,14 @@ const EnvironmentManagerPage: React.FC = () => {
 
   // 获取Java环境列表
   const fetchJavaEnvironments = async () => {
+    if (tabDataLoaded.java) return
+
+    setTabLoadingStates(prev => ({ ...prev, java: true }))
     try {
       const response = await apiClient.getJavaEnvironments()
       if (response.success && response.data) {
         setJavaEnvironments(response.data)
+        setTabDataLoaded(prev => ({ ...prev, java: true }))
       }
     } catch (error) {
       console.error('获取Java环境列表失败:', error)
@@ -159,15 +179,21 @@ const EnvironmentManagerPage: React.FC = () => {
         title: '错误',
         message: '获取Java环境列表失败'
       })
+    } finally {
+      setTabLoadingStates(prev => ({ ...prev, java: false }))
     }
   }
 
   // 获取Visual C++运行库环境列表
   const fetchVcRedistEnvironments = async () => {
+    if (tabDataLoaded.vcredist) return
+
+    setTabLoadingStates(prev => ({ ...prev, vcredist: true }))
     try {
       const response = await apiClient.getVcRedistEnvironments()
       if (response.success && response.data) {
         setVcRedistEnvironments(response.data)
+        setTabDataLoaded(prev => ({ ...prev, vcredist: true }))
       }
     } catch (error) {
       console.error('获取Visual C++运行库环境列表失败:', error)
@@ -176,15 +202,21 @@ const EnvironmentManagerPage: React.FC = () => {
         title: '错误',
         message: '获取Visual C++运行库环境列表失败'
       })
+    } finally {
+      setTabLoadingStates(prev => ({ ...prev, vcredist: false }))
     }
   }
 
   // 获取DirectX环境列表
   const fetchDirectXEnvironments = async () => {
+    if (tabDataLoaded.directx) return
+
+    setTabLoadingStates(prev => ({ ...prev, directx: true }))
     try {
       const response = await apiClient.getDirectXEnvironments()
       if (response.success && response.data) {
         setDirectxEnvironments(response.data)
+        setTabDataLoaded(prev => ({ ...prev, directx: true }))
       }
     } catch (error) {
       console.error('获取DirectX环境列表失败:', error)
@@ -193,11 +225,16 @@ const EnvironmentManagerPage: React.FC = () => {
         title: '错误',
         message: '获取DirectX环境列表失败'
       })
+    } finally {
+      setTabLoadingStates(prev => ({ ...prev, directx: false }))
     }
   }
 
   // 获取包管理器列表
   const fetchPackageManagers = async () => {
+    if (tabDataLoaded.packages) return
+
+    setTabLoadingStates(prev => ({ ...prev, packages: true }))
     try {
       const response = await apiClient.getPackageManagers()
       if (response.success && response.data) {
@@ -206,6 +243,7 @@ const EnvironmentManagerPage: React.FC = () => {
         if (response.data.length > 0) {
           setSelectedPackageManager(response.data[0].name)
         }
+        setTabDataLoaded(prev => ({ ...prev, packages: true }))
       }
     } catch (error) {
       console.error('获取包管理器列表失败:', error)
@@ -214,6 +252,8 @@ const EnvironmentManagerPage: React.FC = () => {
         title: '错误',
         message: '获取包管理器列表失败'
       })
+    } finally {
+      setTabLoadingStates(prev => ({ ...prev, packages: false }))
     }
   }
 
@@ -239,22 +279,53 @@ const EnvironmentManagerPage: React.FC = () => {
     }
   }
 
-  // 初始化数据
+  // 初始化数据 - 只加载系统信息和默认标签页数据
   useEffect(() => {
     const initData = async () => {
       setLoading(true)
+      // 只加载系统信息和默认标签页（Java）的数据
       await Promise.all([
         fetchSystemInfo(),
-        fetchJavaEnvironments(),
-        fetchVcRedistEnvironments(),
-        fetchDirectXEnvironments(),
-        fetchPackageManagers()
+        fetchJavaEnvironments() // 默认加载Java标签页
       ])
       setLoading(false)
     }
     initData()
+  }, [])
 
-    // 监听Java安装进度
+  // 标签页切换时的懒加载逻辑
+  const handleTabChange = async (tabName: string) => {
+    setActiveTab(tabName)
+
+    // 根据标签页加载对应的数据
+    switch (tabName) {
+      case 'java':
+        await fetchJavaEnvironments()
+        break
+      case 'vcredist':
+        if (systemInfo?.platform === 'win32') {
+          await fetchVcRedistEnvironments()
+        }
+        break
+      case 'directx':
+        if (systemInfo?.platform === 'win32') {
+          await fetchDirectXEnvironments()
+        }
+        break
+      case 'packages':
+        if (systemInfo?.platform === 'linux') {
+          await fetchPackageManagers()
+          // 如果已经有选中的包管理器，也加载包列表
+          if (selectedPackageManager) {
+            await fetchPackages(selectedPackageManager)
+          }
+        }
+        break
+    }
+  }
+
+  // 监听Java安装进度
+  useEffect(() => {
     const handleInstallProgress = (data: { version: string; stage: 'download' | 'extract'; progress: number }) => {
       setJavaEnvironments(prev => prev.map(env =>
         env.version === data.version
@@ -471,10 +542,10 @@ const EnvironmentManagerPage: React.FC = () => {
 
   // 监听选中的包管理器变化，获取对应的包列表
   useEffect(() => {
-    if (selectedPackageManager) {
+    if (selectedPackageManager && activeTab === 'packages') {
       fetchPackages(selectedPackageManager)
     }
-  }, [selectedPackageManager])
+  }, [selectedPackageManager, activeTab])
 
   // 处理进度窗口淡入动画
   useEffect(() => {
@@ -491,18 +562,40 @@ const EnvironmentManagerPage: React.FC = () => {
     }
   }, [showTaskProgress])
 
-  // 刷新数据
+  // 刷新数据 - 只刷新当前活跃标签页的数据
   const handleRefresh = async () => {
     setRefreshing(true)
-    await Promise.all([
-      fetchJavaEnvironments(),
-      fetchVcRedistEnvironments(),
-      fetchDirectXEnvironments(),
-      fetchPackageManagers()
-    ])
-    if (selectedPackageManager) {
-      await fetchPackages(selectedPackageManager)
+
+    // 根据当前活跃标签页刷新对应数据
+    switch (activeTab) {
+      case 'java':
+        // 重置加载状态，强制重新加载
+        setTabDataLoaded(prev => ({ ...prev, java: false }))
+        await fetchJavaEnvironments()
+        break
+      case 'vcredist':
+        if (systemInfo?.platform === 'win32') {
+          setTabDataLoaded(prev => ({ ...prev, vcredist: false }))
+          await fetchVcRedistEnvironments()
+        }
+        break
+      case 'directx':
+        if (systemInfo?.platform === 'win32') {
+          setTabDataLoaded(prev => ({ ...prev, directx: false }))
+          await fetchDirectXEnvironments()
+        }
+        break
+      case 'packages':
+        if (systemInfo?.platform === 'linux') {
+          setTabDataLoaded(prev => ({ ...prev, packages: false }))
+          await fetchPackageManagers()
+          if (selectedPackageManager) {
+            await fetchPackages(selectedPackageManager)
+          }
+        }
+        break
     }
+
     setRefreshing(false)
   }
 
@@ -1084,7 +1177,7 @@ const EnvironmentManagerPage: React.FC = () => {
         <div className="border-b border-gray-200 dark:border-gray-700">
           <nav className="flex space-x-8 px-6">
             <button
-              onClick={() => setActiveTab('java')}
+              onClick={() => handleTabChange('java')}
               className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
                 activeTab === 'java'
                   ? 'border-blue-500 text-blue-600 dark:text-blue-400'
@@ -1094,12 +1187,15 @@ const EnvironmentManagerPage: React.FC = () => {
               <div className="flex items-center space-x-2">
                 <Coffee className="w-4 h-4" />
                 <span>Java 环境</span>
+                {tabLoadingStates.java && (
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                )}
               </div>
             </button>
             {/* 只在Windows系统上显示Microsoft Visual C++标签页 */}
             {systemInfo?.platform === 'win32' && (
               <button
-                onClick={() => setActiveTab('vcredist')}
+                onClick={() => handleTabChange('vcredist')}
                 className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
                   activeTab === 'vcredist'
                     ? 'border-blue-500 text-blue-600 dark:text-blue-400'
@@ -1109,13 +1205,16 @@ const EnvironmentManagerPage: React.FC = () => {
                 <div className="flex items-center space-x-2">
                   <Package className="w-4 h-4" />
                   <span>Microsoft Visual C++</span>
+                  {tabLoadingStates.vcredist && (
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                  )}
                 </div>
               </button>
             )}
             {/* 只在Windows系统上显示DirectX标签页 */}
             {systemInfo?.platform === 'win32' && (
               <button
-                onClick={() => setActiveTab('directx')}
+                onClick={() => handleTabChange('directx')}
                 className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
                   activeTab === 'directx'
                     ? 'border-blue-500 text-blue-600 dark:text-blue-400'
@@ -1125,13 +1224,16 @@ const EnvironmentManagerPage: React.FC = () => {
                 <div className="flex items-center space-x-2">
                   <Monitor className="w-4 h-4" />
                   <span>DirectX</span>
+                  {tabLoadingStates.directx && (
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                  )}
                 </div>
               </button>
             )}
             {/* 只在Linux系统上显示动态链接库标签页 */}
             {systemInfo?.platform === 'linux' && (
               <button
-                onClick={() => setActiveTab('packages')}
+                onClick={() => handleTabChange('packages')}
                 className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
                   activeTab === 'packages'
                     ? 'border-blue-500 text-blue-600 dark:text-blue-400'
@@ -1141,6 +1243,9 @@ const EnvironmentManagerPage: React.FC = () => {
                 <div className="flex items-center space-x-2">
                   <Package className="w-4 h-4" />
                   <span>动态链接库</span>
+                  {tabLoadingStates.packages && (
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                  )}
                 </div>
               </button>
             )}
@@ -1150,8 +1255,15 @@ const EnvironmentManagerPage: React.FC = () => {
         {/* 标签页内容 */}
         <div className="p-6">
           {activeTab === 'java' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {javaVersions.map((javaConfig) => {
+            <>
+              {tabLoadingStates.java ? (
+                <div className="text-center py-12">
+                  <Loader2 className="w-12 h-12 animate-spin text-blue-500 mx-auto mb-4" />
+                  <p className="text-gray-500 dark:text-gray-400">正在加载Java环境信息...</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {javaVersions.map((javaConfig) => {
                 const env = javaEnvironments.find(e => e.version === javaConfig.key)
                 const isInstalled = env?.installed || false
                 const isInstalling = env?.installing || false
@@ -1266,20 +1378,29 @@ const EnvironmentManagerPage: React.FC = () => {
                   </div>
                 )
               })}
-            </div>
+                </div>
+              )}
+            </>
           )}
 
           {/* Visual C++运行库标签页内容 */}
           {activeTab === 'vcredist' && systemInfo?.platform === 'win32' && (
-            <div className="space-y-6">
-              <div className="text-center mb-6">
-                <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
-                  Microsoft Visual C++ 运行库
-                </h2>
-                <p className="text-gray-600 dark:text-gray-400">
-                  安装各版本的Microsoft Visual C++运行库，确保应用程序正常运行
-                </p>
-              </div>
+            <>
+              {tabLoadingStates.vcredist ? (
+                <div className="text-center py-12">
+                  <Loader2 className="w-12 h-12 animate-spin text-blue-500 mx-auto mb-4" />
+                  <p className="text-gray-500 dark:text-gray-400">正在加载Visual C++运行库信息...</p>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  <div className="text-center mb-6">
+                    <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+                      Microsoft Visual C++ 运行库
+                    </h2>
+                    <p className="text-gray-600 dark:text-gray-400">
+                      安装各版本的Microsoft Visual C++运行库，确保应用程序正常运行
+                    </p>
+                  </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {vcRedistEnvironments.map((env) => {
@@ -1384,25 +1505,34 @@ const EnvironmentManagerPage: React.FC = () => {
                 })}
               </div>
 
-              {vcRedistEnvironments.length === 0 && (
-                <div className="text-center py-12">
-                  <Package className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                  <p className="text-gray-500 dark:text-gray-400">暂无可用的运行库</p>
+                  {vcRedistEnvironments.length === 0 && (
+                    <div className="text-center py-12">
+                      <Package className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                      <p className="text-gray-500 dark:text-gray-400">暂无可用的运行库</p>
+                    </div>
+                  )}
                 </div>
               )}
-            </div>
+            </>
           )}
 
           {/* DirectX标签页内容 */}
           {activeTab === 'directx' && systemInfo?.platform === 'win32' && (
-            <div className="space-y-6">
-              <div className="text-center mb-6">
-                <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
-                  DirectX 9.0c 运行库
-                </h2>
-                <p className="text-gray-600 dark:text-gray-400 mb-3">
-                  安装DirectX 9.0c运行时组件，确保老游戏和多媒体应用程序正常运行
-                </p>
+            <>
+              {tabLoadingStates.directx ? (
+                <div className="text-center py-12">
+                  <Loader2 className="w-12 h-12 animate-spin text-blue-500 mx-auto mb-4" />
+                  <p className="text-gray-500 dark:text-gray-400">正在加载DirectX环境信息...</p>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  <div className="text-center mb-6">
+                    <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+                      DirectX 9.0c 运行库
+                    </h2>
+                    <p className="text-gray-600 dark:text-gray-400 mb-3">
+                      安装DirectX 9.0c运行时组件，确保老游戏和多媒体应用程序正常运行
+                    </p>
                 <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
                   <p className="text-sm text-blue-800 dark:text-blue-200">
                     <strong>说明：</strong> 即使您的系统有DirectX 12，许多老游戏仍需要DirectX 9.0c的特定运行时组件。
@@ -1534,20 +1664,38 @@ const EnvironmentManagerPage: React.FC = () => {
                 })}
               </div>
 
-              {directxEnvironments.length === 0 && (
-                <div className="text-center py-12">
-                  <Monitor className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                  <p className="text-gray-500 dark:text-gray-400">暂无可用的DirectX运行库</p>
+                  {directxEnvironments.length === 0 && (
+                    <div className="text-center py-12">
+                      <Monitor className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                      <p className="text-gray-500 dark:text-gray-400">暂无可用的DirectX运行库</p>
+                    </div>
+                  )}
                 </div>
               )}
-            </div>
+            </>
           )}
 
           {/* 动态链接库标签页内容 */}
-          {activeTab === 'packages' && (
-            <div className="space-y-6">
-              {/* 包管理器选择 */}
-              {!loading && packageManagers.length > 0 && (
+          {activeTab === 'packages' && systemInfo?.platform === 'linux' && (
+            <>
+              {tabLoadingStates.packages ? (
+                <div className="text-center py-12">
+                  <Loader2 className="w-12 h-12 animate-spin text-blue-500 mx-auto mb-4" />
+                  <p className="text-gray-500 dark:text-gray-400">正在加载包管理器信息...</p>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  <div className="text-center mb-6">
+                    <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+                      动态链接库管理
+                    </h2>
+                    <p className="text-gray-600 dark:text-gray-400">
+                      管理系统动态链接库，确保游戏服务器运行所需的依赖库
+                    </p>
+                  </div>
+
+                  {/* 包管理器选择 */}
+                  {packageManagers.length > 0 && (
                 <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-3">
@@ -1610,8 +1758,8 @@ const EnvironmentManagerPage: React.FC = () => {
                 </div>
               )}
 
-              {/* 包列表 */}
-              {!loading && !packagesLoading && packages.length > 0 && (
+                  {/* 包列表 */}
+                  {!packagesLoading && packages.length > 0 && (
                 <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
                   {/* 表头 */}
                   <div className="border-b border-gray-200 dark:border-gray-700 p-4">
@@ -1714,36 +1862,28 @@ const EnvironmentManagerPage: React.FC = () => {
                 </div>
               )}
 
-              {/* 正在检测包管理器 */}
-              {loading && (
-                <div className="text-center py-12">
-                  <Loader2 className="w-12 h-12 animate-spin text-blue-500 mx-auto mb-4" />
-                  <p className="text-gray-500 dark:text-gray-400">正在检测可用的包管理器...</p>
-                </div>
-              )}
+                  {/* 正在检测包列表 */}
+                  {packagesLoading && (
+                    <div className="text-center py-12">
+                      <Loader2 className="w-12 h-12 animate-spin text-blue-500 mx-auto mb-4" />
+                      <p className="text-gray-500 dark:text-gray-400">正在检测可用的包...</p>
+                    </div>
+                  )}
 
-              {/* 正在检测包列表 */}
-              {!loading && packagesLoading && (
-                <div className="text-center py-12">
-                  <Loader2 className="w-12 h-12 animate-spin text-blue-500 mx-auto mb-4" />
-                  <p className="text-gray-500 dark:text-gray-400">正在检测可用的包...</p>
-                </div>
-              )}
+                  {/* 空状态 */}
+                  {!packagesLoading && packageManagers.length === 0 && (
+                    <div className="text-center py-12">
+                      <Package className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                      <p className="text-gray-500 dark:text-gray-400">当前系统不支持包管理器或未检测到可用的包管理器</p>
+                    </div>
+                  )}
 
-              {/* 空状态 */}
-              {!loading && !packagesLoading && packageManagers.length === 0 && (
-                <div className="text-center py-12">
-                  <Package className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                  <p className="text-gray-500 dark:text-gray-400">当前系统不支持包管理器或未检测到可用的包管理器</p>
-                </div>
-              )}
-
-              {!loading && !packagesLoading && packageManagers.length > 0 && packages.length === 0 && selectedPackageManager && (
-                <div className="text-center py-12">
-                  <Package className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                  <p className="text-gray-500 dark:text-gray-400">暂无可用的包</p>
-                </div>
-              )}
+                  {!packagesLoading && packageManagers.length > 0 && packages.length === 0 && selectedPackageManager && (
+                    <div className="text-center py-12">
+                      <Package className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                      <p className="text-gray-500 dark:text-gray-400">暂无可用的包</p>
+                    </div>
+                  )}
 
               {/* 任务进度显示窗口 */}
               {showTaskProgress && packageTasks.length > 0 && (
@@ -1857,7 +1997,9 @@ const EnvironmentManagerPage: React.FC = () => {
                   </div>
                 </div>
               )}
-            </div>
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>
