@@ -15,6 +15,7 @@ import ScheduledTasksPage from '@/pages/ScheduledTasksPage'
 import SettingsPage from '@/pages/SettingsPage'
 import PluginsPage from '@/pages/PluginsPage'
 import FileManagerPage from '@/pages/FileManagerPage'
+import EnvironmentManagerPage from '@/pages/EnvironmentManagerPage'
 import AboutProjectPage from '@/pages/AboutProjectPage'
 import LoginTransition from '@/components/LoginTransition'
 import NotificationContainer from '@/components/NotificationContainer'
@@ -137,6 +138,7 @@ function App() {
                         <Route path="/game-deployment" element={<PageTransition><GameDeploymentPage /></PageTransition>} />
                         <Route path="/scheduled-tasks" element={<PageTransition><ScheduledTasksPage /></PageTransition>} />
                         <Route path="/files" element={<PageTransition><FileManagerPage /></PageTransition>} />
+                        <Route path="/environment" element={<PageTransition><EnvironmentManagerPage /></PageTransition>} />
                         <Route path="/plugins" element={<PageTransition><PluginsPage /></PageTransition>} />
                         <Route path="/settings" element={<PageTransition><SettingsPage /></PageTransition>} />
                         <Route path="/about" element={<PageTransition><AboutProjectPage /></PageTransition>} />

@@ -761,6 +761,32 @@ class ApiClient {
   async executeRconCommand(instanceId: string, command: string) {
     return this.post(`/rcon/${instanceId}/command`, { command })
   }
+
+  // 环境管理API
+  async getEnvironmentSystemInfo() {
+    return this.get('/environment/system-info')
+  }
+
+  async getJavaEnvironments() {
+    return this.get('/environment/java')
+  }
+
+  async installJavaEnvironment(data: {
+    version: string
+    downloadUrl: string
+    platform: string
+    socketId?: string
+  }) {
+    return this.post('/environment/java/install', data)
+  }
+
+  async uninstallJavaEnvironment(version: string) {
+    return this.delete(`/environment/java/${version}`)
+  }
+
+  async verifyJavaEnvironment(version: string) {
+    return this.get(`/environment/java/${version}/verify`)
+  }
 }
 
 // 创建单例实例

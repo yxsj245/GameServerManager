@@ -41,6 +41,7 @@ import sponsorRouter, { setSponsorDependencies } from './routes/sponsor.js'
 import onlineDeployRouter from './routes/onlineDeploy.js'
 import gameConfigRouter from './routes/gameconfig.js'
 import rconRouter from './routes/rcon.js'
+import environmentRouter, { setEnvironmentSocketIO } from './routes/environment.js'
 
 // 获取当前文件目录
 const __filename = fileURLToPath(import.meta.url)
@@ -650,6 +651,10 @@ async function startServer() {
 
     // 设置RCON路由
     app.use('/api/rcon', rconRouter)
+
+    // 设置环境管理路由
+    setEnvironmentSocketIO(io)
+    app.use('/api/environment', environmentRouter)
 
     // 前端路由处理（SPA支持）
     app.get('*', (req, res) => {
