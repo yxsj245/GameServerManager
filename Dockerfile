@@ -182,8 +182,8 @@ RUN mkdir -p ${STEAMCMD_DIR} \
     && cd /app \
     && npm run install:all \
     && npm run package:linux:no-zip \
-    # 安装Python依赖
-    && pip3 install --no-cache-dir -r /app/server/src/Python/requirements.txt \
+    # 安装Python依赖（强行覆盖系统限制）
+    && PIP_BREAK_SYSTEM_PACKAGES=1 pip3 install --no-cache-dir -r /app/server/src/Python/requirements.txt \
     # 复制构建好的应用到root目录
     && cp -r /app/dist/package/* /root/ \
     && chmod +x /root/start.sh \
