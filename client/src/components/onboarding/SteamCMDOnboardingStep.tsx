@@ -36,14 +36,27 @@ const SteamCMDOnboardingStep: React.FC = () => {
       const isLinux = systemInfo.platform.toLowerCase().includes('linux')
 
       // 设置默认路径
-      setInstallPath(isWindows ? 'C:\\SteamCMD' : '/root/steamcmd')
+      const defaultPath = isWindows ? 'C:\\SteamCMD' : '/root/steamcmd'
+      setInstallPath(defaultPath)
 
       // Linux平台默认选择手动指定路径
       if (isLinux) {
         setInstallMode('manual')
       }
+
+      // 临时保存默认路径
+      localStorage.setItem('gsm3_temp_steamcmd_path', defaultPath)
     }
   }, [systemInfo])
+
+  // 当路径改变时临时保存
+  useEffect(() => {
+    if (installPath.trim()) {
+      localStorage.setItem('gsm3_temp_steamcmd_path', installPath)
+    } else {
+      localStorage.removeItem('gsm3_temp_steamcmd_path')
+    }
+  }, [installPath])
 
   // 检查SteamCMD状态
   useEffect(() => {

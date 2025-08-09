@@ -29,12 +29,15 @@ const GamePathOnboardingStep: React.FC = () => {
     }
   }, [systemInfo])
 
-  // 验证路径格式
+  // 验证路径格式并临时保存
   useEffect(() => {
     if (defaultGamePath.trim()) {
       validatePath(defaultGamePath)
+      // 临时保存到localStorage，供退出时使用
+      localStorage.setItem('gsm3_temp_game_path', defaultGamePath)
     } else {
       setIsPathValid(null)
+      localStorage.removeItem('gsm3_temp_game_path')
     }
   }, [defaultGamePath])
 

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { useOnboardingStore } from '@/stores/onboardingStore'
-import { X, ChevronLeft, ChevronRight, Check, SkipForward } from 'lucide-react'
+import { useNotificationStore } from '@/stores/notificationStore'
+import { X, ChevronLeft, ChevronRight, Check, SkipForward, Save, Loader2 } from 'lucide-react'
 import SteamCMDOnboardingStep from './onboarding/SteamCMDOnboardingStep'
 import GamePathOnboardingStep from './onboarding/GamePathOnboardingStep'
 
@@ -15,11 +16,13 @@ const OnboardingWizard: React.FC = () => {
     completeOnboarding,
     setShowOnboarding
   } = useOnboardingStore()
+  const { addNotification } = useNotificationStore()
 
   // 动画状态管理
   const [isVisible, setIsVisible] = useState(false)
   const [isClosing, setIsClosing] = useState(false)
   const [stepContentKey, setStepContentKey] = useState(0)
+  const [isSaving, setIsSaving] = useState(false)
 
   // 控制整体显示/隐藏动画
   useEffect(() => {
@@ -48,6 +51,152 @@ const OnboardingWizard: React.FC = () => {
 
 
 
+  // 保存游戏路径配置
+  const saveGamePathConfig = async () => {
+    const gamePathFromStorage = localStorage.getItem('gsm3_temp_game_path')
+    if (!gamePathFromStorage) {
+      console.log('没有找到临时游戏路径，跳过保存')
+      return true
+    }
+
+    console.log('正在保存游戏路径:', gamePathFromStorage)
+    try {
+      const response = await fetch('/api/settings/game-path', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('gsm3_token')}`
+        },
+        body: JSON.stringify({ defaultGamePath: gamePathFromStorage })
+      })
+
+      const result = await response.json()
+      console.log('游戏路径保存响应:', result)
+
+      if (result.success) {
+        localStorage.setItem('gsm3_default_game_path', gamePathFromStorage)
+        localStorage.removeItem('gsm3_temp_game_path')
+        console.log('游戏路径保存成功')
+        return true
+      } else {
+        console.error('游戏路径保存失败:', result.message)
+        return false
+      }
+    } catch (error) {
+      console.error('保存游戏路径失败:', error)
+      return false
+    }
+  }
+
+  // 保存SteamCMD配置
+  const saveSteamCMDConfig = async () => {
+    const steamcmdPathFromStorage = localStorage.getItem('gsm3_temp_steamcmd_path')
+    if (!steamcmdPathFromStorage) {
+      console.log('没有找到临时SteamCMD路径，跳过保存')
+      return true
+    }
+
+    console.log('正在保存SteamCMD路径:', steamcmdPathFromStorage)
+    try {
+      const response = await fetch('/api/steamcmd/manual-path', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('gsm3_token')}`
+        },
+        body: JSON.stringify({ installPath: steamcmdPathFromStorage })
+      })
+
+      const result = await response.json()
+      console.log('SteamCMD路径保存响应:', result)
+
+      if (result.success) {
+        localStorage.removeItem('gsm3_temp_steamcmd_path')
+        console.log('SteamCMD路径保存成功')
+        return true
+      } else {
+        console.error('SteamCMD路径保存失败:', result.message)
+        return false
+      }
+    } catch (error) {
+      console.error('保存SteamCMD配置失败:', error)
+      return false
+    }
+  }
+
+  // 保存所有已配置的内容
+  const saveAllConfigurations = async () => {
+    setIsSaving(true)
+    console.log('开始保存所有配置...')
+
+    try {
+      // 检查临时存储的配置数据，而不仅仅依赖步骤完成状态
+      const tempGamePath = localStorage.getItem('gsm3_temp_game_path')
+      const tempSteamCMDPath = localStorage.getItem('gsm3_temp_steamcmd_path')
+
+      console.log('临时游戏路径:', tempGamePath)
+      console.log('临时SteamCMD路径:', tempSteamCMDPath)
+
+      const saveResults = []
+
+      // 保存SteamCMD配置（如果有）
+      if (tempSteamCMDPath) {
+        console.log('正在保存SteamCMD配置...')
+        const steamcmdResult = await saveSteamCMDConfig()
+        saveResults.push({ step: 'SteamCMD 设置', success: steamcmdResult })
+      }
+
+      // 保存游戏路径配置（如果有）
+      if (tempGamePath) {
+        console.log('正在保存游戏路径配置...')
+        const gamePathResult = await saveGamePathConfig()
+        saveResults.push({ step: '游戏默认安装路径', success: gamePathResult })
+      }
+
+      console.log('保存结果:', saveResults)
+
+      if (saveResults.length === 0) {
+        console.log('没有需要保存的配置')
+        addNotification({
+          type: 'info',
+          title: '引导完成',
+          message: '您可以随时在设置页面重新配置这些选项'
+        })
+        return true
+      }
+
+      // 检查保存结果
+      const failedSaves = saveResults.filter(result => !result.success)
+      const successfulSaves = saveResults.filter(result => result.success)
+
+      if (failedSaves.length > 0) {
+        addNotification({
+          type: 'warning',
+          title: '部分配置保存失败',
+          message: `成功保存：${successfulSaves.map(s => s.step).join('、')}。失败：${failedSaves.map(s => s.step).join('、')}`
+        })
+      } else if (successfulSaves.length > 0) {
+        addNotification({
+          type: 'success',
+          title: '配置已保存',
+          message: `已成功保存。您可以在设置页面进行进一步调整。`
+        })
+      }
+
+      return true
+    } catch (error) {
+      console.error('保存配置失败:', error)
+      addNotification({
+        type: 'error',
+        title: '保存失败',
+        message: '保存配置时发生错误，请稍后重试'
+      })
+      return false
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
   const handleNext = () => {
     if (isLastStep) {
       handleClose()
@@ -56,8 +205,17 @@ const OnboardingWizard: React.FC = () => {
     }
   }
 
-  const handleClose = () => {
+  const handleClose = async () => {
     setIsClosing(true)
+
+    // 调试：检查localStorage中的临时数据
+    console.log('关闭前检查localStorage:')
+    console.log('gsm3_temp_game_path:', localStorage.getItem('gsm3_temp_game_path'))
+    console.log('gsm3_temp_steamcmd_path:', localStorage.getItem('gsm3_temp_steamcmd_path'))
+
+    // 先保存所有配置
+    await saveAllConfigurations()
+
     // 延迟执行关闭，让动画播放完成
     setTimeout(() => {
       setShowOnboarding(false)
@@ -84,12 +242,21 @@ const OnboardingWizard: React.FC = () => {
       }`}
     >
       <div
-        className={`bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden transition-all duration-300 ease-in-out ${
+        className={`bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden transition-all duration-300 ease-in-out relative ${
           isVisible && !isClosing
             ? 'opacity-100 scale-100 translate-y-0'
             : 'opacity-0 scale-95 translate-y-4'
         }`}
       >
+        {/* 保存中的覆盖层 */}
+        {isSaving && (
+          <div className="absolute inset-0 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm z-10 flex items-center justify-center">
+            <div className="flex items-center space-x-3 bg-white dark:bg-gray-800 px-6 py-3 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700">
+              <Loader2 className="w-5 h-5 animate-spin text-blue-600" />
+              <span className="text-gray-900 dark:text-white font-medium">正在保存配置...</span>
+            </div>
+          </div>
+        )}
         {/* 头部 */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
           <div className="animate-fade-in-up">
@@ -102,7 +269,8 @@ const OnboardingWizard: React.FC = () => {
           </div>
           <button
             onClick={handleClose}
-            className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-all duration-200 hover:scale-110 animate-fade-in-up animation-delay-200"
+            disabled={isSaving}
+            className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-all duration-200 hover:scale-110 animate-fade-in-up animation-delay-200 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <X className="w-6 h-6" />
           </button>
@@ -197,11 +365,24 @@ const OnboardingWizard: React.FC = () => {
 
             <button
               onClick={handleNext}
-              disabled={!canGoNext}
+              disabled={!canGoNext || isSaving}
               className="flex items-center space-x-2 px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 hover:scale-105 animate-fade-in-up animation-delay-500"
             >
-              <span>{isLastStep ? '退出' : '下一步'}</span>
-              {!isLastStep && <ChevronRight className="w-4 h-4" />}
+              {isLastStep ? (
+                <>
+                  {isSaving ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Save className="w-4 h-4" />
+                  )}
+                  <span>{isSaving ? '保存中...' : '保存并退出'}</span>
+                </>
+              ) : (
+                <>
+                  <span>下一步</span>
+                  <ChevronRight className="w-4 h-4" />
+                </>
+              )}
             </button>
           </div>
         </div>
