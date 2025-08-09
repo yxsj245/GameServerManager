@@ -1,8 +1,7 @@
-import React from 'react'
+import React, { useState, useEffect } from 'react'
 import { useOnboardingStore } from '@/stores/onboardingStore'
 import { X, ChevronLeft, ChevronRight, Check, SkipForward } from 'lucide-react'
 import SteamCMDOnboardingStep from './onboarding/SteamCMDOnboardingStep'
-import JavaOnboardingStep from './onboarding/JavaOnboardingStep'
 import GamePathOnboardingStep from './onboarding/GamePathOnboardingStep'
 
 const OnboardingWizard: React.FC = () => {
@@ -16,6 +15,26 @@ const OnboardingWizard: React.FC = () => {
     completeOnboarding,
     setShowOnboarding
   } = useOnboardingStore()
+
+  // 动画状态管理
+  const [isVisible, setIsVisible] = useState(false)
+  const [isClosing, setIsClosing] = useState(false)
+  const [stepContentKey, setStepContentKey] = useState(0)
+
+  // 控制整体显示/隐藏动画
+  useEffect(() => {
+    if (shouldShowOnboarding() && showOnboarding) {
+      setIsVisible(true)
+      setIsClosing(false)
+    } else {
+      setIsVisible(false)
+    }
+  }, [shouldShowOnboarding, showOnboarding])
+
+  // 步骤切换时的内容动画
+  useEffect(() => {
+    setStepContentKey(prev => prev + 1)
+  }, [currentStep])
 
   // 如果不需要显示引导，返回null
   if (!shouldShowOnboarding() || !showOnboarding) {
@@ -31,22 +50,26 @@ const OnboardingWizard: React.FC = () => {
 
   const handleNext = () => {
     if (isLastStep) {
-      completeOnboarding()
+      handleClose()
     } else {
       nextStep()
     }
   }
 
   const handleClose = () => {
-    setShowOnboarding(false)
+    setIsClosing(true)
+    // 延迟执行关闭，让动画播放完成
+    setTimeout(() => {
+      setShowOnboarding(false)
+      completeOnboarding()
+      setIsClosing(false)
+    }, 300) // 与CSS动画时间匹配
   }
 
   const renderStepContent = () => {
     switch (currentStepData?.id) {
       case 'steamcmd':
         return <SteamCMDOnboardingStep />
-      case 'java':
-        return <JavaOnboardingStep />
       case 'game-path':
         return <GamePathOnboardingStep />
       default:
@@ -55,11 +78,21 @@ const OnboardingWizard: React.FC = () => {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
+    <div
+      className={`fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 transition-all duration-300 ease-in-out ${
+        isVisible && !isClosing ? 'opacity-100' : 'opacity-0'
+      }`}
+    >
+      <div
+        className={`bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden transition-all duration-300 ease-in-out ${
+          isVisible && !isClosing
+            ? 'opacity-100 scale-100 translate-y-0'
+            : 'opacity-0 scale-95 translate-y-4'
+        }`}
+      >
         {/* 头部 */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
-          <div>
+          <div className="animate-fade-in-up">
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
               欢迎使用 GSManager3
             </h1>
@@ -69,7 +102,7 @@ const OnboardingWizard: React.FC = () => {
           </div>
           <button
             onClick={handleClose}
-            className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+            className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-all duration-200 hover:scale-110 animate-fade-in-up animation-delay-200"
           >
             <X className="w-6 h-6" />
           </button>
@@ -81,9 +114,9 @@ const OnboardingWizard: React.FC = () => {
             {steps.map((step, index) => (
               <div key={step.id} className="flex items-center">
                 <div className={`
-                  flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium
-                  ${index < currentStep ? 'bg-green-500 text-white' : 
-                    index === currentStep ? 'bg-blue-500 text-white' : 
+                  flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium transition-all duration-300 ease-in-out
+                  ${index < currentStep ? 'bg-green-500 text-white transform scale-110' :
+                    index === currentStep ? 'bg-blue-500 text-white animate-pulse-glow' :
                     'bg-gray-300 dark:bg-gray-600 text-gray-600 dark:text-gray-400'}
                 `}>
                   {index < currentStep ? (
@@ -101,7 +134,7 @@ const OnboardingWizard: React.FC = () => {
                   </p>
                 </div>
                 {index < steps.length - 1 && (
-                  <div className={`w-16 h-0.5 mx-4 ${
+                  <div className={`w-16 h-0.5 mx-4 transition-all duration-500 ease-in-out ${
                     index < currentStep ? 'bg-green-500' : 'bg-gray-300 dark:bg-gray-600'
                   }`} />
                 )}
@@ -112,7 +145,10 @@ const OnboardingWizard: React.FC = () => {
 
         {/* 步骤内容 */}
         <div className="p-6 flex-1 overflow-y-auto min-h-0">
-          <div className="mb-6">
+          <div
+            key={`header-${stepContentKey}`}
+            className="mb-6 animate-fade-in-up"
+          >
             <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
               {currentStepData?.title}
             </h2>
@@ -120,8 +156,13 @@ const OnboardingWizard: React.FC = () => {
               {currentStepData?.description}
             </p>
           </div>
-          
-          {renderStepContent()}
+
+          <div
+            key={`content-${stepContentKey}`}
+            className="animate-fade-in-up animation-delay-100"
+          >
+            {renderStepContent()}
+          </div>
         </div>
 
         {/* 底部操作栏 */}
@@ -129,7 +170,7 @@ const OnboardingWizard: React.FC = () => {
           <button
             onClick={prevStep}
             disabled={currentStep === 0}
-            className="flex items-center space-x-2 px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="flex items-center space-x-2 px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 hover:scale-105 animate-fade-in-up animation-delay-300"
           >
             <ChevronLeft className="w-4 h-4" />
             <span>上一步</span>
@@ -144,20 +185,20 @@ const OnboardingWizard: React.FC = () => {
                   if (!isLastStep) {
                     nextStep()
                   } else {
-                    completeOnboarding()
+                    handleClose()
                   }
                 }}
-                className="flex items-center space-x-2 px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors"
+                className="flex items-center space-x-2 px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-all duration-200 hover:scale-105 animate-fade-in-up animation-delay-400"
               >
                 <SkipForward className="w-4 h-4" />
                 <span>跳过</span>
               </button>
             )}
-            
+
             <button
               onClick={handleNext}
               disabled={!canGoNext}
-              className="flex items-center space-x-2 px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="flex items-center space-x-2 px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 hover:scale-105 animate-fade-in-up animation-delay-500"
             >
               <span>{isLastStep ? '退出' : '下一步'}</span>
               {!isLastStep && <ChevronRight className="w-4 h-4" />}

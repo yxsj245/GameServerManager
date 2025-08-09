@@ -52,13 +52,6 @@ const defaultSteps: OnboardingStep[] = [
     skippable: true
   },
   {
-    id: 'java',
-    title: 'Java 环境检测',
-    description: '检测系统中的 Java 环境，确保 Minecraft 等游戏服务器能正常运行',
-    completed: false,
-    skippable: true
-  },
-  {
     id: 'game-path',
     title: '游戏默认安装路径',
     description: '设置游戏服务器的默认安装路径，简化后续部署流程',
