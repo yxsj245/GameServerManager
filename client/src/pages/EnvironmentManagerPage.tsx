@@ -116,6 +116,15 @@ const EnvironmentManagerPage: React.FC = () => {
 
   const { addNotification } = useNotificationStore()
 
+  // 赞助者状态
+  const [sponsorStatus, setSponsorStatus] = useState<{
+    isValid: boolean
+    loading: boolean
+  }>({
+    isValid: false,
+    loading: true
+  })
+
   // Java版本配置
   const javaVersions = [
     {
@@ -157,6 +166,32 @@ const EnvironmentManagerPage: React.FC = () => {
         type: 'error',
         title: '错误',
         message: '获取系统信息失败'
+      })
+    }
+  }
+
+  // 获取赞助者状态
+  const fetchSponsorStatus = async () => {
+    try {
+      setSponsorStatus(prev => ({ ...prev, loading: true }))
+      const response = await apiClient.getSponsorKeyInfo()
+
+      if (response.success && response.data) {
+        setSponsorStatus({
+          isValid: response.data.isValid && !response.data.isExpired,
+          loading: false
+        })
+      } else {
+        setSponsorStatus({
+          isValid: false,
+          loading: false
+        })
+      }
+    } catch (error) {
+      console.error('获取赞助者状态失败:', error)
+      setSponsorStatus({
+        isValid: false,
+        loading: false
       })
     }
   }
@@ -283,9 +318,10 @@ const EnvironmentManagerPage: React.FC = () => {
   useEffect(() => {
     const initData = async () => {
       setLoading(true)
-      // 只加载系统信息和默认标签页（Java）的数据
+      // 加载系统信息、赞助者状态和默认标签页（Java）的数据
       await Promise.all([
         fetchSystemInfo(),
+        fetchSponsorStatus(),
         fetchJavaEnvironments() // 默认加载Java标签页
       ])
       setLoading(false)
@@ -565,6 +601,9 @@ const EnvironmentManagerPage: React.FC = () => {
   // 刷新数据 - 只刷新当前活跃标签页的数据
   const handleRefresh = async () => {
     setRefreshing(true)
+
+    // 刷新赞助者状态
+    await fetchSponsorStatus()
 
     // 根据当前活跃标签页刷新对应数据
     switch (activeTab) {
@@ -1158,6 +1197,53 @@ const EnvironmentManagerPage: React.FC = () => {
           <span>刷新</span>
         </button>
       </div>
+
+      {/* 赞助者状态提示 */}
+      {!sponsorStatus.loading && (
+        <div className={`rounded-lg p-4 border ${
+          sponsorStatus.isValid
+            ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'
+            : 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800'
+        }`}>
+          <div className="flex items-start space-x-3">
+            <div className={`flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center ${
+              sponsorStatus.isValid
+                ? 'bg-green-500'
+                : 'bg-yellow-500'
+            }`}>
+              {sponsorStatus.isValid ? (
+                <CheckCircle className="w-3 h-3 text-white" />
+              ) : (
+                <AlertCircle className="w-3 h-3 text-white" />
+              )}
+            </div>
+            <div className="flex-1">
+              <p className={`text-sm font-medium ${
+                sponsorStatus.isValid
+                  ? 'text-green-800 dark:text-green-200'
+                  : 'text-yellow-800 dark:text-yellow-200'
+              }`}>
+                {sponsorStatus.isValid ? (
+                  '您现已是赞助者，专享国内高速服务器下载Java环境'
+                ) : (
+                  <>
+                    Java环境安装现已支持赞助者专享国内高速服务器下载，您当前还不是赞助者，欢迎前往
+                    <a
+                      href="https://afdian.com/a/xiaozhuhouses"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 underline ml-1"
+                    >
+                      爱发电
+                    </a>
+                    赞助
+                  </>
+                )}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 系统信息 */}
       {systemInfo && (

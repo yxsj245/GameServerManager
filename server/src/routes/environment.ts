@@ -4,13 +4,20 @@ import logger from '../utils/logger.js'
 import { JavaManager, VcRedistManager, DirectXManager } from '../modules/environment/index.js'
 import { LinuxPackageManager } from '../modules/environment/packageManager.js'
 import { authenticateToken } from '../middleware/auth.js'
+import { ConfigManager } from '../modules/config/ConfigManager.js'
 
 // 存储Socket.IO实例的变量
 let io: any = null
+let configManager: ConfigManager
 
 // 设置Socket.IO实例的函数
 export const setEnvironmentSocketIO = (socketIO: any) => {
   io = socketIO
+}
+
+// 设置ConfigManager实例的函数
+export const setEnvironmentConfigManager = (config: ConfigManager) => {
+  configManager = config
 }
 
 const router = express.Router()
@@ -60,6 +67,64 @@ router.get('/java', authenticateToken, async (req, res) => {
   }
 })
 
+// 验证赞助者密钥
+function validateSponsorKey(): boolean {
+  try {
+    if (!configManager) {
+      logger.warn('ConfigManager未初始化')
+      return false
+    }
+
+    const sponsorConfig = configManager.getSponsorConfig()
+    if (!sponsorConfig || !sponsorConfig.key || !sponsorConfig.isValid) {
+      return false
+    }
+
+    // 检查密钥是否过期
+    if (sponsorConfig.expiryTime && new Date() > new Date(sponsorConfig.expiryTime)) {
+      return false
+    }
+
+    return true
+  } catch (error) {
+    logger.error('验证赞助者密钥失败:', error)
+    return false
+  }
+}
+
+// 获取赞助者专用下载链接
+function getSponsorDownloadUrl(version: string, platform: string): string {
+  const baseUrls = {
+    windows: 'http://download.server.xiaozhuhouses.asia:8082/disk1/jdk/Windows/',
+    linux: 'http://langlangy.server.xiaozhuhouses.asia:8082/disk1/jdk/Linux/'
+  }
+
+  const fileNames = {
+    java8: {
+      windows: 'openjdk-8u44-windows-i586.zip',
+      linux: 'openjdk-8u44-linux-x64.tar.gz'
+    },
+    java17: {
+      windows: 'openjdk-17.0.0.1+2_windows-x64_bin.zip',
+      linux: 'openjdk-17.0.0.1+2_linux-x64_bin.tar.gz'
+    },
+    java21: {
+      windows: 'openjdk-21+35_windows-x64_bin.zip',
+      linux: 'openjdk-21+35_linux-x64_bin.tar.gz'
+    }
+  }
+
+  const platformKey = platform === 'win32' ? 'windows' : 'linux'
+  const baseUrl = baseUrls[platformKey]
+  const fileName = fileNames[version]?.[platformKey]
+
+  if (!baseUrl || !fileName) {
+    throw new Error(`不支持的版本或平台: ${version}, ${platform}`)
+  }
+
+  return baseUrl + fileName
+}
+
 // 安装Java环境
 router.post('/java/install', authenticateToken, async (req, res) => {
   const { version, downloadUrl, socketId } = req.body
@@ -72,14 +137,29 @@ router.post('/java/install', authenticateToken, async (req, res) => {
   }
 
   try {
+    // 检查是否为赞助者，如果是则使用赞助者专用下载链接
+    let finalDownloadUrl = downloadUrl
+    const isSponsor = validateSponsorKey()
+
+    if (isSponsor) {
+      try {
+        const platform = process.platform
+        finalDownloadUrl = getSponsorDownloadUrl(version, platform)
+        logger.info(`检测到有效赞助者，使用赞助者专用下载链接: ${finalDownloadUrl}`)
+      } catch (error) {
+        logger.warn(`获取赞助者下载链接失败，使用默认链接: ${error instanceof Error ? error.message : '未知错误'}`)
+        // 如果获取赞助者链接失败，继续使用原始链接
+      }
+    }
+
     // 立即返回响应，安装过程在后台进行
     res.json({
       success: true,
-      message: `${version} 开始安装`
+      message: `${version} 开始安装${isSponsor ? '（赞助者专用链接）' : ''}`
     })
 
     // 后台执行安装，通过WebSocket发送进度更新
-    await javaManager.installJava(version, downloadUrl, (stage, progress) => {
+    await javaManager.installJava(version, finalDownloadUrl, (stage, progress) => {
       if (io && socketId) {
         io.to(socketId).emit('java-install-progress', {
           version,
@@ -94,7 +174,7 @@ router.post('/java/install', authenticateToken, async (req, res) => {
       io.to(socketId).emit('java-install-complete', {
         version,
         success: true,
-        message: `${version} 安装成功`
+        message: `${version} 安装成功${isSponsor ? '（赞助者专用链接）' : ''}`
       })
     }
   } catch (error) {
