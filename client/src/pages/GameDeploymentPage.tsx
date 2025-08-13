@@ -116,6 +116,7 @@ const GameDeploymentPage: React.FC = () => {
   const [useAnonymous, setUseAnonymous] = useState(true)
   const [steamUsername, setSteamUsername] = useState('')
   const [steamPassword, setSteamPassword] = useState('')
+  const [isValidateMode, setIsValidateMode] = useState(false)
   
   // 平台筛选状态
   const [platformFilter, setPlatformFilter] = useState<string>('all') // 'all', 'compatible', 'Windows', 'Linux', 'macOS'
@@ -204,7 +205,7 @@ const GameDeploymentPage: React.FC = () => {
   // 面板兼容性确认对话框状态
   const [showCompatibilityModal, setShowCompatibilityModal] = useState(false)
   const [compatibilityModalAnimating, setCompatibilityModalAnimating] = useState(false)
-  const [pendingGameInstall, setPendingGameInstall] = useState<{ key: string; info: GameInfo } | null>(null)
+  const [pendingGameInstall, setPendingGameInstall] = useState<{ key: string; info: GameInfo; validateMode?: boolean } | null>(null)
 
   // 内存警告对话框状态
   const [showMemoryWarningModal, setShowMemoryWarningModal] = useState(false)
@@ -1447,10 +1448,41 @@ const GameDeploymentPage: React.FC = () => {
     openInstallModal(gameKey, gameInfo)
   }
 
+  // 校验游戏完整性
+  const handleValidateGame = async (gameKey: string, gameInfo: GameInfo) => {
+    // 检查游戏是否支持当前平台
+    if (gameInfo.supportedOnCurrentPlatform === false) {
+      addNotification({
+        type: 'error',
+        title: '平台不兼容',
+        message: `${gameInfo.game_nameCN} 不支持当前平台 (${gameInfo.currentPlatform})，无法校验`
+      })
+      return
+    }
+
+    // 检查面板是否兼容当前平台
+    if (gameInfo.panelCompatibleOnCurrentPlatform === false) {
+      // 显示兼容性确认对话框
+      setPendingGameInstall({ key: gameKey, info: gameInfo, validateMode: true })
+      setShowCompatibilityModal(true)
+      // 使用requestAnimationFrame确保DOM渲染完成后再触发动画
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          setCompatibilityModalAnimating(true)
+        })
+      })
+      return
+    }
+
+    // 直接打开安装对话框，但标记为校验模式
+    openInstallModal(gameKey, gameInfo, true)
+  }
+
   // 打开安装对话框的通用函数
-  const openInstallModal = (gameKey: string, gameInfo: GameInfo) => {
+  const openInstallModal = (gameKey: string, gameInfo: GameInfo, validateMode: boolean = false) => {
     setSelectedGame({ key: gameKey, info: gameInfo })
     setInstanceName(gameInfo.game_nameCN)
+    setIsValidateMode(validateMode)
     // 自动填充默认游戏路径
     setInstallPath(generatePath(gameInfo.game_nameCN))
     setShowInstallModal(true)
@@ -1467,6 +1499,7 @@ const GameDeploymentPage: React.FC = () => {
     setInstallModalAnimating(false)
     setTimeout(() => {
       setShowInstallModal(false)
+      setIsValidateMode(false) // 重置校验模式状态
     }, 300)
   }
 
@@ -1503,7 +1536,7 @@ const GameDeploymentPage: React.FC = () => {
       handleCloseCompatibilityModal()
       // 延迟一点时间等待对话框关闭动画完成
       setTimeout(() => {
-        openInstallModal(pendingGameInstall.key, pendingGameInstall.info)
+        openInstallModal(pendingGameInstall.key, pendingGameInstall.info, pendingGameInstall.validateMode)
       }, 350)
     }
   }
@@ -1651,17 +1684,19 @@ const GameDeploymentPage: React.FC = () => {
 
     try {
       // 构建SteamCMD安装命令
-      const loginCommand = useAnonymous 
+      const loginCommand = useAnonymous
         ? 'login anonymous'
         : `login ${steamUsername.trim()} ${steamPassword.trim()}`
-      
-      const installCommand = `force_install_dir "${installPath.trim()}" +app_update ${selectedGame.info.appid}`
-      
+
+      const installCommand = isValidateMode
+        ? `force_install_dir "${installPath.trim()}" +app_update ${selectedGame.info.appid} validate`
+        : `force_install_dir "${installPath.trim()}" +app_update ${selectedGame.info.appid}`
+
       const fullCommand = `steamcmd +${loginCommand} +${installCommand} +quit`
-      
+
       // 关闭对话框
       handleCloseInstallModal()
-      
+
       // 调用后端API开始游戏安装
        const response = await apiClient.installGame({
           gameKey: selectedGame.key,
@@ -2230,34 +2265,48 @@ const GameDeploymentPage: React.FC = () => {
                   </div>
 
                   {/* 操作按钮 */}
-                  <div className="flex space-x-2">
-                    {/* 安装游戏按钮 */}
-                    <button
-                      onClick={() => handleInstallGame(gameKey, gameInfo)}
-                      disabled={gameInfo.supportedOnCurrentPlatform === false}
-                      className={`flex-1 py-2 px-3 rounded-lg transition-colors flex items-center justify-center space-x-1 text-sm ${
-                        gameInfo.supportedOnCurrentPlatform === false
-                          ? 'bg-gray-400 cursor-not-allowed text-gray-200'
-                          : gameInfo.panelCompatibleOnCurrentPlatform === false
-                          ? 'bg-orange-600 hover:bg-orange-700 text-white'
-                          : 'bg-blue-600 hover:bg-blue-700 text-white'
-                      }`}
-                    >
-                      <Download className="w-4 h-4" />
-                      <span>
-                        {gameInfo.supportedOnCurrentPlatform === false 
-                          ? '不兼容' 
-                          : gameInfo.panelCompatibleOnCurrentPlatform === false 
-                          ? '面板不兼容' 
-                          : '安装游戏'}
-                      </span>
-                    </button>
-                    
-                    {/* 开服文档按钮 */}
+                  <div className="space-y-2">
+                    {/* 第一行：安装和校验按钮 */}
+                    <div className="flex space-x-2">
+                      {/* 安装游戏按钮 */}
+                      <button
+                        onClick={() => handleInstallGame(gameKey, gameInfo)}
+                        disabled={gameInfo.supportedOnCurrentPlatform === false}
+                        className={`${gameInfo.supportedOnCurrentPlatform === false ? 'w-full' : 'flex-1'} py-2 px-3 rounded-lg transition-colors flex items-center justify-center space-x-1 text-sm ${
+                          gameInfo.supportedOnCurrentPlatform === false
+                            ? 'bg-gray-400 cursor-not-allowed text-gray-200'
+                            : gameInfo.panelCompatibleOnCurrentPlatform === false
+                            ? 'bg-orange-600 hover:bg-orange-700 text-white'
+                            : 'bg-blue-600 hover:bg-blue-700 text-white'
+                        }`}
+                      >
+                        <Download className="w-4 h-4" />
+                        <span>
+                          {gameInfo.supportedOnCurrentPlatform === false
+                            ? '不兼容'
+                            : gameInfo.panelCompatibleOnCurrentPlatform === false
+                            ? '面板不兼容'
+                            : '安装游戏'}
+                        </span>
+                      </button>
+
+                      {/* 校验游戏完整性按钮 - 仅在游戏支持当前平台时显示 */}
+                      {gameInfo.supportedOnCurrentPlatform !== false && (
+                        <button
+                          onClick={() => handleValidateGame(gameKey, gameInfo)}
+                          className="flex-1 py-2 px-3 rounded-lg transition-colors flex items-center justify-center space-x-1 text-sm bg-purple-600 hover:bg-purple-700 text-white"
+                        >
+                          <CheckCircle className="w-4 h-4" />
+                          <span>校验完整性</span>
+                        </button>
+                      )}
+                    </div>
+
+                    {/* 第二行：开服文档按钮（如果存在） */}
                     {gameInfo.docs && (
                       <button
                         onClick={() => handleOpenDocs(gameInfo)}
-                        className="flex-1 py-2 px-3 rounded-lg transition-colors flex items-center justify-center space-x-1 text-sm bg-green-600 hover:bg-green-700 text-white"
+                        className="w-full py-2 px-3 rounded-lg transition-colors flex items-center justify-center space-x-1 text-sm bg-green-600 hover:bg-green-700 text-white"
                       >
                         <BookOpen className="w-4 h-4" />
                         <span>开服文档</span>
@@ -3594,7 +3643,7 @@ const GameDeploymentPage: React.FC = () => {
           }`}>
             <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                安装 {selectedGame.info.game_nameCN}
+                {isValidateMode ? '校验' : '安装'} {selectedGame.info.game_nameCN}
               </h3>
               <button
                 onClick={handleCloseInstallModal}
@@ -3714,14 +3763,18 @@ const GameDeploymentPage: React.FC = () => {
               <button
                 onClick={startInstallation}
                 disabled={
-                  !installPath.trim() || 
-                  !instanceName.trim() || 
+                  !installPath.trim() ||
+                  !instanceName.trim() ||
                   (!useAnonymous && (!steamUsername.trim() || !steamPassword.trim()))
                 }
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded-lg transition-colors flex items-center space-x-2"
+                className={`px-4 py-2 disabled:bg-gray-400 text-white rounded-lg transition-colors flex items-center space-x-2 ${
+                  isValidateMode
+                    ? 'bg-purple-600 hover:bg-purple-700'
+                    : 'bg-blue-600 hover:bg-blue-700'
+                }`}
               >
-                <Download className="w-4 h-4" />
-                <span>开始安装</span>
+                {isValidateMode ? <CheckCircle className="w-4 h-4" /> : <Download className="w-4 h-4" />}
+                <span>{isValidateMode ? '开始校验' : '开始安装'}</span>
               </button>
             </div>
           </div>
@@ -4220,8 +4273,8 @@ const GameDeploymentPage: React.FC = () => {
                 onClick={handleConfirmIncompatibleInstall}
                 className="flex-1 px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg transition-colors flex items-center justify-center space-x-2"
               >
-                <Download className="w-4 h-4" />
-                <span>继续安装</span>
+                {pendingGameInstall?.validateMode ? <CheckCircle className="w-4 h-4" /> : <Download className="w-4 h-4" />}
+                <span>{pendingGameInstall?.validateMode ? '继续校验' : '继续安装'}</span>
               </button>
             </div>
           </div>
