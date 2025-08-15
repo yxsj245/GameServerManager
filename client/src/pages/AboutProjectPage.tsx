@@ -262,7 +262,7 @@ const AboutProjectPage: React.FC = () => {
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-600 dark:text-gray-400">许可证：</span>
-                      <span className="text-black dark:text-white font-medium">AGPL-3.0 license</span>
+                      <span className="text-black dark:text-white font-medium">GPL-3.0 license</span>
                     </div>
                   </div>
                 </div>
