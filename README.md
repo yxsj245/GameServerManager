@@ -11,7 +11,7 @@
 [![Docker Pulls](https://badgen.net/docker/pulls/xiaozhu674/gameservermanager)](https://hub.docker.com/r/xiaozhu674/gameservermanager)
 [![License](https://badgen.net/github/license/yxsj245/GameServerManager)](https://github.com/yxsj245/GameServerManager/blob/main/LICENSE)
 
-[📖 文档站](http://docsgsm.xiaozhuhouses.asia/) • [🌐 官方网站](http://gsm.xiaozhuhouses.asia/) • [💬 QQ群](https://qm.qq.com/q/oNd4HvMj6M)
+[📖 文档站](http://docs.gsm.xiaozhuhouses.asia/) • [🌐 官方网站](http://gsm.xiaozhuhouses.asia/) • [💬 QQ群](https://qm.qq.com/q/oNd4HvMj6M)
 
 </div>
 
@@ -138,7 +138,7 @@ GSManager3/
 
 - 🐛 **问题反馈**：[GitHub Issues](https://github.com/yxsj245/GameServerManager/issues)
 - 💬 **QQ交流群**：1040201322
-- 📖 **详细文档**：[GSM3 文档站](http://docsgsm.xiaozhuhouses.asia/)
+- 📖 **详细文档**：[GSM3 文档站](http://docs.gsm.xiaozhuhouses.asia/)
 - 🌐 **官方网站**：[GSM3 官网](http://gsm.xiaozhuhouses.asia/)
 - 💝 **赞助支持**：[爱发电](https://afdian.net/a/xiaozhu674)
 
@@ -188,6 +188,6 @@ GSManager3/
 
 **GSM3.0 - 新一代游戏服务器管理平台**
 
-[🌐 官网](http://gsm.xiaozhuhouses.asia/) | [📖 文档](http://docsgsm.xiaozhuhouses.asia/) | [💬 交流群](https://qm.qq.com/q/oNd4HvMj6M)
+[🌐 官网](http://gsm.xiaozhuhouses.asia/) | [📖 文档](http://docs.gsm.xiaozhuhouses.asia/) | [💬 交流群](https://qm.qq.com/q/oNd4HvMj6M)
 
 </div>
