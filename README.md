@@ -6,10 +6,10 @@
 
 **新一代游戏服务器管理平台 - 让游戏服务器的部署、管理和维护变得简单高效**
 
-[![GitHub Stars](https://badgen.net/github/stars/yxsj245/GameServerManager)](https://github.com/yxsj245/GameServerManager/stargazers)
-[![GitHub Release](https://badgen.net/github/release/yxsj245/GameServerManager)](https://github.com/yxsj245/GameServerManager/releases)
+[![GitHub Stars](https://badgen.net/github/stars/GSManagerXZ/GameServerManager)](https://github.com/GSManagerXZ/GameServerManager/stargazers)
+[![GitHub Release](https://badgen.net/github/release/GSManagerXZ/GameServerManager)](https://github.com/GSManagerXZ/GameServerManager/releases)
 [![Docker Pulls](https://badgen.net/docker/pulls/xiaozhu674/gameservermanager)](https://hub.docker.com/r/xiaozhu674/gameservermanager)
-[![License](https://badgen.net/github/license/yxsj245/GameServerManager)](https://github.com/yxsj245/GameServerManager/blob/main/LICENSE)
+[![License](https://badgen.net/github/license/GSManagerXZ/GameServerManager)](https://github.com/GSManagerXZ/GameServerManager/blob/main/LICENSE)
 
 [📖 文档站](http://docs.gsm.xiaozhuhouses.asia/) • [🌐 官方网站](http://gsm.xiaozhuhouses.asia/) • [💬 QQ群](https://qm.qq.com/q/oNd4HvMj6M)
 
@@ -140,7 +140,7 @@ GSManager3/
 
 ## 📞 支持与反馈
 
-- 🐛 **问题反馈**：[GitHub Issues](https://github.com/yxsj245/GameServerManager/issues)
+- 🐛 **问题反馈**：[GitHub Issues](https://github.com/GSManagerXZ/GameServerManager/issues)
 - 💬 **QQ交流群**：1040201322
 - 📖 **详细文档**：[GSM3 文档站](http://docs.gsm.xiaozhuhouses.asia/)
 - 🌐 **官方网站**：[GSM3 官网](http://gsm.xiaozhuhouses.asia/)
