@@ -182,7 +182,7 @@ GSManager3/
 
 ## 📈 项目统计
 
-![Star History](https://api.star-history.com/svg?repos=yxsj245/GameServerManager&type=Date)
+![Star History](https://api.star-history.com/svg?repos=GSManagerXZ/GameServerManager&type=Date)
 
 ---
 
