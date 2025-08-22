@@ -1347,7 +1347,7 @@ const FileManagerPage: React.FC = () => {
                           // 长按触发右键菜单
                           const position = event instanceof TouchEvent
                             ? { x: event.touches[0]?.clientX || 0, y: event.touches[0]?.clientY || 0 }
-                            : { x: (event as MouseEvent).clientX, y: (event as MouseEvent).clientY }
+                            : { x: event.clientX, y: event.clientY }
                           setContextMenuInfo({ file, position })
                         }}
                       />
@@ -1417,7 +1417,7 @@ const FileManagerPage: React.FC = () => {
                           // 长按触发右键菜单
                           const position = event instanceof TouchEvent
                             ? { x: event.touches[0]?.clientX || 0, y: event.touches[0]?.clientY || 0 }
-                            : { x: (event as MouseEvent).clientX, y: (event as MouseEvent).clientY }
+                            : { x: event.clientX, y: event.clientY }
                           setContextMenuInfo({ file, position })
                         }}
                       />
