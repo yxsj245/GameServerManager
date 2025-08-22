@@ -19,7 +19,7 @@ interface FileGridItemProps {
   isSelected: boolean
   onClick: (file: FileItem, event: React.MouseEvent) => void
   onDoubleClick: (file: FileItem) => void
-  onContextMenu?: (file: FileItem, event: React.MouseEvent | TouchEvent) => void
+  onContextMenu?: (file: FileItem, event: TouchEvent | MouseEvent) => void
 }
 
 // 根据文件扩展名获取图标
@@ -107,7 +107,7 @@ export const FileGridItem: React.FC<FileGridItemProps> = ({
   }
 
   // 长按处理，用于触摸设备的右键菜单
-  const longPressHandlers = useLongPress((event) => {
+  const longPressHandlers = useLongPress((event: TouchEvent | MouseEvent) => {
     if (onContextMenu) {
       onContextMenu(file, event)
     }

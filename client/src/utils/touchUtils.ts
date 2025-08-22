@@ -28,19 +28,19 @@ export const useLongPress = (
   let timeoutId: NodeJS.Timeout | null = null
   let startPosition: TouchPosition | null = null
 
-  const start = (event: TouchEvent | MouseEvent) => {
-    const position = getEventPosition(event)
+  const start = (event: React.TouchEvent | React.MouseEvent) => {
+    const position = getEventPosition(event.nativeEvent)
     startPosition = position
 
     timeoutId = setTimeout(() => {
-      callback(event)
+      callback(event.nativeEvent)
     }, delay)
   }
 
-  const move = (event: TouchEvent | MouseEvent) => {
+  const move = (event: React.TouchEvent | React.MouseEvent) => {
     if (!startPosition || !timeoutId) return
 
-    const currentPosition = getEventPosition(event)
+    const currentPosition = getEventPosition(event.nativeEvent)
     const distance = Math.sqrt(
       Math.pow(currentPosition.x - startPosition.x, 2) +
       Math.pow(currentPosition.y - startPosition.y, 2)
