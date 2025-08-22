@@ -68,6 +68,9 @@ import { FileItem } from '@/types/file'
 import { fileApiClient } from '@/utils/fileApi'
 import { isTextFile, isImageFile } from '@/utils/format'
 import { normalizePath, getDirectoryPath, getBasename } from '@/utils/pathUtils'
+import { useTouchAdaptation } from '@/hooks/useTouchAdaptation'
+import { useLongPress } from '@/utils/touchUtils'
+import { TouchHelpTooltip } from '@/components/TouchHelpTooltip'
 
 
 
@@ -179,17 +182,37 @@ const FileManagerPage: React.FC = () => {
   // 任务状态抽屉
   const [taskDrawerVisible, setTaskDrawerVisible] = useState(false)
   
+  // 触摸适配
+  const touchAdaptation = useTouchAdaptation()
+
   // 视图模式
   const [viewMode, setViewMode] = useState<'grid' | 'list'>(() => {
+    // 小屏模式默认使用列表视图
+    if (touchAdaptation.shouldUseListView) {
+      return 'list'
+    }
     const saved = localStorage.getItem('fileManager_viewMode')
     return (saved as 'grid' | 'list') || 'grid'
   })
   
   // 保存视图模式到localStorage
   const handleViewModeChange = (mode: 'grid' | 'list') => {
-    setViewMode(mode)
-    localStorage.setItem('fileManager_viewMode', mode)
+    // 小屏模式强制使用列表视图
+    if (touchAdaptation.shouldUseListView) {
+      setViewMode('list')
+      localStorage.setItem('fileManager_viewMode', 'list')
+    } else {
+      setViewMode(mode)
+      localStorage.setItem('fileManager_viewMode', mode)
+    }
   }
+
+  // 监听触摸适配状态变化，自动切换到列表视图
+  React.useEffect(() => {
+    if (touchAdaptation.shouldUseListView && viewMode !== 'list') {
+      setViewMode('list')
+    }
+  }, [touchAdaptation.shouldUseListView, viewMode])
 
   // 右键菜单状态
   const [contextMenuInfo, setContextMenuInfo] = useState<{
@@ -988,7 +1011,7 @@ const FileManagerPage: React.FC = () => {
   return (
     <div className="h-full flex flex-col bg-white dark:bg-gray-900">
       {/* 工具栏 */}
-      <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
+      <div className={`flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700 file-manager-toolbar ${touchAdaptation.shouldShowMobileUI ? 'flex-wrap gap-2' : ''}`}>
         <div className="flex items-center space-x-2">
           {/* 盘符选择 */}
           <div className="mr-2">
@@ -1037,133 +1060,140 @@ const FileManagerPage: React.FC = () => {
         </div>
         
         <div className="flex items-center space-x-2">
-          {/* 视图切换 */}
-           <Space>
-             <Tooltip title="网格视图">
-               <motion.div
-                 whileHover={{ scale: 1.05 }}
-                 whileTap={{ scale: 0.95 }}
-                 transition={{ duration: 0.2 }}
-               >
-                 <Button 
-                   icon={<AppstoreOutlined />}
-                   type={viewMode === 'grid' ? 'primary' : 'default'}
-                   onClick={() => handleViewModeChange('grid')}
-                 />
-               </motion.div>
-             </Tooltip>
-             <Tooltip title="列表视图">
-               <motion.div
-                 whileHover={{ scale: 1.05 }}
-                 whileTap={{ scale: 0.95 }}
-                 transition={{ duration: 0.2 }}
-               >
-                 <Button 
-                   icon={<UnorderedListOutlined />}
-                   type={viewMode === 'list' ? 'primary' : 'default'}
-                   onClick={() => handleViewModeChange('list')}
-                 />
-               </motion.div>
-             </Tooltip>
-           </Space>
-          
+          {/* 视图切换 - 小屏模式下隐藏 */}
+          {!touchAdaptation.shouldHideViewToggle && (
+            <Space>
+              <Tooltip title="网格视图">
+                <motion.div
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <Button
+                    icon={<AppstoreOutlined />}
+                    type={viewMode === 'grid' ? 'primary' : 'default'}
+                    onClick={() => handleViewModeChange('grid')}
+                  />
+                </motion.div>
+              </Tooltip>
+              <Tooltip title="列表视图">
+                <motion.div
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <Button
+                    icon={<UnorderedListOutlined />}
+                    type={viewMode === 'list' ? 'primary' : 'default'}
+                    onClick={() => handleViewModeChange('list')}
+                  />
+                </motion.div>
+              </Tooltip>
+            </Space>
+          )}
+
           {/* 搜索 */}
           <Input
             placeholder="搜索文件..."
             prefix={<SearchOutlined />}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-64"
+            className={touchAdaptation.shouldShowMobileUI ? "w-32" : "w-64"}
           />
-          
+
           {/* 操作按钮 */}
           <Space>
-            <Tooltip title="新建文件">
-              <Button 
-                icon={<FileAddOutlined />}
-                onClick={() => setCreateDialog({ visible: true, type: 'file' })}
-              >
-                新建文件
-              </Button>
-            </Tooltip>
             <Tooltip title="新建文件夹">
-              <Button 
+              <Button
                 icon={<PlusOutlined />}
                 onClick={() => setCreateDialog({ visible: true, type: 'folder' })}
               >
-                新建文件夹
+                {!touchAdaptation.shouldShowMobileUI && "新建文件夹"}
+              </Button>
+            </Tooltip>
+            <Tooltip title="新建文件">
+              <Button
+                icon={<FileAddOutlined />}
+                onClick={() => setCreateDialog({ visible: true, type: 'file' })}
+              >
+                {!touchAdaptation.shouldShowMobileUI && "新建文件"}
               </Button>
             </Tooltip>
             <Tooltip title="上传文件">
-              <Button 
+              <Button
                 icon={<UploadOutlined />}
                 onClick={() => setUploadDialog(true)}
               >
-                上传
+                {!touchAdaptation.shouldShowMobileUI && "上传"}
               </Button>
             </Tooltip>
-            
-            {/* 文件操作按钮 - 固定显示在右上角 */}
-            <div className="border-l border-gray-300 dark:border-gray-600 pl-2 ml-2">
-              <Space>
-                <Tooltip title={selectedFiles.size > 0 ? `复制选中项 (${selectedFiles.size}) (Ctrl+C)` : "复制 (Ctrl+C)"}>
-                  <Button 
-                    icon={<CopyOutlined />}
-                    disabled={selectedFiles.size === 0}
-                    onClick={() => {
-                      const selectedFileItems = Array.from(selectedFiles).map(path => 
-                        files.find(f => f.path === path)
-                      ).filter(Boolean) as FileItem[]
-                      handleContextMenuCopy(selectedFileItems)
-                    }}
-                  />
-                </Tooltip>
-                <Tooltip title={selectedFiles.size > 0 ? `剪切选中项 (${selectedFiles.size}) (Ctrl+X)` : "剪切 (Ctrl+X)"}>
-                  <Button 
-                    icon={<ScissorOutlined />}
-                    disabled={selectedFiles.size === 0}
-                    onClick={() => {
-                      const selectedFileItems = Array.from(selectedFiles).map(path => 
-                        files.find(f => f.path === path)
-                      ).filter(Boolean) as FileItem[]
-                      handleContextMenuCut(selectedFileItems)
-                    }}
-                  />
-                </Tooltip>
-                <Tooltip title={clipboard.operation && clipboard.items.length > 0 ? `粘贴 ${clipboard.items.length} 个项目 (Ctrl+V)` : "粘贴 (Ctrl+V)"}>
-                  <Button 
-                    icon={<SnippetsOutlined />}
-                    disabled={!clipboard.operation || clipboard.items.length === 0}
-                    type={clipboard.operation && clipboard.items.length > 0 ? "primary" : "default"}
-                    onClick={handlePaste}
-                  />
-                </Tooltip>
-                <Tooltip title={selectedFiles.size > 0 ? `删除选中项 (${selectedFiles.size}) (Delete)` : "删除 (Delete)"}>
-                  <Button 
-                    icon={<DeleteOutlined />}
-                    disabled={selectedFiles.size === 0}
-                    danger
-                    onClick={() => {
-                      // 将选中的文件转换为FileItem数组
-                      const selectedFileItems = files.filter(file => selectedFiles.has(file.path))
-                      setDeleteDialog({ visible: true, files: selectedFileItems })
-                    }}
-                  />
-                </Tooltip>
-              </Space>
-            </div>
-            
+
+            {/* 文件操作按钮 - 小屏模式下隐藏 */}
+            {!touchAdaptation.shouldShowMobileUI && (
+              <div className="border-l border-gray-300 dark:border-gray-600 pl-2 ml-2">
+                <Space>
+                  <Tooltip title={selectedFiles.size > 0 ? `复制选中项 (${selectedFiles.size}) (Ctrl+C)` : "复制 (Ctrl+C)"}>
+                    <Button
+                      icon={<CopyOutlined />}
+                      disabled={selectedFiles.size === 0}
+                      onClick={() => {
+                        const selectedFileItems = Array.from(selectedFiles).map(path =>
+                          files.find(f => f.path === path)
+                        ).filter(Boolean) as FileItem[]
+                        handleContextMenuCopy(selectedFileItems)
+                      }}
+                    />
+                  </Tooltip>
+                  <Tooltip title={selectedFiles.size > 0 ? `剪切选中项 (${selectedFiles.size}) (Ctrl+X)` : "剪切 (Ctrl+X)"}>
+                    <Button
+                      icon={<ScissorOutlined />}
+                      disabled={selectedFiles.size === 0}
+                      onClick={() => {
+                        const selectedFileItems = Array.from(selectedFiles).map(path =>
+                          files.find(f => f.path === path)
+                        ).filter(Boolean) as FileItem[]
+                        handleContextMenuCut(selectedFileItems)
+                      }}
+                    />
+                  </Tooltip>
+                  <Tooltip title={clipboard.operation && clipboard.items.length > 0 ? `粘贴 ${clipboard.items.length} 个项目 (Ctrl+V)` : "粘贴 (Ctrl+V)"}>
+                    <Button
+                      icon={<SnippetsOutlined />}
+                      disabled={!clipboard.operation || clipboard.items.length === 0}
+                      type={clipboard.operation && clipboard.items.length > 0 ? "primary" : "default"}
+                      onClick={handlePaste}
+                    />
+                  </Tooltip>
+                  <Tooltip title={selectedFiles.size > 0 ? `删除选中项 (${selectedFiles.size}) (Delete)` : "删除 (Delete)"}>
+                    <Button
+                      icon={<DeleteOutlined />}
+                      disabled={selectedFiles.size === 0}
+                      danger
+                      onClick={() => {
+                        // 将选中的文件转换为FileItem数组
+                        const selectedFileItems = files.filter(file => selectedFiles.has(file.path))
+                        setDeleteDialog({ visible: true, files: selectedFileItems })
+                      }}
+                    />
+                  </Tooltip>
+                </Space>
+              </div>
+            )}
+
             {/* 任务状态按钮 */}
             <Tooltip title="查看任务状态">
               <Badge count={activeTasks.length} size="small">
-                <Button 
+                <Button
                   icon={<BellOutlined />}
                   onClick={() => setTaskDrawerVisible(true)}
                 >
-                  任务
+                  {!touchAdaptation.shouldShowMobileUI && "任务"}
                 </Button>
               </Badge>
             </Tooltip>
+
+            {/* 触摸帮助提示 */}
+            <TouchHelpTooltip />
           </Space>
         </div>
       </div>
@@ -1313,6 +1343,13 @@ const FileManagerPage: React.FC = () => {
                         isSelected={selectedFiles.has(file.path)}
                         onClick={handleFileClick}
                         onDoubleClick={handleFileDoubleClick}
+                        onContextMenu={(file, event) => {
+                          // 长按触发右键菜单
+                          const position = event instanceof TouchEvent
+                            ? { x: event.touches[0]?.clientX || 0, y: event.touches[0]?.clientY || 0 }
+                            : { x: (event as MouseEvent).clientX, y: (event as MouseEvent).clientY }
+                          setContextMenuInfo({ file, position })
+                        }}
                       />
                     </FileContextMenu>
                   </motion.div>
@@ -1376,6 +1413,13 @@ const FileManagerPage: React.FC = () => {
                         isSelected={selectedFiles.has(file.path)}
                         onClick={handleFileClick}
                         onDoubleClick={handleFileDoubleClick}
+                        onContextMenu={(file, event) => {
+                          // 长按触发右键菜单
+                          const position = event instanceof TouchEvent
+                            ? { x: event.touches[0]?.clientX || 0, y: event.touches[0]?.clientY || 0 }
+                            : { x: (event as MouseEvent).clientX, y: (event as MouseEvent).clientY }
+                          setContextMenuInfo({ file, position })
+                        }}
                       />
                     </FileContextMenu>
                   </motion.div>

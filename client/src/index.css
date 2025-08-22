@@ -300,9 +300,38 @@
   .mobile-sidebar {
     transition: transform 0.3s ease-in-out;
   }
-  
+
   .mobile-sidebar.collapsed {
     transform: translateX(-100%);
+  }
+
+  /* 文件管理器移动端优化 */
+  .file-manager-toolbar {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .file-manager-toolbar .ant-input {
+    min-width: 120px;
+  }
+
+  .file-manager-toolbar .ant-btn {
+    min-height: 36px;
+    padding: 4px 8px;
+  }
+
+  /* 文件项触摸优化 */
+  [data-file-item] {
+    min-height: 48px;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* 长按反馈 */
+  [data-file-item]:active {
+    background-color: rgba(59, 130, 246, 0.1) !important;
+    transform: scale(0.98);
+    transition: all 0.1s ease;
   }
 }
 

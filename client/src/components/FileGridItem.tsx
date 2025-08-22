@@ -12,12 +12,14 @@ import {
   FileOutlined
 } from '@ant-design/icons'
 import { formatFileSize, formatDate } from '@/utils/format'
+import { useLongPress } from '@/utils/touchUtils'
 
 interface FileGridItemProps {
   file: FileItem
   isSelected: boolean
   onClick: (file: FileItem, event: React.MouseEvent) => void
   onDoubleClick: (file: FileItem) => void
+  onContextMenu?: (file: FileItem, event: React.MouseEvent | TouchEvent) => void
 }
 
 // 根据文件扩展名获取图标
@@ -93,7 +95,8 @@ export const FileGridItem: React.FC<FileGridItemProps> = ({
   file,
   isSelected,
   onClick,
-  onDoubleClick
+  onDoubleClick,
+  onContextMenu
 }) => {
   const handleClick = (event: React.MouseEvent) => {
     onClick(file, event)
@@ -103,25 +106,33 @@ export const FileGridItem: React.FC<FileGridItemProps> = ({
     onDoubleClick(file)
   }
 
+  // 长按处理，用于触摸设备的右键菜单
+  const longPressHandlers = useLongPress((event) => {
+    if (onContextMenu) {
+      onContextMenu(file, event)
+    }
+  }, { delay: 500, threshold: 10 })
+
   return (
     <motion.div
       data-file-item="true"
       className={`
          relative group cursor-pointer p-4 rounded-lg border-2 select-none
           hover:shadow-lg hover:border-blue-300
-        ${isSelected 
-          ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 shadow-md' 
+        ${isSelected
+          ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 shadow-md'
           : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-750'
         }
         ${file.type === 'directory' ? 'border-dashed' : ''}
       `}
       onClick={handleClick}
       onDoubleClick={handleDoubleClick}
-      whileHover={{ 
+      {...longPressHandlers}
+      whileHover={{
         scale: 1.02,
         transition: { duration: 0.2, ease: "easeOut" }
       }}
-      whileTap={{ 
+      whileTap={{
         scale: 0.98,
         transition: { duration: 0.1 }
       }}

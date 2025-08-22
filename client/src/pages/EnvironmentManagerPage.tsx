@@ -15,6 +15,7 @@ import {
 import { useNotificationStore } from '@/stores/notificationStore'
 import apiClient from '@/utils/api'
 import socketClient from '@/utils/socket'
+import { copyToClipboard } from '@/utils/clipboard'
 
 interface JavaEnvironment {
   version: string
@@ -902,20 +903,31 @@ const EnvironmentManagerPage: React.FC = () => {
   }
 
   // 复制Java路径
-  const handleCopyJavaPath = (javaExecutable: string) => {
-    navigator.clipboard.writeText(javaExecutable).then(() => {
-      addNotification({
-        type: 'success',
-        title: '成功',
-        message: 'Java路径已复制到剪贴板'
-      })
-    }).catch(() => {
+  const handleCopyJavaPath = async (javaExecutable: string) => {
+    try {
+      const success = await copyToClipboard(javaExecutable)
+
+      if (success) {
+        addNotification({
+          type: 'success',
+          title: '成功',
+          message: 'Java路径已复制到剪贴板'
+        })
+      } else {
+        addNotification({
+          type: 'error',
+          title: '错误',
+          message: '复制失败，请手动复制'
+        })
+      }
+    } catch (error) {
+      console.error('复制Java路径失败:', error)
       addNotification({
         type: 'error',
         title: '错误',
         message: '复制失败'
       })
-    })
+    }
   }
 
   // 处理包选择
