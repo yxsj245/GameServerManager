@@ -117,7 +117,7 @@ const GameDeploymentPage: React.FC = () => {
   const [steamUsername, setSteamUsername] = useState('')
   const [steamPassword, setSteamPassword] = useState('')
   const [isValidateMode, setIsValidateMode] = useState(false)
-  
+
   // 平台筛选状态
   const [platformFilter, setPlatformFilter] = useState<string>('all') // 'all', 'compatible', 'Windows', 'Linux', 'macOS'
   const [searchQuery, setSearchQuery] = useState('')
@@ -144,7 +144,7 @@ const GameDeploymentPage: React.FC = () => {
   const [instanceDescription, setInstanceDescription] = useState('')
   const [instanceStartCommand, setInstanceStartCommand] = useState('')
   const [creatingInstance, setCreatingInstance] = useState(false)
-  
+
   // 更多游戏部署相关状态
   const [moreGames, setMoreGames] = useState<MoreGameInfo[]>([])
   const [moreGamesLoading, setMoreGamesLoading] = useState(false)
@@ -155,7 +155,7 @@ const GameDeploymentPage: React.FC = () => {
   const [moreGameDeployProgress, setMoreGameDeployProgress] = useState<any>(null)
   const [moreGameDeployLogs, setMoreGameDeployLogs] = useState<string[]>([])
   const [moreGameDeployComplete, setMoreGameDeployComplete] = useState(false)
-  
+
   // Minecraft整合包部署相关状态
   const [mrpackSearchQuery, setMrpackSearchQuery] = useState('')
   const [mrpackSearchResults, setMrpackSearchResults] = useState<any[]>([])
@@ -170,11 +170,11 @@ const GameDeploymentPage: React.FC = () => {
   const [mrpackDeployProgress, setMrpackDeployProgress] = useState<any>(null)
   const [mrpackDeployLogs, setMrpackDeployLogs] = useState<string[]>([])
   const [mrpackDeployComplete, setMrpackDeployComplete] = useState(false)
-  
+
   // 整合包悬停详情状态
   const [hoveredMrpack, setHoveredMrpack] = useState<string | null>(null)
   const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null)
-  
+
   // 创建整合包实例相关状态
   const [showCreateMrpackInstanceModal, setShowCreateMrpackInstanceModal] = useState(false)
   const [createMrpackInstanceModalAnimating, setCreateMrpackInstanceModalAnimating] = useState(false)
@@ -182,7 +182,7 @@ const GameDeploymentPage: React.FC = () => {
   const [mrpackInstanceDescription, setMrpackInstanceDescription] = useState('')
   const [mrpackInstanceStartCommand, setMrpackInstanceStartCommand] = useState('')
   const [creatingMrpackInstance, setCreatingMrpackInstance] = useState(false)
-  
+
   // 在线部署相关状态
   const [onlineGames, setOnlineGames] = useState<any[]>([])
   const [onlineGamesLoading, setOnlineGamesLoading] = useState(false)
@@ -197,11 +197,11 @@ const GameDeploymentPage: React.FC = () => {
   const [onlineGameDeployResult, setOnlineGameDeployResult] = useState<any>(null)
   const [showOnlineGameInstallModal, setShowOnlineGameInstallModal] = useState(false)
   const [onlineGameInstallModalAnimating, setOnlineGameInstallModalAnimating] = useState(false)
-  
+
   // 在线部署筛选相关状态
   const [onlineGameTypeFilter, setOnlineGameTypeFilter] = useState<string>('all')
   const [onlineGameSearchQuery, setOnlineGameSearchQuery] = useState('')
-  
+
   // 面板兼容性确认对话框状态
   const [showCompatibilityModal, setShowCompatibilityModal] = useState(false)
   const [compatibilityModalAnimating, setCompatibilityModalAnimating] = useState(false)
@@ -217,7 +217,7 @@ const GameDeploymentPage: React.FC = () => {
     gameKey: string
     gameInfo: GameInfo
   } | null>(null)
-  
+
   // 开服文档相关状态
   const [showDocsModal, setShowDocsModal] = useState(false)
   const [docsModalAnimating, setDocsModalAnimating] = useState(false)
@@ -234,11 +234,15 @@ const GameDeploymentPage: React.FC = () => {
     // 从localStorage读取保存的选择
     return localStorage.getItem('selectedMrpackJava') || 'default'
   })
-  
+
   // 帮助模态框相关状态
   const [showHelpModal, setShowHelpModal] = useState(false)
   const [helpModalAnimating, setHelpModalAnimating] = useState(false)
-  
+
+
+  // SteamCMD高级选项
+  const [showAdvanced, setShowAdvanced] = useState(false)
+  const [steamcmdCommand, setSteamcmdCommand] = useState('')
   const socketRef = useRef<Socket | null>(null)
   const currentDownloadId = useRef<string | null>(null)
   const currentMoreGameDeploymentId = useRef<string | null>(null)
@@ -251,7 +255,7 @@ const GameDeploymentPage: React.FC = () => {
       setLoading(true)
       setGameListError(null)
       const response = await apiClient.getInstallableGames()
-      
+
       if (response.success) {
         setGames(response.data || {})
       } else {
@@ -260,7 +264,7 @@ const GameDeploymentPage: React.FC = () => {
     } catch (error: any) {
       console.error('获取游戏列表失败:', error)
       setGameListError(error.message || '无法获取游戏列表')
-      
+
       // 如果错误信息包含"无法找到 installgame.json 文件"，自动尝试更新游戏清单
       if (error.message && error.message.includes('无法找到 installgame.json 文件')) {
         addNotification({
@@ -268,18 +272,18 @@ const GameDeploymentPage: React.FC = () => {
           title: '正在更新',
           message: '检测到游戏清单文件缺失，正在自动更新...'
         })
-        
+
         try {
           setUpdatingGameList(true)
           const updateResponse = await apiClient.updateSteamGameList()
-          
+
           if (updateResponse.success) {
             addNotification({
               type: 'success',
               title: '更新成功',
               message: `游戏部署清单已更新，共${updateResponse.data?.gameCount || 0}个游戏`
             })
-            
+
             // 重新获取游戏列表
             setTimeout(() => {
               fetchGames()
@@ -315,7 +319,7 @@ const GameDeploymentPage: React.FC = () => {
     try {
       setMoreGamesLoading(true)
       const response = await apiClient.getMoreGames()
-      
+
       if (response.success) {
         setMoreGames(response.data || [])
       } else {
@@ -338,7 +342,7 @@ const GameDeploymentPage: React.FC = () => {
     try {
       setSponsorKeyChecking(true)
       const response = await apiClient.getSponsorKeyInfo()
-      
+
       if (response.success && response.data) {
         setSponsorKeyValid(response.data.isValid)
         if (!response.data.isValid) {
@@ -364,22 +368,22 @@ const GameDeploymentPage: React.FC = () => {
     try {
       setUpdatingGameList(true)
       setGameListError(null)
-      
+
       addNotification({
         type: 'info',
         title: '正在更新',
         message: '正在更新Steam游戏部署清单...'
       })
-      
+
       const response = await apiClient.updateSteamGameList()
-      
+
       if (response.success) {
         addNotification({
           type: 'success',
           title: '更新成功',
           message: `游戏部署清单已更新，共${response.data?.gameCount || 0}个游戏`
         })
-        
+
         // 重新获取游戏列表
         setTimeout(() => {
           fetchGames()
@@ -411,7 +415,7 @@ const GameDeploymentPage: React.FC = () => {
       })
       return
     }
-    
+
     // 检查游戏是否支持当前平台
     const selectedGame = moreGames.find(g => g.id === selectedMoreGame)
     if (!selectedGame?.supportedOnCurrentPlatform) {
@@ -430,10 +434,10 @@ const GameDeploymentPage: React.FC = () => {
       setMoreGameDeployProgress(null)
       setMoreGameDeployLogs([])
       setMoreGameDeployComplete(false)
-      
+
       // 初始化WebSocket连接并等待连接建立
       initializeSocket()
-      
+
       // 等待WebSocket连接建立
       const waitForConnection = () => {
         return new Promise<string>((resolve, reject) => {
@@ -441,11 +445,11 @@ const GameDeploymentPage: React.FC = () => {
             resolve(socketRef.current.id)
             return
           }
-          
+
           const timeout = setTimeout(() => {
             reject(new Error('WebSocket连接超时'))
           }, 10000) // 10秒超时
-          
+
           const checkConnection = () => {
             if (socketRef.current?.connected && socketRef.current?.id) {
               clearTimeout(timeout)
@@ -454,14 +458,14 @@ const GameDeploymentPage: React.FC = () => {
               setTimeout(checkConnection, 100)
             }
           }
-          
+
           checkConnection()
         })
       }
-      
+
       const socketId = await waitForConnection()
       console.log('WebSocket连接已建立，Socket ID:', socketId)
-      
+
       let response
       if (selectedMoreGame === 'tmodloader') {
         response = await apiClient.deployTModLoader({
@@ -476,11 +480,11 @@ const GameDeploymentPage: React.FC = () => {
       } else {
         throw new Error('不支持的游戏类型')
       }
-      
+
       if (response.success) {
         currentMoreGameDeploymentId.current = response.data?.deploymentId
         console.log('更多游戏部署开始，Deployment ID:', currentMoreGameDeploymentId.current)
-        
+
         addNotification({
           type: 'info',
           title: '开始部署',
@@ -506,7 +510,7 @@ const GameDeploymentPage: React.FC = () => {
     try {
       setMinecraftLoading(true)
       const response = await apiClient.getMinecraftServerCategories()
-      
+
       if (response.success) {
         setMinecraftCategories(response.data || [])
       } else {
@@ -541,7 +545,7 @@ const GameDeploymentPage: React.FC = () => {
         query: mrpackSearchQuery,
         limit: 20
       })
-      
+
       if (response.success) {
         setMrpackSearchResults(response.data?.hits || [])
       } else {
@@ -564,7 +568,7 @@ const GameDeploymentPage: React.FC = () => {
     try {
       setMrpackVersionsLoading(true)
       const response = await apiClient.getMrpackProjectVersions(projectId)
-      
+
       if (response.success) {
         setMrpackVersions(response.data || [])
         setSelectedMrpackVersion(null)
@@ -601,10 +605,10 @@ const GameDeploymentPage: React.FC = () => {
       setMrpackDeployProgress(null)
       setMrpackDeployLogs([])
       setMrpackDeployComplete(false)
-      
+
       // 初始化WebSocket连接并等待连接建立
       initializeSocket()
-      
+
       // 等待WebSocket连接建立
       const waitForConnection = () => {
         return new Promise<string>((resolve, reject) => {
@@ -612,11 +616,11 @@ const GameDeploymentPage: React.FC = () => {
             resolve(socketRef.current.id)
             return
           }
-          
+
           const timeout = setTimeout(() => {
             reject(new Error('WebSocket连接超时'))
           }, 10000) // 10秒超时
-          
+
           const checkConnection = () => {
             if (socketRef.current?.connected && socketRef.current?.id) {
               clearTimeout(timeout)
@@ -625,25 +629,25 @@ const GameDeploymentPage: React.FC = () => {
               setTimeout(checkConnection, 100)
             }
           }
-          
+
           checkConnection()
         })
       }
-      
+
       const socketId = await waitForConnection()
       console.log('WebSocket连接已建立，Socket ID:', socketId)
-      
+
       const response = await apiClient.deployMrpack({
         projectId: selectedMrpack.project_id,
         versionId: selectedMrpackVersion.id,
         installPath: mrpackInstallPath,
         socketId
       })
-      
+
       if (response.success) {
         currentMrpackDeploymentId.current = response.data?.deploymentId
         console.log('整合包部署开始，Deployment ID:', currentMrpackDeploymentId.current)
-        
+
         addNotification({
           type: 'info',
           title: '开始部署',
@@ -668,7 +672,7 @@ const GameDeploymentPage: React.FC = () => {
   const fetchMinecraftVersions = async (server: string) => {
     try {
       const response = await apiClient.getMinecraftVersions(server)
-      
+
       if (response.success) {
         setAvailableVersions(response.data || [])
         setSelectedVersion('')
@@ -817,7 +821,7 @@ const GameDeploymentPage: React.FC = () => {
         setMinecraftDownloading(false)
         setDownloadComplete(true)
         setDownloadResult(data.data)
-        
+
         addNotification({
           type: 'success',
           title: '下载完成',
@@ -831,7 +835,7 @@ const GameDeploymentPage: React.FC = () => {
       console.log('收到下载错误事件:', data)
       if (data.downloadId === currentDownloadId.current) {
         setMinecraftDownloading(false)
-        
+
         addNotification({
           type: 'error',
           title: '下载失败',
@@ -870,7 +874,7 @@ const GameDeploymentPage: React.FC = () => {
         setMrpackDeployComplete(true)
         setMrpackDeployResult(data.data)
         currentMrpackDeploymentId.current = null // 重置整合包部署ID
-        
+
         // 自动生成启动命令
         if (data.data?.serverType) {
           setMrpackInstanceStartCommand(generateStartCommand(data.data.serverType, selectedMrpackJava))
@@ -879,7 +883,7 @@ const GameDeploymentPage: React.FC = () => {
           const defaultCommand = data.data?.serverJarPath ? `java -jar "${data.data.serverJarPath}"` : 'java -jar server.jar'
           setMrpackInstanceStartCommand(selectedMrpackJava !== 'default' ? replaceJavaInCommand(defaultCommand, selectedMrpackJava) : defaultCommand)
         }
-        
+
         addNotification({
           type: 'success',
           title: '部署完成',
@@ -890,7 +894,7 @@ const GameDeploymentPage: React.FC = () => {
         setMoreGameDeployComplete(true)
         setMoreGameDeployResult(data.data)
         currentMoreGameDeploymentId.current = null
-        
+
         addNotification({
           type: 'success',
           title: '部署完成',
@@ -905,7 +909,7 @@ const GameDeploymentPage: React.FC = () => {
       if (data.deploymentId && data.deploymentId.startsWith('mrpack-deploy-')) {
         setMrpackDeploying(false)
         currentMrpackDeploymentId.current = null // 重置整合包部署ID
-        
+
         addNotification({
           type: 'error',
           title: '部署失败',
@@ -914,7 +918,7 @@ const GameDeploymentPage: React.FC = () => {
       } else {
         setMoreGameDeploying(false)
         currentMoreGameDeploymentId.current = null
-        
+
         addNotification({
           type: 'error',
           title: '部署失败',
@@ -947,7 +951,7 @@ const GameDeploymentPage: React.FC = () => {
         setOnlineGameDeployComplete(true)
         setOnlineGameDeployResult(data.result)
         currentOnlineGameDeploymentId.current = null
-        
+
         // 不显示通知，让用户在模态框中看到结果
         // 成功或失败的状态会在UI中显示
       }
@@ -972,10 +976,10 @@ const GameDeploymentPage: React.FC = () => {
       setDownloadLogs([])
       setDownloadComplete(false)
       setDownloadResult(null)
-      
+
       // 初始化WebSocket连接并等待连接建立
       initializeSocket()
-      
+
       // 等待WebSocket连接建立
       const waitForConnection = () => {
         return new Promise<string>((resolve, reject) => {
@@ -983,11 +987,11 @@ const GameDeploymentPage: React.FC = () => {
             resolve(socketRef.current.id)
             return
           }
-          
+
           const timeout = setTimeout(() => {
             reject(new Error('WebSocket连接超时'))
           }, 10000) // 10秒超时
-          
+
           const checkConnection = () => {
             if (socketRef.current?.connected && socketRef.current?.id) {
               clearTimeout(timeout)
@@ -996,14 +1000,14 @@ const GameDeploymentPage: React.FC = () => {
               setTimeout(checkConnection, 100)
             }
           }
-          
+
           checkConnection()
         })
       }
-      
+
       const socketId = await waitForConnection()
       console.log('WebSocket连接已建立，Socket ID:', socketId)
-      
+
       const downloadOptions: MinecraftDownloadOptions & { socketId?: string } = {
         server: selectedServer,
         version: selectedVersion,
@@ -1012,13 +1016,13 @@ const GameDeploymentPage: React.FC = () => {
         skipServerRun,
         socketId
       }
-      
+
       const response = await apiClient.downloadMinecraftServer(downloadOptions)
-      
+
       if (response.success) {
         currentDownloadId.current = response.data?.downloadId
         console.log('下载开始，Download ID:', currentDownloadId.current, 'Socket ID:', socketId)
-        
+
         addNotification({
           type: 'info',
           title: '开始下载',
@@ -1052,13 +1056,13 @@ const GameDeploymentPage: React.FC = () => {
     try {
       console.log('尝试取消部署，ID:', currentMoreGameDeploymentId.current)
       const response = await apiClient.cancelMoreGameDeployment(currentMoreGameDeploymentId.current)
-      
+
       if (response.success) {
         // 重置部署状态
         setMoreGameDeploying(false)
         setMoreGameDeployProgress(null)
         currentMoreGameDeploymentId.current = null
-        
+
         addNotification({
           type: 'info',
           title: '部署已取消',
@@ -1091,13 +1095,13 @@ const GameDeploymentPage: React.FC = () => {
 
     try {
       const response = await apiClient.cancelMinecraftDownload(currentDownloadId.current)
-      
+
       if (response.success) {
         // 重置下载状态
         setMinecraftDownloading(false)
         setDownloadProgress(null)
         currentDownloadId.current = null
-        
+
         addNotification({
           type: 'info',
           title: '下载已取消',
@@ -1130,13 +1134,13 @@ const GameDeploymentPage: React.FC = () => {
     try {
       console.log('尝试取消整合包部署，ID:', currentMrpackDeploymentId.current)
       const response = await apiClient.cancelMoreGameDeployment(currentMrpackDeploymentId.current)
-      
+
       if (response.success) {
         // 重置部署状态
         setMrpackDeploying(false)
         setMrpackDeployProgress(null)
         currentMrpackDeploymentId.current = null
-        
+
         addNotification({
           type: 'info',
           title: '部署已取消',
@@ -1162,7 +1166,7 @@ const GameDeploymentPage: React.FC = () => {
     if (hoverTimeoutRef.current) {
       clearTimeout(hoverTimeoutRef.current)
     }
-    
+
     // 设置1秒后显示详情
     hoverTimeoutRef.current = setTimeout(() => {
       setHoveredMrpack(mrpackId)
@@ -1175,7 +1179,7 @@ const GameDeploymentPage: React.FC = () => {
       clearTimeout(hoverTimeoutRef.current)
       hoverTimeoutRef.current = null
     }
-    
+
     // 隐藏详情
     setHoveredMrpack(null)
   }
@@ -1236,7 +1240,7 @@ const GameDeploymentPage: React.FC = () => {
 
     try {
       setCreatingInstance(true)
-      
+
       // 生成启动命令，考虑选中的Java版本
       let finalStartCommand = instanceStartCommand || generateStartCommand(selectedServer, selectedMinecraftJava)
 
@@ -1253,16 +1257,16 @@ const GameDeploymentPage: React.FC = () => {
         autoStart: false,
         stopCommand: 'stop' as const
       })
-      
+
       if (response.success) {
         addNotification({
           type: 'success',
           title: '实例创建成功',
           message: `Minecraft实例 "${instanceName}" 创建成功！`
         })
-        
+
         handleCloseCreateInstanceModal()
-        
+
         // 重置表单
         setSelectedCategory('')
         setSelectedServer('')
@@ -1274,7 +1278,7 @@ const GameDeploymentPage: React.FC = () => {
         setInstanceName('')
         setInstanceDescription('')
         setInstanceStartCommand('')
-        
+
         // 跳转到实例管理页面
         navigate('/instances')
       } else {
@@ -1391,6 +1395,23 @@ const GameDeploymentPage: React.FC = () => {
     }
   }, [])
 
+
+  // 自动生成和更新SteamCMD命令
+  useEffect(() => {
+    if (showInstallModal && selectedGame) {
+      const loginCommand = useAnonymous
+        ? 'login anonymous'
+        : `login ${steamUsername.trim()} ${steamPassword.trim()}`
+
+      const installCommand = isValidateMode
+        ? `force_install_dir "${installPath.trim()}" +app_update ${selectedGame.info.appid} validate`
+        : `force_install_dir "${installPath.trim()}" +app_update ${selectedGame.info.appid}`
+
+      const fullCommand = `steamcmd +${loginCommand} +${installCommand} +quit`
+      setSteamcmdCommand(fullCommand)
+    }
+  }, [showInstallModal, selectedGame, useAnonymous, steamUsername, steamPassword, isValidateMode, installPath])
+
   // 打开安装对话框
   const handleInstallGame = async (gameKey: string, gameInfo: GameInfo) => {
     // 检查游戏是否支持当前平台
@@ -1500,6 +1521,8 @@ const GameDeploymentPage: React.FC = () => {
     setTimeout(() => {
       setShowInstallModal(false)
       setIsValidateMode(false) // 重置校验模式状态
+      setShowAdvanced(false) // 重置高级选项展开状态
+      setSteamcmdCommand('') // 重置SteamCMD命令
     }, 300)
   }
 
@@ -1551,7 +1574,7 @@ const GameDeploymentPage: React.FC = () => {
       })
       return
     }
-    
+
     setSelectedGameDocs(gameInfo)
     setShowDocsModal(true)
     setTimeout(() => setDocsModalAnimating(true), 10)
@@ -1633,16 +1656,16 @@ const GameDeploymentPage: React.FC = () => {
         autoStart: false,
         stopCommand: 'stop' as const
       })
-      
+
       if (response.success) {
         addNotification({
           type: 'success',
           title: '实例创建成功',
           message: `实例 "${mrpackInstanceName.trim()}" 已创建，即将跳转到实例管理页面...`
         })
-        
+
         handleCloseCreateMrpackInstanceModal()
-        
+
         // 跳转到实例管理页面
         setTimeout(() => {
           navigate('/instances')
@@ -1682,22 +1705,21 @@ const GameDeploymentPage: React.FC = () => {
       return
     }
 
+    // 验证SteamCMD命令是否为空
+    if (!steamcmdCommand.trim()) {
+      addNotification({
+        type: 'error',
+        title: '参数错误',
+        message: 'SteamCMD命令不能为空'
+      })
+      return
+    }
+
     try {
-      // 构建SteamCMD安装命令
-      const loginCommand = useAnonymous
-        ? 'login anonymous'
-        : `login ${steamUsername.trim()} ${steamPassword.trim()}`
-
-      const installCommand = isValidateMode
-        ? `force_install_dir "${installPath.trim()}" +app_update ${selectedGame.info.appid} validate`
-        : `force_install_dir "${installPath.trim()}" +app_update ${selectedGame.info.appid}`
-
-      const fullCommand = `steamcmd +${loginCommand} +${installCommand} +quit`
-
       // 关闭对话框
       handleCloseInstallModal()
 
-      // 调用后端API开始游戏安装
+      // 调用后端API开始游戏安装，使用高级选项中的命令
        const response = await apiClient.installGame({
           gameKey: selectedGame.key,
           gameName: selectedGame.info.game_nameCN,
@@ -1707,7 +1729,7 @@ const GameDeploymentPage: React.FC = () => {
           useAnonymous,
           steamUsername: useAnonymous ? undefined : steamUsername.trim(),
           steamPassword: useAnonymous ? undefined : steamPassword.trim(),
-          steamcmdCommand: fullCommand
+          steamcmdCommand: steamcmdCommand.trim()
         })
 
       if (response.success && response.data?.terminalSessionId) {
@@ -1757,7 +1779,7 @@ const GameDeploymentPage: React.FC = () => {
     try {
       setOnlineGamesLoading(true)
       const response = await apiClient.getOnlineGames()
-      
+
       if (response.success) {
         // 后端返回的是数组格式，直接使用
         const gamesArray = (response.data || []).map((gameData: any) => ({
@@ -1831,10 +1853,10 @@ const GameDeploymentPage: React.FC = () => {
       setOnlineGameDeployLogs([])
       setOnlineGameDeployComplete(false)
       setOnlineGameDeployResult(null)
-      
+
       // 初始化WebSocket连接
       initializeSocket()
-      
+
       // 等待WebSocket连接建立
       const waitForConnection = () => {
         return new Promise<string>((resolve, reject) => {
@@ -1842,11 +1864,11 @@ const GameDeploymentPage: React.FC = () => {
             resolve(socketRef.current.id)
             return
           }
-          
+
           const timeout = setTimeout(() => {
             reject(new Error('WebSocket连接超时'))
           }, 10000)
-          
+
           const checkConnection = () => {
             if (socketRef.current?.connected && socketRef.current?.id) {
               clearTimeout(timeout)
@@ -1855,29 +1877,29 @@ const GameDeploymentPage: React.FC = () => {
               setTimeout(checkConnection, 100)
             }
           }
-          
+
           checkConnection()
         })
       }
-      
+
       const socketId = await waitForConnection()
-      
+
       // 调用部署API
       const response = await apiClient.deployOnlineGame({
         gameId: selectedOnlineGame.id,
         installPath: onlineGameInstallPath.trim(),
         socketId
       })
-      
+
       if (response.success && response.data?.deploymentId) {
         currentOnlineGameDeploymentId.current = response.data.deploymentId
-        
+
         addNotification({
           type: 'success',
           title: '部署已启动',
           message: `${selectedOnlineGame.name} 部署已开始`
         })
-        
+
         // 不关闭模态框，保持打开状态以显示部署进度
       } else {
         throw new Error(response.message || '启动部署失败')
@@ -1885,7 +1907,7 @@ const GameDeploymentPage: React.FC = () => {
     } catch (error: any) {
       console.error('启动在线游戏部署失败:', error)
       setOnlineGameDeploying(false)
-      
+
       addNotification({
         type: 'error',
         title: '部署失败',
@@ -1907,12 +1929,12 @@ const GameDeploymentPage: React.FC = () => {
 
     try {
       const response = await apiClient.cancelOnlineGameDeployment(currentOnlineGameDeploymentId.current)
-      
+
       if (response.success) {
         setOnlineGameDeploying(false)
         setOnlineGameDeployProgress(null)
         currentOnlineGameDeploymentId.current = null
-        
+
         addNotification({
           type: 'info',
           title: '部署已取消',
@@ -1951,17 +1973,17 @@ const GameDeploymentPage: React.FC = () => {
         autoStart: false,
         stopCommand: 'ctrl+c' as const
       })
-      
+
       if (response.success) {
         addNotification({
           type: 'success',
           title: '创建成功',
           message: `实例 "${selectedOnlineGame.name}" 创建成功！`
         })
-        
+
         // 关闭模态框
         handleCloseOnlineGameInstallModal()
-        
+
         // 跳转到实例管理页面
         navigate('/instances')
       } else {
@@ -1983,7 +2005,7 @@ const GameDeploymentPage: React.FC = () => {
     if (searchQuery && !gameInfo.game_nameCN.toLowerCase().includes(searchQuery.toLowerCase())) {
       return false
     }
-    
+
     // 平台筛选
     switch (platformFilter) {
       case 'all':
@@ -2005,12 +2027,12 @@ const GameDeploymentPage: React.FC = () => {
     if (onlineGameSearchQuery && !game.name.toLowerCase().includes(onlineGameSearchQuery.toLowerCase())) {
       return false
     }
-    
+
     // 类型筛选
     if (onlineGameTypeFilter !== 'all' && game.type) {
       return game.type.includes(onlineGameTypeFilter)
     }
-    
+
     return true
   })
 
@@ -2142,7 +2164,7 @@ const GameDeploymentPage: React.FC = () => {
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                 />
               </div>
-              
+
               {/* 平台筛选 */}
               <div className="sm:w-48">
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -2160,7 +2182,7 @@ const GameDeploymentPage: React.FC = () => {
                   <option value="macOS">macOS</option>
                 </select>
                </div>
-               
+
                {/* 清除筛选按钮 */}
                {(searchQuery || platformFilter !== 'all') && (
                  <div className="sm:w-auto flex items-end">
@@ -2176,7 +2198,7 @@ const GameDeploymentPage: React.FC = () => {
                  </div>
                )}
              </div>
-             
+
              {/* 统计信息 */}
              <div className="mt-4 text-sm text-gray-600 dark:text-gray-400">
                显示 {filteredGames.length} / {Object.keys(games).length} 个游戏
@@ -2192,7 +2214,7 @@ const GameDeploymentPage: React.FC = () => {
                )}
              </div>
           </div>
-          
+
           {/* 游戏网格 */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {filteredGames.length === 0 ? (
@@ -2240,7 +2262,7 @@ const GameDeploymentPage: React.FC = () => {
                   <h3 className="font-semibold text-gray-900 dark:text-white mb-2 text-center">
                     {gameInfo.game_nameCN}
                   </h3>
-                  
+
                   {/* 平台兼容性信息 */}
                   <div className="mb-4 text-center">
                     {gameInfo.system && gameInfo.system.length > 0 ? (
@@ -2248,11 +2270,11 @@ const GameDeploymentPage: React.FC = () => {
                         <span>支持平台: {gameInfo.system.join(', ')}</span>
                         {gameInfo.currentPlatform && (
                           <div className={`mt-1 text-xs ${
-                            gameInfo.supportedOnCurrentPlatform 
-                              ? 'text-green-600 dark:text-green-400' 
+                            gameInfo.supportedOnCurrentPlatform
+                              ? 'text-green-600 dark:text-green-400'
                               : 'text-red-600 dark:text-red-400'
                           }`}>
-                            当前平台: {gameInfo.currentPlatform} 
+                            当前平台: {gameInfo.currentPlatform}
                             {gameInfo.supportedOnCurrentPlatform ? '✓ 兼容' : '✗ 不兼容'}
                           </div>
                         )}
@@ -2372,7 +2394,7 @@ const GameDeploymentPage: React.FC = () => {
                     className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                   />
                 </div>
-                
+
                 {/* 类型筛选 - 只有当有游戏类型时才显示 */}
                 {hasGameTypes && (
                   <div className="sm:w-48">
@@ -2393,7 +2415,7 @@ const GameDeploymentPage: React.FC = () => {
                     </select>
                   </div>
                 )}
-                
+
                 {/* 清除筛选按钮 */}
                 {(onlineGameSearchQuery || (hasGameTypes && onlineGameTypeFilter !== 'all')) && (
                   <div className="sm:w-auto flex items-end">
@@ -2409,7 +2431,7 @@ const GameDeploymentPage: React.FC = () => {
                   </div>
                 )}
               </div>
-              
+
               {/* 统计信息 */}
               <div className="mt-4 text-sm text-gray-600 dark:text-gray-400">
                 显示 {filteredOnlineGames.length} / {onlineGames.length} 个游戏
@@ -2444,8 +2466,8 @@ const GameDeploymentPage: React.FC = () => {
                         {onlineGames.length === 0 ? '暂无可用的在线游戏' : '没有找到匹配的游戏'}
                       </p>
                       <p className="text-sm">
-                        {onlineGames.length === 0 
-                          ? '请稍后再试或联系管理员' 
+                        {onlineGames.length === 0
+                          ? '请稍后再试或联系管理员'
                           : '尝试修改搜索条件或筛选设置'}
                       </p>
                     </div>
@@ -2475,7 +2497,7 @@ const GameDeploymentPage: React.FC = () => {
                         <h3 className="font-semibold text-gray-900 dark:text-white mb-2 text-center">
                           {game.name}
                         </h3>
-                        
+
                         {/* 游戏类型标签 */}
                         {game.type && game.type.length > 0 && (
                           <div className="flex flex-wrap gap-1 justify-center mb-3">
@@ -2489,7 +2511,7 @@ const GameDeploymentPage: React.FC = () => {
                             ))}
                           </div>
                         )}
-                        
+
                         {/* 游戏描述 */}
                         {game.description && (
                           <p className="text-sm text-gray-600 dark:text-gray-400 mb-4 text-center line-clamp-2">
@@ -2621,7 +2643,7 @@ const GameDeploymentPage: React.FC = () => {
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
                   选择服务端类型
                 </h3>
-                
+
                 <div className="space-y-4">
                   {/* 服务器分类 */}
                   <div>
@@ -2707,7 +2729,7 @@ const GameDeploymentPage: React.FC = () => {
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
                   下载配置
                 </h3>
-                
+
                 <div className="space-y-4">
                   {/* 安装路径 */}
                   <div>
@@ -2728,7 +2750,7 @@ const GameDeploymentPage: React.FC = () => {
                     <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">
                       高级选项
                     </h4>
-                    
+
                     <div className="space-y-2">
                       <div className="flex items-center space-x-2">
                         <input
@@ -2742,7 +2764,7 @@ const GameDeploymentPage: React.FC = () => {
                           跳过Java环境检查
                         </label>
                       </div>
-                      
+
                       <div className="flex items-center space-x-2">
                         <input
                           type="checkbox"
@@ -2763,9 +2785,9 @@ const GameDeploymentPage: React.FC = () => {
                     <button
                       onClick={downloadMinecraftServer}
                       disabled={
-                        !selectedServer || 
-                        !selectedVersion || 
-                        !minecraftInstallPath.trim() || 
+                        !selectedServer ||
+                        !selectedVersion ||
+                        !minecraftInstallPath.trim() ||
                         minecraftDownloading
                       }
                       className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white py-3 px-4 rounded-lg transition-colors flex items-center justify-center space-x-2"
@@ -2782,7 +2804,7 @@ const GameDeploymentPage: React.FC = () => {
                         </>
                       )}
                     </button>
-                    
+
                     {/* 取消下载按钮 */}
                     {minecraftDownloading && (
                       <button
@@ -2817,7 +2839,7 @@ const GameDeploymentPage: React.FC = () => {
                           )}
                         </div>
                       )}
-                      
+
                       {/* 下载日志 */}
                       {downloadLogs.length > 0 && (
                         <div>
@@ -2835,7 +2857,7 @@ const GameDeploymentPage: React.FC = () => {
                       )}
                     </div>
                   )}
-                  
+
                   {/* 下载完成后的操作 */}
                   {downloadComplete && downloadResult && (
                     <div className="mt-4 p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
@@ -2877,7 +2899,7 @@ const GameDeploymentPage: React.FC = () => {
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
               选择游戏
             </h3>
-            
+
             {moreGamesLoading ? (
               <div className="flex items-center justify-center py-8">
                 <Loader className="w-6 h-6 animate-spin text-blue-500" />
@@ -2892,13 +2914,13 @@ const GameDeploymentPage: React.FC = () => {
                     [Platform.LINUX]: 'Linux',
                     [Platform.MACOS]: 'macOS'
                   }
-                  
+
                   return (
                     <div
                       key={game.id}
                       className={`
                         p-4 border-2 rounded-lg transition-all relative
-                        ${!isSupported 
+                        ${!isSupported
                           ? 'border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700/50 cursor-not-allowed opacity-60'
                           : selectedMoreGame === game.id
                             ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 cursor-pointer'
@@ -2909,8 +2931,8 @@ const GameDeploymentPage: React.FC = () => {
                     >
                       <div className="flex items-start space-x-3">
                         <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${
-                           isSupported 
-                             ? 'bg-gradient-to-br from-blue-500 to-purple-600' 
+                           isSupported
+                             ? 'bg-gradient-to-br from-blue-500 to-purple-600'
                              : 'bg-gray-400 dark:bg-gray-600'
                          }`}>
                            <Server className="w-6 h-6 text-white" />
@@ -2918,8 +2940,8 @@ const GameDeploymentPage: React.FC = () => {
                         <div className="flex-1">
                           <div className="flex items-center justify-between">
                             <h4 className={`font-medium ${
-                              isSupported 
-                                ? 'text-gray-900 dark:text-white' 
+                              isSupported
+                                ? 'text-gray-900 dark:text-white'
                                 : 'text-gray-500 dark:text-gray-400'
                             }`}>
                               {game.name}
@@ -2929,15 +2951,15 @@ const GameDeploymentPage: React.FC = () => {
                             )}
                           </div>
                           <p className={`text-sm ${
-                            isSupported 
-                              ? 'text-gray-600 dark:text-gray-400' 
+                            isSupported
+                              ? 'text-gray-600 dark:text-gray-400'
                               : 'text-gray-500 dark:text-gray-500'
                           }`}>
                             {game.description}
                           </p>
                           <div className="mt-2 flex flex-wrap gap-1">
                             <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                              isSupported 
+                              isSupported
                                 ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400'
                                 : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
                             }`}>
@@ -2967,7 +2989,7 @@ const GameDeploymentPage: React.FC = () => {
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
                 部署配置
               </h3>
-              
+
               <div className="space-y-4">
                 {/* 安装路径 */}
                 <div>
@@ -2982,7 +3004,7 @@ const GameDeploymentPage: React.FC = () => {
                     placeholder={`输入 ${moreGames.find(g => g.id === selectedMoreGame)?.name} 的安装路径`}
                   />
                 </div>
-                
+
                 {/* 平台兼容性提示 */}
                 {(() => {
                   const selectedGame = moreGames.find(g => g.id === selectedMoreGame)
@@ -3009,7 +3031,7 @@ const GameDeploymentPage: React.FC = () => {
                   }
                   return null
                 })()}
-                
+
                 {/* 部署按钮 */}
                 <div className="space-y-2">
                   <div className="flex justify-end">
@@ -3017,7 +3039,7 @@ const GameDeploymentPage: React.FC = () => {
                       const selectedGame = moreGames.find(g => g.id === selectedMoreGame)
                       const isGameSupported = selectedGame?.supportedOnCurrentPlatform ?? false
                       const isDisabled = moreGameDeploying || !moreGameInstallPath.trim() || !isGameSupported
-                      
+
                       return (
                         <button
                           onClick={deployMoreGame}
@@ -3046,9 +3068,9 @@ const GameDeploymentPage: React.FC = () => {
                           )}
                         </button>
                       )
-                    })()} 
+                    })()}
                   </div>
-                  
+
                   {/* 取消部署按钮 */}
                   {moreGameDeploying && (
                     <div className="flex justify-end">
@@ -3062,7 +3084,7 @@ const GameDeploymentPage: React.FC = () => {
                     </div>
                   )}
                 </div>
-                
+
                 {/* 部署进度 */}
                 {(moreGameDeployProgress || moreGameDeploying) && (
                   <div className="mt-4 space-y-3">
@@ -3080,7 +3102,7 @@ const GameDeploymentPage: React.FC = () => {
                         </div>
                       </div>
                     )}
-                    
+
                     {/* 部署日志 */}
                     {moreGameDeployLogs.length > 0 && (
                       <div>
@@ -3108,7 +3130,7 @@ const GameDeploymentPage: React.FC = () => {
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
                 部署完成
               </h3>
-              
+
               <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
                 <div className="flex items-center space-x-2 text-green-800 dark:text-green-400 mb-3">
                   <CheckCircle className="w-5 h-5" />
@@ -3227,7 +3249,7 @@ const GameDeploymentPage: React.FC = () => {
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
               搜索Minecraft整合包
             </h3>
-            
+
             <div className="flex space-x-4 mb-4">
               <input
                 type="text"
@@ -3259,7 +3281,7 @@ const GameDeploymentPage: React.FC = () => {
                 )}
               </button>
             </div>
-            
+
             {/* 搜索结果 */}
             {mrpackSearchResults.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -3355,7 +3377,7 @@ const GameDeploymentPage: React.FC = () => {
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
                 部署配置
               </h3>
-              
+
               <div className="space-y-4">
                 {/* 选中的整合包信息 */}
                 <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
@@ -3393,7 +3415,7 @@ const GameDeploymentPage: React.FC = () => {
                     </div>
                   </div>
                 </div>
-                
+
                 {/* 版本选择 */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -3421,7 +3443,7 @@ const GameDeploymentPage: React.FC = () => {
                         </>
                       )}
                     </button>
-                    
+
                     {mrpackVersions.length > 0 && (
                       <select
                         value={selectedMrpackVersion?.id || ''}
@@ -3440,7 +3462,7 @@ const GameDeploymentPage: React.FC = () => {
                       </select>
                     )}
                   </div>
-                  
+
                   {selectedMrpackVersion && (
                     <div className="mt-2 p-3 bg-gray-50 dark:bg-gray-900 rounded-lg">
                       <p className="text-sm text-gray-600 dark:text-gray-400">
@@ -3460,7 +3482,7 @@ const GameDeploymentPage: React.FC = () => {
                     </div>
                   )}
                 </div>
-                
+
                 {/* 安装路径 */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -3474,7 +3496,7 @@ const GameDeploymentPage: React.FC = () => {
                     placeholder="例如/home/steam/games/xxx 或 D:\Games"
                   />
                 </div>
-                
+
                 {/* 部署按钮 */}
                 <div className="space-y-2">
                   <div className="flex justify-end space-x-3">
@@ -3510,7 +3532,7 @@ const GameDeploymentPage: React.FC = () => {
                     </button>
                   </div>
                 </div>
-                
+
                 {/* 部署进度 */}
                 {(mrpackDeployProgress || mrpackDeploying) && (
                   <div className="mt-4 space-y-3">
@@ -3528,7 +3550,7 @@ const GameDeploymentPage: React.FC = () => {
                         </div>
                       </div>
                     )}
-                    
+
                     {/* 部署日志 */}
                     {mrpackDeployLogs.length > 0 && (
                       <div>
@@ -3556,7 +3578,7 @@ const GameDeploymentPage: React.FC = () => {
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
                 部署完成
               </h3>
-              
+
               <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
                 <div className="flex items-center space-x-2 text-green-800 dark:text-green-400 mb-3">
                   <CheckCircle className="w-5 h-5" />
@@ -3652,7 +3674,7 @@ const GameDeploymentPage: React.FC = () => {
                 <X className="w-5 h-5" />
               </button>
             </div>
-            
+
             <div className="p-6 space-y-4">
               {/* 实例名称 */}
               <div>
@@ -3667,7 +3689,7 @@ const GameDeploymentPage: React.FC = () => {
                   placeholder="输入实例名称"
                 />
               </div>
-              
+
               {/* 安装路径 */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -3689,7 +3711,7 @@ const GameDeploymentPage: React.FC = () => {
                   </button>
                 </div>
               </div>
-              
+
               {/* Steam账户设置 */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -3709,7 +3731,7 @@ const GameDeploymentPage: React.FC = () => {
                       使用匿名账户
                     </label>
                   </div>
-                  
+
                   {/* Steam登录信息 */}
                   {!useAnonymous && (
                     <div className="space-y-3 pl-6 border-l-2 border-gray-200 dark:border-gray-600">
@@ -3741,7 +3763,7 @@ const GameDeploymentPage: React.FC = () => {
                   )}
                 </div>
               </div>
-              
+
               {/* 游戏信息 */}
               <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
                 <p className="text-sm text-gray-600 dark:text-gray-400">
@@ -3751,8 +3773,48 @@ const GameDeploymentPage: React.FC = () => {
                   <strong>提示:</strong> {selectedGame.info.tip}
                 </p>
               </div>
+
+              {/* 高级选项 */}
+              <div className="border-t border-gray-200 dark:border-gray-600 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setShowAdvanced(!showAdvanced)}
+                  className="flex items-center justify-between w-full text-left text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-colors"
+                >
+                  <span>高级选项</span>
+                  <svg
+                    className={`w-4 h-4 transform transition-transform ${showAdvanced ? 'rotate-180' : ''}`}
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+
+                {showAdvanced && (
+                  <div className="mt-4 space-y-4 animate-in slide-in-from-top-2 duration-200 max-h-60 overflow-y-auto pr-2">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        SteamCMD 安装命令
+                      </label>
+                      <textarea
+                        value={steamcmdCommand}
+                        onChange={(e) => setSteamcmdCommand(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-mono text-sm"
+                        placeholder="SteamCMD 命令将在这里显示，您可以修改后执行"
+                        rows={4}
+                        readOnly={false}
+                      />
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        您可以修改此命令来自定义安装参数，修改后的命令将用于实际安装
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
-            
+
             <div className="flex justify-end space-x-3 p-6 border-t border-gray-200 dark:border-gray-700">
               <button
                 onClick={handleCloseInstallModal}
@@ -3800,7 +3862,7 @@ const GameDeploymentPage: React.FC = () => {
                 <X className="w-5 h-5" />
               </button>
             </div>
-            
+
             <div className="p-6 space-y-4">
               {/* 服务器信息 */}
               <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-3">
@@ -3814,7 +3876,7 @@ const GameDeploymentPage: React.FC = () => {
                   路径: {downloadResult.targetDirectory}
                 </p>
               </div>
-              
+
               {/* 实例名称 */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -3828,7 +3890,7 @@ const GameDeploymentPage: React.FC = () => {
                   placeholder="输入实例名称"
                 />
               </div>
-              
+
               {/* 实例描述 */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -3842,7 +3904,7 @@ const GameDeploymentPage: React.FC = () => {
                   rows={3}
                 />
               </div>
-              
+
               {/* 启动命令 */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -3857,7 +3919,7 @@ const GameDeploymentPage: React.FC = () => {
                 />
               </div>
             </div>
-            
+
             <div className="flex space-x-3 p-6 border-t border-gray-200 dark:border-gray-700">
               <button
                 onClick={handleCloseCreateInstanceModal}
@@ -3906,7 +3968,7 @@ const GameDeploymentPage: React.FC = () => {
                 <X className="w-5 h-5" />
               </button>
             </div>
-            
+
             <div className="p-6 space-y-4">
               {/* 游戏信息 */}
               <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
@@ -3922,7 +3984,7 @@ const GameDeploymentPage: React.FC = () => {
                   </p>
                 )}
               </div>
-              
+
               {/* 安装路径 */}
               {!onlineGameDeploying && (
                 <div>
@@ -3938,7 +4000,7 @@ const GameDeploymentPage: React.FC = () => {
                   />
                 </div>
               )}
-              
+
               {/* 部署进度 */}
               {onlineGameDeploying && onlineGameDeployProgress && (
                 <div className="space-y-3">
@@ -3951,7 +4013,7 @@ const GameDeploymentPage: React.FC = () => {
                     </span>
                   </div>
                   <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                    <div 
+                    <div
                       className="bg-green-600 h-2 rounded-full transition-all duration-300"
                       style={{ width: `${onlineGameDeployProgress.percentage}%` }}
                     ></div>
@@ -3961,7 +4023,7 @@ const GameDeploymentPage: React.FC = () => {
                   </p>
                 </div>
               )}
-              
+
               {/* 部署日志 */}
               {onlineGameDeploying && onlineGameDeployLogs.length > 0 && (
                 <div>
@@ -3977,11 +4039,11 @@ const GameDeploymentPage: React.FC = () => {
                   </div>
                 </div>
               )}
-              
+
               {/* 部署完成结果 */}
               {onlineGameDeployComplete && (
                 <div className={`rounded-lg p-3 ${
-                  onlineGameDeployResult?.success !== false 
+                  onlineGameDeployResult?.success !== false
                     ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800'
                     : 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800'
                 }`}>
@@ -4018,7 +4080,7 @@ const GameDeploymentPage: React.FC = () => {
                 </div>
               )}
             </div>
-            
+
             <div className="flex space-x-3 p-6 border-t border-gray-200 dark:border-gray-700">
               {onlineGameDeployComplete ? (
                 onlineGameDeployResult?.success !== false ? (
@@ -4097,7 +4159,7 @@ const GameDeploymentPage: React.FC = () => {
                 <X className="w-5 h-5" />
               </button>
             </div>
-            
+
             <div className="p-6 space-y-4">
               {/* 整合包信息 */}
               <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-3">
@@ -4143,7 +4205,7 @@ const GameDeploymentPage: React.FC = () => {
                   </div>
                 </div>
               </div>
-              
+
               {/* 实例名称 */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -4157,7 +4219,7 @@ const GameDeploymentPage: React.FC = () => {
                   placeholder="输入实例名称"
                 />
               </div>
-              
+
               {/* 实例描述 */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -4171,7 +4233,7 @@ const GameDeploymentPage: React.FC = () => {
                   rows={3}
                 />
               </div>
-              
+
               {/* 启动命令 */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -4186,7 +4248,7 @@ const GameDeploymentPage: React.FC = () => {
                 />
               </div>
             </div>
-            
+
             <div className="flex space-x-3 p-6 border-t border-gray-200 dark:border-gray-700">
               <button
                 onClick={handleCloseCreateMrpackInstanceModal}
@@ -4236,7 +4298,7 @@ const GameDeploymentPage: React.FC = () => {
                 <X className="w-5 h-5" />
               </button>
             </div>
-            
+
             <div className="p-6">
               <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg p-4 mb-4">
                 <div className="flex items-start space-x-3">
@@ -4251,7 +4313,7 @@ const GameDeploymentPage: React.FC = () => {
                   </div>
                 </div>
               </div>
-              
+
               <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
                 <p className="text-sm text-gray-600 dark:text-gray-400">
                   <strong>游戏:</strong> {pendingGameInstall.info.game_nameCN}
@@ -4261,7 +4323,7 @@ const GameDeploymentPage: React.FC = () => {
                 </p>
               </div>
             </div>
-            
+
             <div className="flex space-x-3 p-6 border-t border-gray-200 dark:border-gray-700">
               <button
                 onClick={handleCloseCompatibilityModal}
@@ -4301,7 +4363,7 @@ const GameDeploymentPage: React.FC = () => {
                 <X className="w-5 h-5" />
               </button>
             </div>
-            
+
             <div className="flex-1 p-6 overflow-hidden">
               <div className="w-full h-full bg-gray-50 dark:bg-gray-900 rounded-lg overflow-hidden">
                 <iframe
@@ -4336,7 +4398,7 @@ const GameDeploymentPage: React.FC = () => {
                 <X className="w-5 h-5" />
               </button>
             </div>
-            
+
             <div className="p-6 max-h-[70vh] overflow-y-auto">
               <div className="space-y-6">
                 {/* 安装的游戏 */}
@@ -4423,7 +4485,7 @@ const GameDeploymentPage: React.FC = () => {
                 </div>
               </div>
             </div>
-            
+
             <div className="flex justify-end p-6 border-t border-gray-200 dark:border-gray-700">
               <button
                 onClick={handleCloseHelpModal}
