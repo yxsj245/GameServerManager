@@ -99,13 +99,13 @@ const AboutProjectPage: React.FC = () => {
                     </div>
                     <div>
                       <h3 className="text-lg font-semibold text-black dark:text-white">
-                        yxsj245/GameServerManager
+                        GSManagerXZ/GameServerManager
                       </h3>
                       <p className="text-sm text-gray-600 dark:text-gray-400">公开仓库</p>
                     </div>
                   </div>
                   <a
-                    href="https://github.com/yxsj245/GameServerManager"
+                    href="https://github.com/GSManagerXZ/GameServerManager"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex items-center space-x-2 px-4 py-2 bg-gray-900 dark:bg-gray-700 text-white rounded-lg hover:bg-gray-800 dark:hover:bg-gray-600 transition-colors"
@@ -168,7 +168,7 @@ const AboutProjectPage: React.FC = () => {
               {/* 快速链接 */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <a
-                  href="https://github.com/yxsj245/GameServerManager/issues"
+                  href="https://github.com/GSManagerXZ/GameServerManager/issues"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center space-x-3 p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 transition-colors"
@@ -183,7 +183,7 @@ const AboutProjectPage: React.FC = () => {
                 </a>
                 
                 <a
-                  href="https://github.com/yxsj245/GameServerManager/releases"
+                  href="https://github.com/GSManagerXZ/GameServerManager/releases"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center space-x-3 p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 transition-colors"
