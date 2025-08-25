@@ -99,7 +99,8 @@
         "image":"https://shared.cdn.queniuqe.com/store_item_assets/steam/apps/440/header.jpg",
         "url":"https://store.steampowered.com/app/440/Team_Fortress_2/",
         "system":["Windows","Linux"],
-		"system_info":["Linux"]
+		"system_info":["Linux"],
+        "docs":"https://docs.gsm.xiaozhuhouses.asia/%E6%B8%B8%E6%88%8F%E7%99%BE%E7%A7%91/Steam/%E5%86%9B%E5%9B%A2%E8%A6%81%E5%A1%9E2%E9%A3%9F%E7%94%A8%E8%AF%B4%E6%98%8E.html"
     },
     "Insurgency_Sandstorm": {
         "game_nameCN": "叛乱：沙漠风暴",
