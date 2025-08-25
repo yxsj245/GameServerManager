@@ -113,6 +113,7 @@ const GameDeploymentPage: React.FC = () => {
   const [selectedGame, setSelectedGame] = useState<{ key: string; info: GameInfo } | null>(null)
   const [installPath, setInstallPath] = useState('')
   const [installing, setInstalling] = useState(false)
+  const [checkingEnvironment, setCheckingEnvironment] = useState<string | null>(null) // 正在检测环境的游戏key
   const [useAnonymous, setUseAnonymous] = useState(true)
   const [steamUsername, setSteamUsername] = useState('')
   const [steamPassword, setSteamPassword] = useState('')
@@ -1424,49 +1425,57 @@ const GameDeploymentPage: React.FC = () => {
       return
     }
 
-    // 检查面板是否兼容当前平台
-    if (gameInfo.panelCompatibleOnCurrentPlatform === false) {
-      // 显示兼容性确认对话框
-      setPendingGameInstall({ key: gameKey, info: gameInfo })
-      setShowCompatibilityModal(true)
-      // 使用requestAnimationFrame确保DOM渲染完成后再触发动画
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          setCompatibilityModalAnimating(true)
-        })
-      })
-      return
-    }
+    // 设置正在检测环境状态
+    setCheckingEnvironment(gameKey)
 
-    // 检查内存需求
     try {
-      const memoryCheckResponse = await apiClient.checkGameMemory(gameKey)
-      const memoryWarning = (memoryCheckResponse as any).memoryWarning
-      if (memoryCheckResponse.success && memoryWarning) {
-        // 显示内存警告对话框
-        setMemoryWarningInfo({
-          required: memoryWarning.required,
-          available: memoryWarning.available,
-          message: memoryWarning.message,
-          gameKey,
-          gameInfo
-        })
-        setShowMemoryWarningModal(true)
+      // 检查面板是否兼容当前平台
+      if (gameInfo.panelCompatibleOnCurrentPlatform === false) {
+        // 显示兼容性确认对话框
+        setPendingGameInstall({ key: gameKey, info: gameInfo })
+        setShowCompatibilityModal(true)
         // 使用requestAnimationFrame确保DOM渲染完成后再触发动画
         requestAnimationFrame(() => {
           requestAnimationFrame(() => {
-            setMemoryWarningModalAnimating(true)
+            setCompatibilityModalAnimating(true)
           })
         })
         return
       }
-    } catch (error) {
-      console.warn('检查内存需求失败，继续安装流程:', error)
-      // 内存检查失败不应阻止安装流程
-    }
 
-    // 直接打开安装对话框
-    openInstallModal(gameKey, gameInfo)
+      // 检查内存需求
+      try {
+        const memoryCheckResponse = await apiClient.checkGameMemory(gameKey)
+        const memoryWarning = (memoryCheckResponse as any).memoryWarning
+        if (memoryCheckResponse.success && memoryWarning) {
+          // 显示内存警告对话框
+          setMemoryWarningInfo({
+            required: memoryWarning.required,
+            available: memoryWarning.available,
+            message: memoryWarning.message,
+            gameKey,
+            gameInfo
+          })
+          setShowMemoryWarningModal(true)
+          // 使用requestAnimationFrame确保DOM渲染完成后再触发动画
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+              setMemoryWarningModalAnimating(true)
+            })
+          })
+          return
+        }
+      } catch (error) {
+        console.warn('检查内存需求失败，继续安装流程:', error)
+        // 内存检查失败不应阻止安装流程
+      }
+
+      // 直接打开安装对话框
+      openInstallModal(gameKey, gameInfo)
+    } finally {
+      // 清除检测环境状态
+      setCheckingEnvironment(null)
+    }
   }
 
 
@@ -1503,6 +1512,7 @@ const GameDeploymentPage: React.FC = () => {
     setTimeout(() => {
       setShowCompatibilityModal(false)
       setPendingGameInstall(null)
+      setCheckingEnvironment(null) // 清除检测环境状态
     }, 300)
   }
 
@@ -1512,6 +1522,7 @@ const GameDeploymentPage: React.FC = () => {
     setTimeout(() => {
       setShowMemoryWarningModal(false)
       setMemoryWarningInfo(null)
+      setCheckingEnvironment(null) // 清除检测环境状态
     }, 300)
   }
 
@@ -1519,6 +1530,8 @@ const GameDeploymentPage: React.FC = () => {
   const handleContinueInstallation = () => {
     if (memoryWarningInfo) {
       handleCloseMemoryWarningModal()
+      // 清除检测环境状态
+      setCheckingEnvironment(null)
       // 打开安装对话框
       openInstallModal(memoryWarningInfo.gameKey, memoryWarningInfo.gameInfo)
     }
@@ -1528,6 +1541,8 @@ const GameDeploymentPage: React.FC = () => {
   const handleConfirmIncompatibleInstall = () => {
     if (pendingGameInstall) {
       handleCloseCompatibilityModal()
+      // 清除检测环境状态
+      setCheckingEnvironment(null)
       // 延迟一点时间等待对话框关闭动画完成
       setTimeout(() => {
         openInstallModal(pendingGameInstall.key, pendingGameInstall.info)
@@ -2262,18 +2277,24 @@ const GameDeploymentPage: React.FC = () => {
                     {/* 部署游戏按钮 */}
                     <button
                       onClick={() => handleInstallGame(gameKey, gameInfo)}
-                      disabled={gameInfo.supportedOnCurrentPlatform === false}
+                      disabled={gameInfo.supportedOnCurrentPlatform === false || checkingEnvironment === gameKey}
                       className={`${gameInfo.docs ? 'flex-1' : 'w-full'} py-2 px-3 rounded-lg transition-colors flex items-center justify-center space-x-1 text-sm ${
-                        gameInfo.supportedOnCurrentPlatform === false
+                        gameInfo.supportedOnCurrentPlatform === false || checkingEnvironment === gameKey
                           ? 'bg-gray-400 cursor-not-allowed text-gray-200'
                           : gameInfo.panelCompatibleOnCurrentPlatform === false
                           ? 'bg-orange-600 hover:bg-orange-700 text-white'
                           : 'bg-blue-600 hover:bg-blue-700 text-white'
                       }`}
                     >
-                      <Download className="w-4 h-4" />
+                      {checkingEnvironment === gameKey ? (
+                        <Loader className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Download className="w-4 h-4" />
+                      )}
                       <span>
-                        {gameInfo.supportedOnCurrentPlatform === false
+                        {checkingEnvironment === gameKey
+                          ? '正在检测运行环境'
+                          : gameInfo.supportedOnCurrentPlatform === false
                           ? '不兼容'
                           : gameInfo.panelCompatibleOnCurrentPlatform === false
                           ? '面板不兼容'
